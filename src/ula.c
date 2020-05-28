@@ -185,7 +185,7 @@ void zesarux_zxi_write_register_value(z80_byte value)
 
     case 1:
       //HARDWARE_DEBUG_ASCII
-        printf ("%c",(value>=32 && value<=127 ? value : '?')  );
+        printf ("%c",((value>=32 && value<=127) || value == '\n' ? value : '?')  );
         fflush(stdout);
     break;
 
