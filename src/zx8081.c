@@ -508,7 +508,7 @@ void enable_chroma81(void)
 
 
 	//en drivers stdout o curses, no habilitar colores, aunque dejamos si que dejamos habilitar las paginas de ram y el rainbow
-	if (!strcmp(scr_driver_name,"curses") || !strcmp(scr_driver_name,"stdout")) {
+	if (!strcmp(scr_new_driver_name,"curses") || !strcmp(scr_new_driver_name,"stdout")) {
 		debug_printf (VERBOSE_WARN,"Chroma 81 is not supported on curses or stdout drivers");
 	}
 	else {

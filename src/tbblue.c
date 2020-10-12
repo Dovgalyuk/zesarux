@@ -44,6 +44,7 @@
 #include "uartbridge.h"
 #include "chardevice.h"
 #include "settings.h"
+#include "joystick.h"
 
 #define TBBLUE_MAX_SRAM_8KB_BLOCKS 224
 
@@ -1826,33 +1827,33 @@ void tbsprite_do_overlay(void)
 
 		if (!tbblue_if_sprites_enabled() ) return;
 
-				//printf ("tbblue sprite chip activo\n");
+		//printf ("tbblue sprite chip activo\n");
 
 
         //int scanline_copia=t_scanline_draw-screen_indice_inicio_pant;
         int y=t_scanline_draw; //0..63 es border (8 no visibles)
 
-				int border_no_visible=screen_indice_inicio_pant-TBBLUE_SPRITE_BORDER;
+		int border_no_visible=screen_indice_inicio_pant-TBBLUE_SPRITE_BORDER;
 
-				y -=border_no_visible;
+		y -=border_no_visible;
 
-				//Ejemplo: scanline_draw=32 (justo donde se ve sprites). border_no_visible=64-32 =32
-				//y=y-32 -> y=0
-
-
-				//Situamos el 0 32 pixeles por encima de dentro de pantalla, tal cual como funcionan las cordenadas de sprite de tbblue
+		//Ejemplo: scanline_draw=32 (justo donde se ve sprites). border_no_visible=64-32 =32
+		//y=y-32 -> y=0
 
 
-				//Calculos exclusivos para puntero buffer rainbow
-		    int rainbowy=t_scanline_draw-screen_invisible_borde_superior;
-		    if (border_enabled.v==0) rainbowy=rainbowy-screen_borde_superior;
+		//Situamos el 0 32 pixeles por encima de dentro de pantalla, tal cual como funcionan las cordenadas de sprite de tbblue
+
+
+		//Calculos exclusivos para puntero buffer rainbow
+		int rainbowy=t_scanline_draw-screen_invisible_borde_superior;
+		if (border_enabled.v==0) rainbowy=rainbowy-screen_borde_superior;
 		 
 
-				//Aqui tenemos el y=0 arriba del todo del border
+		//Aqui tenemos el y=0 arriba del todo del border
 
         //Bucle para cada sprite
         int conta_sprites;
-				z80_byte index_pattern;
+		z80_byte index_pattern;
 
 		int i;
 		//int offset_pattern;
@@ -1860,21 +1861,57 @@ void tbsprite_do_overlay(void)
 		z80_byte sprites_over_border=tbblue_registers[21]&2;
 
 
-				int rangoxmin, rangoxmax;
+		int rangoxmin, rangoxmax;
+		int rangoymin, rangoymax;
 
-				if (sprites_over_border) {
-					rangoxmin=0;
-					rangoxmax=TBBLUE_SPRITE_BORDER+256+TBBLUE_SPRITE_BORDER-1;
-				}
+		if (sprites_over_border) {
+			rangoxmin=0;
+			rangoxmax=TBBLUE_SPRITE_BORDER+256+TBBLUE_SPRITE_BORDER-1;
+			rangoymin=0;
+			rangoymax=TBBLUE_SPRITE_BORDER+192+TBBLUE_SPRITE_BORDER-1;			
 
-				else {
-					rangoxmin=TBBLUE_SPRITE_BORDER;
-					rangoxmax=TBBLUE_SPRITE_BORDER+255;
-				}
+			if (tbblue_registers[21]&0x20) {
+					// sprite clipping "over border" enabled, double the X coordinate of clip window
+					rangoxmin=2*clip_windows[TBBLUE_CLIP_WINDOW_SPRITES][0];
+					rangoxmax=2*clip_windows[TBBLUE_CLIP_WINDOW_SPRITES][1]+1;
+					rangoymin=clip_windows[TBBLUE_CLIP_WINDOW_SPRITES][2];
+					rangoymax=clip_windows[TBBLUE_CLIP_WINDOW_SPRITES][3];
+					if (rangoxmax > TBBLUE_SPRITE_BORDER+256+TBBLUE_SPRITE_BORDER-1) {
+						// clamp rangoxmax to 319
+						rangoxmax = TBBLUE_SPRITE_BORDER+256+TBBLUE_SPRITE_BORDER-1;
+					}
+			}
+		}
+
+		else {
+			// take clip window coordinates, but limit them to [0,0]->[255,191] (and offset them +32,+32)
+			rangoxmin=clip_windows[TBBLUE_CLIP_WINDOW_SPRITES][0] + TBBLUE_SPRITE_BORDER;
+			rangoxmax=clip_windows[TBBLUE_CLIP_WINDOW_SPRITES][1] + TBBLUE_SPRITE_BORDER-1;
+			rangoymin=clip_windows[TBBLUE_CLIP_WINDOW_SPRITES][2] + TBBLUE_SPRITE_BORDER;
+			rangoymax=clip_windows[TBBLUE_CLIP_WINDOW_SPRITES][3] + TBBLUE_SPRITE_BORDER-1;
+			if (rangoymax > TBBLUE_SPRITE_BORDER+192-1) {
+				// clamp rangoymax to 32+191 (bottom edge of PAPER)
+				rangoymax = TBBLUE_SPRITE_BORDER+192-1;
+			}
+		}
+
+		if (y<rangoymin || y>rangoymax) return;
 
 
-				int total_sprites=0;
+		int total_sprites=0;
 
+		int sprite_visible;
+
+		int anchor_x;
+		int anchor_y;
+		z80_byte anchor_palette_offset;
+		z80_byte anchor_index_pattern;
+		int anchor_visible;
+		int anchor_sprite_es_4bpp;
+
+		anchor_x=anchor_y=anchor_palette_offset=anchor_index_pattern=anchor_visible=anchor_sprite_es_4bpp=0;
+
+		int sprite_has_5_bytes;
 
         for (conta_sprites=0;conta_sprites<TBBLUE_MAX_SPRITES && total_sprites<MAX_SPRITES_PER_LINE;conta_sprites++) {
 					int sprite_x;
@@ -1906,14 +1943,77 @@ void tbsprite_do_overlay(void)
 
 If the display of the sprites on the border is disabled, the coordinates of the sprites range from (32,32) to (287,223).
 */
+					int relative_sprite=0;
+
+					sprite_visible=tbsprite_sprites[conta_sprites][3]&128;
+
+					sprite_has_5_bytes=tbsprite_sprites[conta_sprites][3] & 64;
+
+							if (sprite_has_5_bytes) {
+								//Pattern es de 5 bytes
+								
+
+								//Relative sprites
+								//H N6 T X X Y Y Y8
+								//{H,N6} must not equal {0,1} as this combination is used to indicate a relative sprite.
+								if ((tbsprite_sprites[conta_sprites][4] & (128+64))==64) {
+
+									relative_sprite=1;
+
+									//printf ("Relative sprite number %d\n",conta_sprites);
+									/*
+									The sprite module records the following information from the anchor:
+
+									Anchor.visible
+									Anchor.X
+									Anchor.Y
+									Anchor.palette_offset
+									Anchor.N (pattern number)
+									Anchor.H (indicates if the sprite uses 4-bit patterns)
+									*/
+
+									//Relative sprites is visible if anchor and this sprite are both visibles
+									//The visibility of a particular relative sprite is the result of ANDing the anchor’s visibility 
+									//with the relative sprite’s visibility. In other words, if the anchor is invisible then so are all its relatives.
+									if (sprite_visible && anchor_visible) sprite_visible=128; 
+									//Realmente con 1 valdria pero lo hago para que coincida con el valor normal cuando es visible
+
+
+									else sprite_visible=0;
+									
+									//sprite_visible=anchor_visible;
+
+									//printf("visible: %d\n",sprite_visible);
+								}
+
+								else {
+									//No es relativo. Guardar la visibilidad del ultimo anchor
+									anchor_visible=sprite_visible;
+								}
+
+							}
+
+
 
 					//Si sprite visible
-					if (tbsprite_sprites[conta_sprites][3]&128) {
+					
+					
+					if (sprite_visible) {
+
 						sprite_x=tbsprite_sprites[conta_sprites][0] | ((tbsprite_sprites[conta_sprites][2]&1)<<8);
 
 						//printf ("sprite %d x: %d \n",conta_sprites,sprite_x);
 
 						sprite_y=tbsprite_sprites[conta_sprites][1];
+
+						if (sprite_has_5_bytes && !relative_sprite) {
+							//Sprite Attribute 4
+							//A. Extended Anchor Sprite
+							//H N6 T X X Y Y Y8
+							//Y8 = Ninth bit of the sprite’s Y coordinate
+
+							sprite_y |= ((tbsprite_sprites[conta_sprites][4]&1)<<8);
+						}
 
 						//Posicionamos esa y teniendo en cuenta que nosotros contamos 0 arriba del todo del border en cambio sprites aqui
 						//Considera y=32 dentro de pantalla y y=0..31 en el border
@@ -1922,18 +2022,68 @@ If the display of the sprites on the border is disabled, the coordinates of the 
 						//Si y==32-> y=32+48-32=32+16=48
 						//Si y==0 -> y=48-32=16
 
-						z80_byte mirror_x=tbsprite_sprites[conta_sprites][2]&8;
-						//[2] 3rd: bits 7-4 is palette offset, bit 3 is X mirror, bit 2 is Y mirror, bit 1 is rotate flag and bit 0 is X MSB.
-						z80_byte mirror_y=tbsprite_sprites[conta_sprites][2]&4;
 
 						//3rd: bits 7-4 is palette offset, bit 3 is X mirror, bit 2 is Y mirror, bit 1 is rotate flag and bit 0 is X MSB.
 						//Offset paleta se lee tal cual sin rotar valor
 						z80_byte palette_offset=(tbsprite_sprites[conta_sprites][2]) & 0xF0;
 
 						index_pattern=tbsprite_sprites[conta_sprites][3]&63;
-						//Si coordenada y esta en margen y sprite activo
+						
+						//Sprite Attribute 4
+						//0 1 N6 X X Y Y PO
+						//TODO: solo para relative composite sprite, no unified
+						z80_byte sprite_zoom_x=(tbsprite_sprites[conta_sprites][4] >> 3)&3;
+						z80_byte sprite_zoom_y=(tbsprite_sprites[conta_sprites][4] >> 1)&3;
 
-						int diferencia=y-sprite_y;
+						//Si era sprite relativo
+						if (relative_sprite) {
+							//printf("Using the last anchor values\n");
+
+							//No estoy seguro de estos AND 0xFF
+							//Pero si los quito, el test de SpritRel.sna se ve peor
+							sprite_x=(sprite_x+anchor_x) & 0xFF;
+							sprite_y=(sprite_y+anchor_y) & 0xFF;
+
+							/*
+							If the relative sprite has its PR bit set in sprite attribute 2, 
+							then the anchor’s palette offset is added to the relative sprite’s to determine the active 
+							palette offset for the relative sprite. Otherwise the relative sprite uses its own palette 
+							offset as usual.
+
+							If the relative sprite has its PO bit set in sprite attribute 4, then the anchor’s pattern 
+							number is added to the relative sprite’s to determine the pattern used for display. Otherwise 
+							the relative sprite uses its own pattern number as usual. The intention is to supply a method 
+							to easily animate a large sprite by manipulating the pattern number in the anchor.
+							*/
+							//P P P P XM YM R X8/PR
+							if (tbsprite_sprites[conta_sprites][2]&1) {
+								palette_offset=(palette_offset+anchor_palette_offset)& 0xF0;
+							}
+
+							//0 1 N6 X X Y Y PO
+							if (tbsprite_sprites[conta_sprites][4]&1) {
+								index_pattern=(index_pattern+anchor_index_pattern)&63;
+							}
+						}
+
+						else {
+							//Guardamos estos valores como el ultimo anchor
+							//if (sprite_x > 512-128) sprite_x -= 512;                // -127 .. +384 (cover 8x scaleX)
+
+							anchor_x=sprite_x;
+							anchor_y=sprite_y;
+							anchor_palette_offset=palette_offset;
+							anchor_index_pattern=index_pattern;
+						}
+
+						//printf("x: %d\n",sprite_x);
+
+						z80_byte mirror_x=tbsprite_sprites[conta_sprites][2]&8;
+						//[2] 3rd: bits 7-4 is palette offset, bit 3 is X mirror, bit 2 is Y mirror, bit 1 is rotate flag and bit 0 is X MSB.
+						z80_byte mirror_y=tbsprite_sprites[conta_sprites][2]&4;						
+
+						//Si coordenada y esta en margen y sprite activo
+						int diferencia=(y-sprite_y)>>sprite_zoom_y;
 
 
 						int rangoymin, rangoymax;
@@ -2049,11 +2199,46 @@ If the display of the sprites on the border is disabled, the coordinates of the 
 
 							if (tbsprite_sprites[conta_sprites][3] & 64) {
 								//Pattern es de 5 bytes
-								if (tbsprite_sprites[conta_sprites][4] & 128) sprite_es_4bpp=1;
 
-								if (tbsprite_sprites[conta_sprites][4] & 64) offset_4bpp_N6=1;
+								//En caso de anchor:
+								//H N6 T X X Y Y Y8
+								//H = 1 if the sprite pattern is 4-bit
+								//N6 = 7th pattern bit if the sprite pattern is 4-bit
 
 								
+
+								if (!relative_sprite) {
+
+									if (tbsprite_sprites[conta_sprites][4] & 128) sprite_es_4bpp=1;
+
+									if (sprite_es_4bpp) {
+										if (tbsprite_sprites[conta_sprites][4] & 64) offset_4bpp_N6=1;
+									}
+
+									anchor_sprite_es_4bpp=sprite_es_4bpp;
+								}
+
+								else {
+
+
+									//En caso de relative sprites, el valor de H viene del anchor
+									/*
+									B. Relative Sprite, Composite Type
+									0 1 N6 X X Y Y PO
+									C. Relative Sprite, Unified Type
+									0 1 N6 0 0 0 0 PO
+
+									Ver que el bit N6 se desplaza respecto a cuando es un anchor
+									*/
+
+									sprite_es_4bpp=anchor_sprite_es_4bpp;
+
+									if (sprite_es_4bpp) {
+										if (tbsprite_sprites[conta_sprites][4] & 32) offset_4bpp_N6=1;
+									}
+
+									
+								}
 
 								//TODO: Y8
 							}
@@ -2062,10 +2247,17 @@ If the display of the sprites on the border is disabled, the coordinates of the 
 								z80_byte index_color;
 
 								if (sprite_es_4bpp) {
+									//printf("es 4bpp\n");
 									index_color=tbsprite_do_overlay_get_pattern_xy_4bpp(index_pattern,offset_4bpp_N6,sx,sy);
+
+									//index_color +=7;
 								}
 								else {
+									//printf("es 8 bpp\n");
+									//printf("pattern %d\n",index_pattern);
 									index_color=tbsprite_do_overlay_get_pattern_xy_8bpp(index_pattern,sx,sy);
+
+									//index_color +=2;
 								}
 
 									//Si index de color es transparente, no hacer nada
@@ -2079,6 +2271,8 @@ bits 7-0 = Set the index value. (0XE3 after a reset)
 								sx=sx+incx;
 								sy=sy+incy;
 
+								int sumar_x=1<<sprite_zoom_x;
+
 
 								if (index_color!=tbblue_registers[75]) {
 
@@ -2086,12 +2280,21 @@ bits 7-0 = Set the index value. (0XE3 after a reset)
 								index_color +=palette_offset;
 
 								//printf ("index color: %d\n",index_color);
+								//printf ("palette offset: %d\n",palette_offset);
 								
 
-								tbsprite_put_color_line(sprite_x,index_color,rangoxmin,rangoxmax);
+								if (sprite_zoom_x==0) {
+									tbsprite_put_color_line(sprite_x,index_color,rangoxmin,rangoxmax);
+								}
+								else {
+									int zz=0;
+									for (zz=0;zz<sumar_x;zz++) {
+										tbsprite_put_color_line(sprite_x+zz,index_color,rangoxmin,rangoxmax);
+									}
+								}
 
 								}
-								sprite_x++;
+								sprite_x+=sumar_x;
 
 
 							}
@@ -2294,11 +2497,13 @@ void tbblue_set_ram_page(z80_byte segment)
 	z80_byte tbblue_register=80+segment;
 	z80_byte reg_value=tbblue_registers[tbblue_register];
 
+	//Guardar el valor tal cual, antes de ver si la pagina excede el limite
+	debug_paginas_memoria_mapeadas[segment]=reg_value;		
+
 	//tbblue_memory_paged[segment]=tbblue_ram_memory_pages[page];
 	reg_value=tbblue_get_limit_sram_page(reg_value);
 	tbblue_memory_paged[segment]=tbblue_ram_memory_pages[reg_value];
 
-	debug_paginas_memoria_mapeadas[segment]=reg_value;
 }
 
 
@@ -2307,9 +2512,12 @@ void tbblue_set_rom_page_no_255(z80_byte segment)
         z80_byte tbblue_register=80+segment;
         z80_byte reg_value=tbblue_registers[tbblue_register];
 
+	//Guardar el valor tal cual, antes de ver si la pagina excede el limite
+	debug_paginas_memoria_mapeadas[segment]=reg_value;			
+
 	reg_value=tbblue_get_limit_sram_page(reg_value);
 	tbblue_memory_paged[segment]=tbblue_ram_memory_pages[reg_value];
-	debug_paginas_memoria_mapeadas[segment]=reg_value;
+
 }
 
 int tbblue_get_altrom(void)
@@ -2467,6 +2675,10 @@ void tbblue_set_rom_page(z80_byte segment,z80_byte page)
 	z80_byte reg_value=tbblue_registers[tbblue_register];
 
 	if (reg_value==255) {
+
+		//Guardar el valor tal cual, antes de ver si la pagina excede el limite
+		debug_paginas_memoria_mapeadas[segment]=DEBUG_PAGINA_MAP_ES_ROM+page;
+
 		page=tbblue_get_limit_sram_page(page);
 
 		//Si esta altrom en read
@@ -2492,7 +2704,7 @@ void tbblue_set_rom_page(z80_byte segment,z80_byte page)
 		else tbblue_memory_paged[segment]=tbblue_rom_memory_pages[page];
 
 
-		debug_paginas_memoria_mapeadas[segment]=DEBUG_PAGINA_MAP_ES_ROM+page;
+		
 	}
 	else {
 		tbblue_set_rom_page_no_255(segment);
@@ -3721,6 +3933,83 @@ Writes immediately change the current mmu mapping as if by port write
 	tbblue_registers[142] |=8;
 }
 
+
+void tbblue_set_joystick_1_mode(void)
+{
+
+	z80_byte joystick_mode=((tbblue_registers[5] >>6) & 3 ) | ((tbblue_registers[5] >> 1) & 4) ;
+
+	//printf("joystick mode: %d\n",joystick_mode);
+
+	/*
+
+	0x05 (05) => Peripheral 1 Setting
+(R/W)
+  bits 7:6 = Joystick 1 mode (LSB)
+  bits 5:4 = Joystick 2 mode (LSB)
+  bit 3 = Joystick 1 mode (MSB)
+  bit 2 = 50/60 Hz mode (0 = 50Hz, 1 = 60Hz, Pentagon is always 50Hz)
+  bit 1 = Joystick 2 mode (MSB)
+  bit 0 = Enable scandoubler (1 = enabled)
+Joystick modes:
+  000 = Sinclair 2 (12345)
+  001 = Kempston 1 (port 0x1F)
+  010 = Cursor (56780)
+  011 = Sinclair 1 (67890)
+  100 = Kempston 2 (port 0x37)
+  101 = MD 1 (3 or 6 button joystick port 0x1F)
+  110 = MD 2 (3 or 6 button joystick port 0x37)
+  111 = I/O Mode
+Both joysticks are placed in I/O Mode if either is set to I/O Mode. The underlying
+joystick type is not changed and reads of this register will continue to return
+the last joystick type. Whether the joystick is in io mode or not is invisible
+but this state can be cleared either through reset or by re-writing the register
+with joystick type not equal to 111. Recovery time for a normal joystick read after
+leaving I/O Mode is at most 64 scan lines.
+
+	*/
+
+	//TODO: que es I/O Mode ???
+
+	//Solo hacemos caso a estos:
+
+/*
+  000 = Sinclair 2 (12345)
+  001 = Kempston 1 (port 0x1F)
+  010 = Cursor (56780)
+  011 = Sinclair 1 (67890)
+  100 = Kempston 2 (port 0x37)
+  */
+
+ //cualquier otro, dejarlo como estaba
+
+ switch (joystick_mode) {
+	 case 0:
+	 	joystick_emulation=JOYSTICK_SINCLAIR_2;
+		debug_printf(VERBOSE_DEBUG,"Setting joystick 1 emulation to Sinclair 2");
+	 break;
+
+	 case 1:
+	 case 4:
+	 	joystick_emulation=JOYSTICK_KEMPSTON;
+		debug_printf(VERBOSE_DEBUG,"Setting joystick 1 emulation to Kempston");
+	 break;
+
+	 case 2:
+	 	joystick_emulation=JOYSTICK_CURSOR_WITH_SHIFT;
+		debug_printf(VERBOSE_DEBUG,"Setting joystick 1 emulation to Cursor");
+	 break;
+
+	 case 3:
+	 	joystick_emulation=JOYSTICK_SINCLAIR_1;
+		debug_printf(VERBOSE_DEBUG,"Setting joystick 1 emulation to Sinclair 1");
+	 break;
+
+ }
+
+
+}
+
 	
 //tbblue_last_register
 //void tbblue_set_value_port(z80_byte value)
@@ -3892,6 +4181,20 @@ void tbblue_set_value_port_position(z80_byte index_position,z80_byte value)
 
 		case 5:
 			if ((last_register_5&4)!=(value&4)) tbblue_splash_monitor_mode();
+
+			//joystick 1 mode
+			/*
+			  bits 7:6 = Joystick 1 mode (LSB)
+  			bits 5:4 = Joystick 2 mode (LSB)
+  			bit 3 = Joystick 1 mode (MSB)
+  			bit 2 = 50/60 Hz mode (0 = 50Hz, 1 = 60Hz, Pentagon is always 50Hz)
+  			bit 1 = Joystick 2 mode (MSB)
+  			bit 0 = Enable scandoubler (1 = enabled)
+			*/
+
+			if ((last_register_5&(8+64+128))!=(value&(8+64+128))) {
+				tbblue_set_joystick_1_mode();
+			}
 		
 		break;
 

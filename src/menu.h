@@ -83,6 +83,9 @@ struct s_zxvision_window {
 	//Si boton de background aparece en ventana. Nota: en principio F6 funciona aunque esto no se establezca
 	int can_be_backgrounded;
 
+	//Si se pueden enviar hotkeys desde raton, pulsando en letras inversas
+	int can_mouse_send_hotkeys;
+
 	int height_before_max_min_imize;
 	int width_before_max_min_imize;
 	int x_before_max_min_imize;
@@ -123,9 +126,10 @@ typedef struct s_zxvision_window zxvision_window;
 #define MENU_ITEM_PARAMETERS int valor_opcion GCC_UNUSED
 
 //Usado en ver sprites y ver colores mapeados
-#define MENU_TOTAL_MAPPED_PALETTES 16
+#define MENU_TOTAL_MAPPED_PALETTES 17
 
 #define MENU_LAST_DIR_FILE_NAME "zesarux_last_dir.txt"
+#define MENU_SCR_INFO_FILE_NAME "zesarux_scr_info.txt"
 
 extern int menu_overlay_activo;
 extern void (*menu_overlay_function)(void);
@@ -146,6 +150,9 @@ extern void menu_escribe_texto(int x,int y,int tinta,int papel,char *texto);
 extern void normal_overlay_texto_menu(void);
 extern int si_menu_mouse_en_ventana(void);
 extern void menu_calculate_mouse_xy(void);
+
+extern unsigned char menu_escribe_texto_convert_utf(unsigned char prefijo_utf,unsigned char caracter);
+extern int menu_es_prefijo_utf(z80_byte caracter);
 
 extern void menu_ventana_draw_vertical_perc_bar(int x,int y,int ancho,int alto,int porcentaje,int estilo_invertido);
 extern void menu_ventana_draw_horizontal_perc_bar(int x,int y,int ancho,int alto,int porcentaje,int estilo_invertido);
@@ -255,6 +262,7 @@ extern void zxvision_delete_window_if_exists(zxvision_window *ventana);
 extern int zxvision_window_can_be_backgrounded(zxvision_window *w);
 extern void zxvision_message_put_window_background(void);
 extern void zxvision_window_delete_all_windows(void);
+extern void zxvision_window_delete_all_windows_and_clear_geometry(void);
 
 extern zxvision_window *zxvision_coords_in_below_windows(zxvision_window *w,int x,int y);
 
@@ -291,6 +299,7 @@ extern void zxvision_send_scroll_right(zxvision_window *w);
 extern void zxvision_draw_below_windows(zxvision_window *w);
 extern void zxvision_draw_overlays_below_windows(zxvision_window *w);
 extern void zxvision_clear_window_contents(zxvision_window *w);
+extern void zxvision_fill_window_transparent(zxvision_window *w);
 
 extern void zxvision_set_not_resizable(zxvision_window *w);
 extern void zxvision_set_resizable(zxvision_window *w);
@@ -321,6 +330,8 @@ extern void menu_calculate_mouse_xy_absolute_interface(int *resultado_x,int *res
 extern void menu_calculate_mouse_xy_absolute_interface_pixel(int *resultado_x,int *resultado_y);
 
 extern void zxvision_putpixel(zxvision_window *w,int x,int y,int color);
+extern void zxvision_putpixel_no_zoom(zxvision_window *w,int x,int y,int color);
+
 extern z80_byte zxvision_read_keyboard(void);
 void zxvision_handle_cursors_pgupdn(zxvision_window *ventana,z80_byte tecla);
 extern z80_byte zxvision_common_getkey_refresh(void);
@@ -359,7 +370,7 @@ extern void menu_first_aid_init(void);
 extern void menu_first_aid_random_startup(void);
 extern int menu_first_aid_title(char *key_setting,char *title);
 
-#define MAX_F_FUNCTIONS 24
+#define MAX_F_FUNCTIONS 26
 
 enum defined_f_function_ids {
 	//reset, hard-reset, nmi, open menu, ocr, smartload, osd keyboard, exitemulator.
@@ -382,11 +393,13 @@ enum defined_f_function_ids {
 	F_FUNCION_SWITCHFULLSCREEN, //17
 	F_FUNCION_RELOADMMC, 
 	F_FUNCION_REINSERTTAPE, 
-	F_FUNCION_DEBUGCPU,   
-	F_FUNCION_PAUSE,    //21
+	F_FUNCION_PAUSEUNPAUSETAPE,
+	F_FUNCION_DEBUGCPU,   //21
+	F_FUNCION_PAUSE,    
 	F_FUNCION_TOPSPEED,  
- 	F_FUNCION_EXITEMULATOR, //23
-	F_FUNCION_BACKGROUND_WINDOW
+ 	F_FUNCION_EXITEMULATOR, 
+	F_FUNCION_BACKGROUND_WINDOW,
+	F_FUNCION_OVERLAY_WINDOWS
 };
 //Nota: F_FUNCION_BACKGROUND_WINDOW no se llama de la misma manera que las otras funciones F
 //solo esta aqui para evitar que una misma tecla F se asigne a una funcion F normal y tambien a background window
@@ -560,6 +573,8 @@ typedef struct s_menu_item menu_item;
 
 
 extern void menu_ventana_scanf(char *titulo,char *texto,int max_length);
+extern int menu_ventana_scanf_numero(char *titulo,char *texto,int max_length,int incremento,int minimo,int maximo,int circular);
+extern void menu_ventana_scanf_numero_enhanced(char *titulo,int *variable,int max_length,int incremento,int minimo,int maximo,int circular);
 extern int menu_filesel(char *titulo,char *filtros[],char *archivo);
 extern int zxvision_menu_filesel(char *titulo,char *filtros[],char *archivo);
 
@@ -589,7 +604,7 @@ extern void menu_generic_message_warn(char *titulo, const char * texto);
 extern void zxvision_menu_generic_message_setting(char *titulo, const char *texto, char *texto_opcion, int *valor_opcion);
 
 
-
+extern void zxvision_rearrange_background_windows(void);
 
 extern void menu_generic_message_tooltip(char *titulo, int volver_timeout, int tooltip_enabled, int mostrar_cursor, generic_message_tooltip_return *retorno, const char * texto_format , ...);
 
@@ -660,8 +675,8 @@ extern void menu_footer_bottom_line(void);
 
 extern void menu_inicio(void);
 
-extern void set_splash_text(void);
-extern void reset_splash_text(void);
+extern void set_welcome_message(void);
+extern void reset_welcome_message(void);
 extern z80_bit menu_splash_text_active;
 extern int menu_splash_segundos;
 extern z80_byte menu_da_todas_teclas(void);
@@ -808,13 +823,14 @@ struct s_estilos_gui {
 typedef struct s_estilos_gui estilos_gui;
 
 
-#define ESTILOS_GUI 14
+#define ESTILOS_GUI 15
 
 
-#define ESTILO_GUI_RETROMAC 8
-#define ESTILO_GUI_QL 7
-#define ESTILO_GUI_MANSOFTWARE 6
-#define ESTILO_GUI_SAM 5
+#define ESTILO_GUI_RETROMAC 9
+#define ESTILO_GUI_QL 8
+#define ESTILO_GUI_MANSOFTWARE 7
+#define ESTILO_GUI_SAM 6
+#define ESTILO_GUI_MSX 5
 #define ESTILO_GUI_CPC 4
 #define ESTILO_GUI_Z88 3
 
@@ -831,8 +847,14 @@ extern void menu_draw_ext_desktop(void);
 extern int menu_ext_desktop_enabled_place_menu(void);
 extern int menu_get_width_characters_ext_desktop(void);
 
+#define MENU_MAX_EXT_DESKTOP_FILL_NUMBER 6
+
 extern int menu_ext_desktop_fill;
-extern int menu_ext_desktop_fill_solid_color;
+extern int menu_ext_desktop_fill_first_color;
+extern int menu_ext_desktop_fill_second_color;
+
+extern z80_bit menu_ext_desktop_transparent_lower_icons;
+extern z80_bit menu_ext_desktop_transparent_upper_icons;
 
 
 #define ESTILO_GUI_PAPEL_NORMAL (definiciones_estilos_gui[estilo_gui_activo].papel_normal)
@@ -883,6 +905,8 @@ extern int salir_todos_menus;
 extern int si_valid_char(z80_byte caracter);
 
 extern z80_bit menu_event_open_menu;
+
+extern z80_bit menu_was_open_by_left_mouse_button;
 
 extern int menu_debug_memory_zone;
 
@@ -940,9 +964,7 @@ extern char snapshot_load_file[];
 extern int menu_char_width;
 
 extern int overlay_usado_screen_array[];
-#define ZESARUX_ASCII_LOGO_ANCHO 26
-#define ZESARUX_ASCII_LOGO_ALTO 26
-extern char *zesarux_ascii_logo[ZESARUX_ASCII_LOGO_ALTO];
+
 
 extern int return_color_zesarux_ascii(char c);
 
@@ -952,6 +974,8 @@ extern char menu_filesel_posicionar_archivo_nombre[];
 extern z80_bit menu_limit_menu_open;
 
 extern z80_bit menu_filesel_hide_dirs;
+
+extern z80_bit menu_filesel_show_previews;
 
 extern int osd_kb_no_mostrar_desde_menu;
 
@@ -971,7 +995,7 @@ extern void menu_dsk_getoff_block(z80_byte *dsk_file_memory,int longitud_dsk,int
 
 extern int menu_dsk_get_start_filesystem(z80_byte *dsk_file_memory,int longitud_dsk);
 
-extern int menu_dsk_getoff_track_sector(z80_byte *dsk_memoria,int total_pistas,int pista_buscar,int sector_buscar);
+extern int menu_dsk_getoff_track_sector(z80_byte *dsk_memoria,int total_pistas,int pista_buscar,int sector_buscar,int longitud_dsk);
 
 extern int menu_decae_ajusta_valor_volumen(int valor_decae,int valor_volumen);
 
@@ -1013,6 +1037,30 @@ extern int menu_origin_x(void);
 extern int menu_center_y(void);
 
 extern z80_bit no_close_menu_after_smartload;
+
+extern z80_bit menu_zxdesktop_buttons_enabled;
+
+
+struct s_zxdesktop_lowericons_info {
+	int (*is_visible)(void);
+	int (*is_active)(void);
+	void (*accion)(void);	
+	char **bitmap_active;
+	char **bitmap_inactive;
+	int *icon_is_inverse;
+};
+
+extern int zxdesktop_icon_tape_inverse;
+extern int zxdesktop_icon_mmc_inverse;
+extern int zxdesktop_icon_plus3_inverse;
+extern int zxdesktop_icon_betadisk_inverse;
+extern int zxdesktop_icon_ide_inverse;
+extern int zxdesktop_icon_zxpand_inverse;
+extern int zxdesktop_icon_mdv_flp_inverse;
+
+#define TOTAL_ZXDESKTOP_MAX_LOWER_ICONS 15
+
+extern struct s_zxdesktop_lowericons_info zdesktop_lowericons_array[];
 
 extern void zxvision_espera_tecla_condicion_progreso(zxvision_window *w,int (*funcioncond) (zxvision_window *),void (*funcionprint) (zxvision_window *) );
 extern void zxvision_simple_progress_window(char *titulo, int (*funcioncond) (zxvision_window *),void (*funcionprint) (zxvision_window *) );
@@ -1064,6 +1112,7 @@ extern void menu_uncompress_zip_progress(char *zip_file,char *dest_dir);
 "[FUNCTION] can be:\n" \
 "PEEK(e): returns the byte at address e, where e is any expression\n" \
 "PEEKW(e): returns the word at address e\n" \
+"IN(e): returns the byte at port e\n" \
 "NOT(e): negates expression e: if it's 0, returns 1. Otherwhise, return 0. \n" \
 "ABS(e): returns absolute value of expression e\n" \
 "BYTE(e): same as (e)&FFH\n" \

@@ -360,3 +360,58 @@
         //Fin pruebas 22 Mayo 2018
 	//
 
+
+	//
+        //Pruebas 17 Agosto 2020
+	//
+        //sin rainbow
+        //sin memptr,sin visualmem, sin cpustats
+        //con contended memory
+        //con pthreads
+        ./zesarux --noconfigfile --ao null --vo null
+        //48k, ao null, vo null, 10% cpu aprox en pc
+
+        //sin rainbow
+        //sin memptr,sin visualmem, sin cpustats
+        //con contended memory
+        ./zesarux --noconfigfile --ao null --vo xwindows --zoom 1
+        //48k, ao null, vo x11, zoom 1, 21% cpu aprox en pc
+
+        //con rainbow
+        //sin memptr,sin visualmem, sin cpustats
+        //con contended memory
+        ./zesarux --noconfigfile --ao null --vo xwindows --zoom 1 extras/media/spectrum/rainbow/over128.z80
+        //128k, ao null, vo x11, zoom 1, over128.z80, 48% cpu aprox en pc
+
+	//
+        //Fin pruebas 17 Agosto 2020
+	//        
+
+
+
+
+        //
+        //Pruebas 7 Septiembre 2020. NUEVO PC
+        //
+        //sin rainbow
+        //sin memptr,sin visualmem, sin cpustats
+        //con contended memory
+        //con pthreads
+        ./zesarux --noconfigfile --ao null --vo null
+        //48k, ao null, vo null, 9% cpu aprox en pc
+
+        //sin rainbow
+        //sin memptr,sin visualmem, sin cpustats
+        //con contended memory
+        ./zesarux --noconfigfile --ao null --vo xwindows --zoom 1
+        //48k, ao null, vo x11, zoom 1, 18% cpu aprox en pc
+
+        //con rainbow
+        //sin memptr,sin visualmem, sin cpustats
+        //con contended memory
+        ./zesarux --noconfigfile --ao null --vo xwindows --zoom 1 extras/media/spectrum/rainbow/over128.z80
+        //128k, ao null, vo x11, zoom 1, over128.z80, 43% cpu aprox en pc
+
+        //
+        //Fin pruebas 7 Septiembre 2020
+        //

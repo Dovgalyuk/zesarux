@@ -47,7 +47,7 @@ R5 � Ajuste aproximado del tono, canal C
 El tono de cada canal es un valor de 12 bits que se forma combinando los bits D3-DO
 del registro de ajuste aproximado y los bits D7-DO del registro de ajuste fino. La uni-
 dad b~sica del tono es la frecuencia de reloj ~ividida por 16 (es decir, 110.83 KHz).
-Como el contador es de 12 bits, se puede g ~erar frecuencias de 27 Hz a 110 KHz.
+Como el contador es de 12 bits, se puede generar frecuencias de 27 Hz a 110 KHz.
 
 R6 � Control del generador de ruido, D4-DO
 El periodo del generador de ruido se toma contando los cinco bits inferiores del regis-
@@ -291,6 +291,8 @@ int i;
 	//Establecemos frecuencia
 	if (MACHINE_IS_CPC) ay_chip_frequency=FRECUENCIA_CPC_AY;
 	else if (MACHINE_IS_ZX8081) ay_chip_frequency=FRECUENCIA_ZX81_AY;
+	else if (MACHINE_IS_MSX) ay_chip_frequency=FRECUENCIA_MSX_AY;
+	else if (MACHINE_IS_SVI) ay_chip_frequency=FRECUENCIA_SVI_AY;
 	else ay_chip_frequency=FRECUENCIA_SPECTRUM_AY;
 
 	debug_printf (VERBOSE_INFO,"Setting AY chip frequency to %d HZ",ay_chip_frequency);
@@ -948,18 +950,21 @@ z80_byte in_port_ay(z80_byte puerto_h)
 
 
 //Calcular contadores de incremento
-//void establece_frecuencia_tono(z80_byte indice, int *freq_tono, int *contador_tono)
-void establece_frecuencia_tono(z80_byte indice, int *freq_tono)
+//void ay_establece_frecuencia_tono(z80_byte indice, int *freq_tono, int *contador_tono)
+void ay_establece_frecuencia_tono(z80_byte indice, int *freq_tono)
 {
 
 	int freq_temp;
 	freq_temp=ay_3_8912_registros[ay_chip_selected][indice]+256*(ay_3_8912_registros[ay_chip_selected][indice+1] & 0x0F);
         //printf ("Valor freq_temp : %d\n",freq_temp);
-        freq_temp=freq_temp*16;
-
 
 	//controlamos divisiones por cero
 	if (!freq_temp) freq_temp++;
+
+        freq_temp=freq_temp*AY_DIVISOR_FRECUENCIA;
+
+
+
 
         *freq_tono=FRECUENCIA_AY/freq_temp;
 
@@ -1007,6 +1012,106 @@ void establece_frecuencia_tono(z80_byte indice, int *freq_tono)
 }
 
 
+
+void ay_establece_frecuencia_ruido(void)
+{
+			
+	//Frecuencia ruido
+	int freq_temp=ay_3_8912_registros[ay_chip_selected][6] & 31;
+		//printf ("Valor registros ruido : %d Hz\n",freq_temp);
+
+	//controlamos divisiones por cero
+	if (!freq_temp) freq_temp++;
+
+	freq_temp=freq_temp*AY_DIVISOR_FRECUENCIA;
+
+
+
+				freq_ruido[ay_chip_selected]=FRECUENCIA_NOISE/freq_temp;
+	//printf ("Frecuencia ruido: %d Hz\n",freq_ruido);
+
+		//freq_ruido realmente tiene frecuencia*2... dice cada cuando se conmuta de signo
+		//freq_ruido=freq_ruido*TEMP_MULTIPLICADOR;
+		freq_ruido[ay_chip_selected]=freq_ruido[ay_chip_selected]*2;
+
+
+
+	if (freq_ruido[ay_chip_selected]>FRECUENCIA_CONSTANTE_NORMAL_SONIDO) {
+				//debug_printf (VERBOSE_DEBUG,"Frequency noise %d out of range",freq_ruido[ay_chip_selected]/2);
+				freq_ruido[ay_chip_selected]=FRECUENCIA_CONSTANTE_NORMAL_SONIDO;
+		}
+
+
+//si la frecuencia del ruido es exactamente igual a la del sonido
+//alteramos un poco el valor
+if ( freq_ruido[ay_chip_selected]==FRECUENCIA_CONSTANTE_NORMAL_SONIDO) freq_ruido[ay_chip_selected]=FRECUENCIA_CONSTANTE_NORMAL_SONIDO-10;
+
+
+
+	//printf ("Frecuencia ruido final: %d Hz\n",freq_ruido);
+
+
+		
+}
+
+
+void ay_establece_frecuencia_envelope(void)
+{
+
+			//debug_printf (VERBOSE_DEBUG,"Register Frequency Envelope ay");
+			//contador de 16 bits?
+	        	int freq_temp=ay_3_8912_registros[ay_chip_selected][11]+256*(ay_3_8912_registros[ay_chip_selected][12] & 0xFF);
+			//debug_printf (VERBOSE_DEBUG,"Register counter envelope: %d",freq_temp);
+		        //freq_temp=freq_temp*256;
+	       		//printf ("Valor frecuencia envelope : %d Hz\n",freq_temp);
+
+			/* Envolvente: En teoria debe ir desde 0.1 Hz a 6 KHz
+
+			SI X=6927
+
+			Minimo valor(maxima frecuencia)=1.
+
+			X/1= aprox 6000 Hz
+
+			Maximo valor (menor frecuencia)=65536.  65536
+			X/65536=0.09
+
+			multiplicamos por 10
+
+			X=69270
+
+			*/
+
+
+		        //controlamos divisiones por cero
+			if (!freq_temp) freq_temp++;
+			
+		        freq_envelope[ay_chip_selected]=FRECUENCIA_ENVELOPE/freq_temp;
+
+		        if (freq_envelope[ay_chip_selected]>FRECUENCIA_CONSTANTE_NORMAL_SONIDO) {
+		                //debug_printf (VERBOSE_DEBUG,"Frequency envelope %d out of range",freq_envelope[ay_chip_selected]);
+		                freq_envelope[ay_chip_selected]=FRECUENCIA_CONSTANTE_NORMAL_SONIDO;
+		        }
+
+
+				//si la frecuencia del envelope es exactamente igual a la del sonido
+				//alteramos un poco el valor
+			//esto sucede con valores demasiado altos y quedan fijados a FRECUENCIA_CONSTANTE_NORMAL_SONIDO en el trozo de codigo anterior
+
+
+			//si lo alterasemos solo un poquito, sucede que juegos como el Robocop 2 no se oyen los disparos
+			//lo alteramos mas ( *2 / 3)
+				if ( freq_envelope[ay_chip_selected]==FRECUENCIA_CONSTANTE_NORMAL_SONIDO) {
+				//printf ("temp freq_envelope = FRECUENCIA_CONSTANTE_NORMAL_SONIDO : %d\n",freq_envelope);
+				freq_envelope[ay_chip_selected] *=2;
+				freq_envelope[ay_chip_selected] /=3;
+			}
+
+
+
+						//debug_printf (VERBOSE_DEBUG,"Frequency envelope *10 : %d Hz",freq_envelope[ay_chip_selected]);
+
+}
 
 
 // Emulación y gestión de los dos registros de conexión con el chip AY mediante protocolo serie
@@ -1220,7 +1325,9 @@ void out_port_ay(z80_int puerto,z80_byte value)
 	if (puerto==49149 && (ay_3_8912_registro_sel[ay_chip_selected]==14 || ay_3_8912_registro_sel[ay_chip_selected]==15) ) {
 		//printf ("Out midi valor: %d\n",value);
 		//old_ay3_mid_handle(value);
-		nuevo_aymidi_rs232_handle(value);
+
+
+		if (MACHINE_IS_SPECTRUM) nuevo_aymidi_rs232_handle(value);
 	}
 	//if (puerto==65533 && value>=14) printf("Out seleccion registro valor: %d\n",value);
 
@@ -1232,28 +1339,28 @@ void out_port_ay(z80_int puerto,z80_byte value)
 
 		if (total_ay_chips>1 && value_sin_mascara==156) {
 
-		/*the IC selection still the same
-		TS is 111111 XX
-		I suppose 255 value for first chip, 254 for second and 253 for third, right?
+			/*the IC selection still the same
+			TS is 111111 XX
+			I suppose 255 value for first chip, 254 for second and 253 for third, right?
 
-		11 to 1st ay, 10 to 2nd, 01 to 3rd and 00 to SID
-		yes
-		I made a change to pan the channels, but you can start with these.
-		TBBlue now uses bit 6 and 5 to pan
-		1LR111XX
-		its compatible with original TS, because the tracas are selected by 111111XX, got it?
-		Example:
-		select 2nd AY with audio on Right side only
-		10111110
-		2nd AY, left side only 11011110
-		3rd AY, both sides: 11111101
-		*/
+			11 to 1st ay, 10 to 2nd, 01 to 3rd and 00 to SID
+			yes
+			I made a change to pan the channels, but you can start with these.
+			TBBlue now uses bit 6 and 5 to pan
+			1LR111XX
+			its compatible with original TS, because the tracas are selected by 111111XX, got it?
+			Example:
+			select 2nd AY with audio on Right side only
+			10111110
+			2nd AY, left side only 11011110
+			3rd AY, both sides: 11111101
+			*/
 
 
-		//if (turbosound_enabled.v &&
-		//   (value==255 || value==254 || value==253)
-		//)
-		//{
+			//if (turbosound_enabled.v &&
+			//   (value==255 || value==254 || value==253)
+			//)
+			//{
 
 			int value_chip=value&3;
 
@@ -1276,13 +1383,6 @@ void out_port_ay(z80_int puerto,z80_byte value)
 		ay_3_8912_registros[ay_chip_selected][ay_3_8912_registro_sel[ay_chip_selected]&15]=value;
 
 
-	//imprimir registros
-		/*int r;
-		for (r=0;r<15;r++)
-			printf ("R%d=%x ",r,ay_3_8912_registros[r]);
-		printf ("\n");
-*/
-
 		//Nota sobre registro 7 mixer:
 		//Bit 6 controla la direccion del registro de I/O - registro R14 - de puerto paralelo
 		//como no emulamos puerto paralelo, no nos debe preocupar esto
@@ -1291,129 +1391,41 @@ void out_port_ay(z80_int puerto,z80_byte value)
 
 		if (ay_3_8912_registro_sel[ay_chip_selected] ==0 || ay_3_8912_registro_sel[ay_chip_selected] == 1) {
 			//Canal A
-			//establece_frecuencia_tono(0,&freq_tono_A[ay_chip_selected],&contador_tono_A[ay_chip_selected]);
-			establece_frecuencia_tono(0,&freq_tono_A[ay_chip_selected]);
-
+			ay_establece_frecuencia_tono(0,&freq_tono_A[ay_chip_selected]);
 		}
 
-                if (ay_3_8912_registro_sel[ay_chip_selected] ==2 || ay_3_8912_registro_sel[ay_chip_selected] == 3) {
-                        //Canal B
-			//establece_frecuencia_tono(2,&freq_tono_B[ay_chip_selected],&contador_tono_B[ay_chip_selected]);
-			establece_frecuencia_tono(2,&freq_tono_B[ay_chip_selected]);
-
-                }
+		if (ay_3_8912_registro_sel[ay_chip_selected] ==2 || ay_3_8912_registro_sel[ay_chip_selected] == 3) {
+			//Canal B
+			ay_establece_frecuencia_tono(2,&freq_tono_B[ay_chip_selected]);
+		}
 
 
-                if (ay_3_8912_registro_sel[ay_chip_selected] ==4 || ay_3_8912_registro_sel[ay_chip_selected] == 5) {
-                        //Canal C
-			//establece_frecuencia_tono(4,&freq_tono_C[ay_chip_selected],&contador_tono_C[ay_chip_selected]);
-			establece_frecuencia_tono(4,&freq_tono_C[ay_chip_selected]);
-                }
+		if (ay_3_8912_registro_sel[ay_chip_selected] ==4 || ay_3_8912_registro_sel[ay_chip_selected] == 5) {
+			//Canal C
+			ay_establece_frecuencia_tono(4,&freq_tono_C[ay_chip_selected]);
+		}
 
 		if (ay_3_8912_registro_sel[ay_chip_selected] ==6) {
 			//Frecuencia ruido
-			int freq_temp=ay_3_8912_registros[ay_chip_selected][6] & 31;
-	       		//printf ("Valor registros ruido : %d Hz\n",freq_temp);
-			freq_temp=freq_temp*16;
-
-			//controlamos divisiones por cero
-			if (!freq_temp) freq_temp++;
-
-                        freq_ruido[ay_chip_selected]=FRECUENCIA_NOISE/freq_temp;
-			//printf ("Frecuencia ruido: %d Hz\n",freq_ruido);
-
-		        //freq_ruido realmente tiene frecuencia*2... dice cada cuando se conmuta de signo
-        		//freq_ruido=freq_ruido*TEMP_MULTIPLICADOR;
-        		freq_ruido[ay_chip_selected]=freq_ruido[ay_chip_selected]*2;
-
-
-
-			if (freq_ruido[ay_chip_selected]>FRECUENCIA_CONSTANTE_NORMAL_SONIDO) {
-	                  //debug_printf (VERBOSE_DEBUG,"Frequency noise %d out of range",freq_ruido[ay_chip_selected]/2);
-        	          freq_ruido[ay_chip_selected]=FRECUENCIA_CONSTANTE_NORMAL_SONIDO;
-        		}
-
-
-        //si la frecuencia del ruido es exactamente igual a la del sonido
-        //alteramos un poco el valor
-        if ( freq_ruido[ay_chip_selected]==FRECUENCIA_CONSTANTE_NORMAL_SONIDO) freq_ruido[ay_chip_selected]=FRECUENCIA_CONSTANTE_NORMAL_SONIDO-10;
-
-
-
-			//printf ("Frecuencia ruido final: %d Hz\n",freq_ruido);
-
-
+			ay_establece_frecuencia_ruido();
+	
 		}
 
 		//Envelope
 		//Esto se ejecuta aunque desactivemos el envelope por linea de comandos... pero da igual, al final no se escuchara el envelope
-                if (ay_3_8912_registro_sel[ay_chip_selected] == 11 || ay_3_8912_registro_sel[ay_chip_selected] == 12) {
-			//debug_printf (VERBOSE_DEBUG,"Register Frequency Envelope ay");
-			//contador de 16 bits?
-	        	int freq_temp=ay_3_8912_registros[ay_chip_selected][11]+256*(ay_3_8912_registros[ay_chip_selected][12] & 0xFF);
-			//debug_printf (VERBOSE_DEBUG,"Register counter envelope: %d",freq_temp);
-		        //freq_temp=freq_temp*256;
-	       		//printf ("Valor frecuencia envelope : %d Hz\n",freq_temp);
-
-			/* Envolvente: En teoria debe ir desde 0.1 Hz a 6 KHz
-
-			SI X=6927
-
-			Minimo valor(maxima frecuencia)=1.
-
-			X/1= aprox 6000 Hz
-
-			Maximo valor (menor frecuencia)=65536.  65536
-			X/65536=0.09
-
-			multiplicamos por 10
-
-			X=69270
-
-			*/
-
-
-		        //controlamos divisiones por cero
-			if (!freq_temp) freq_temp++;
-		        freq_envelope[ay_chip_selected]=FRECUENCIA_ENVELOPE/freq_temp;
-
-		        if (freq_envelope[ay_chip_selected]>FRECUENCIA_CONSTANTE_NORMAL_SONIDO) {
-		                //debug_printf (VERBOSE_DEBUG,"Frequency envelope %d out of range",freq_envelope[ay_chip_selected]);
-		                freq_envelope[ay_chip_selected]=FRECUENCIA_CONSTANTE_NORMAL_SONIDO;
-		        }
-
-
-        //si la frecuencia del envelope es exactamente igual a la del sonido
-        //alteramos un poco el valor
-	//esto sucede con valores demasiado altos y quedan fijados a FRECUENCIA_CONSTANTE_NORMAL_SONIDO en el trozo de codigo anterior
-
-
-	//si lo alterasemos solo un poquito, sucede que juegos como el Robocop 2 no se oyen los disparos
-	//lo alteramos mas ( *2 / 3)
-        if ( freq_envelope[ay_chip_selected]==FRECUENCIA_CONSTANTE_NORMAL_SONIDO) {
-		//printf ("temp freq_envelope = FRECUENCIA_CONSTANTE_NORMAL_SONIDO : %d\n",freq_envelope);
-		freq_envelope[ay_chip_selected] *=2;
-		freq_envelope[ay_chip_selected] /=3;
-	}
-
-
-
-		        //debug_printf (VERBOSE_DEBUG,"Frequency envelope *10 : %d Hz",freq_envelope[ay_chip_selected]);
-
-
-
-
-                }
-
-                //Envelope
-		//Esto se ejecuta aunque desactivemos el envelope por linea de comandos... pero da igual, al final no se escuchara el envelope
-                if (ay_3_8912_registro_sel[ay_chip_selected] == 13) {
-			//debug_printf (VERBOSE_DEBUG,"Register Envelope Type ay : %d",value);
-                        //Resetear el ciclo de envolvente
-                        ciclo_envolvente[ay_chip_selected]=0;
-
+        if (ay_3_8912_registro_sel[ay_chip_selected] == 11 || ay_3_8912_registro_sel[ay_chip_selected] == 12) {
+			ay_establece_frecuencia_envelope();
 		}
 
+
+
+		//Envelope
+		//Esto se ejecuta aunque desactivemos el envelope por linea de comandos... pero da igual, al final no se escuchara el envelope
+		if (ay_3_8912_registro_sel[ay_chip_selected] == 13) {
+			//debug_printf (VERBOSE_DEBUG,"Register Envelope Type ay : %d",value);
+			//Resetear el ciclo de envolvente
+			ciclo_envolvente[ay_chip_selected]=0;
+		}
 
 
 
@@ -1432,22 +1444,37 @@ void activa_ay_chip_si_conviene(void)
 }
 
 
-//Retorna la frecuencia de un registro concreto del chip AY de sonido
-int ay_retorna_frecuencia(int registro,int chip)
+//Retorna la frecuencia del tono sobre un valor concreto del chip de sonido
+//Se le pasa valores fino (8 bits bajos) y algo (8 bits altos)
+int ay_retorna_frecuencia_valor_registro(z80_byte value_l,z80_byte value_h)
 {
         int freq_temp;
 	int freq_tono;
-        freq_temp=ay_3_8912_registros[chip][registro*2]+256*(ay_3_8912_registros[chip][registro*2+1] & 0x0F);
+        freq_temp=value_l+256*(value_h & 0x0F);
         //printf ("Valor freq_temp : %d\n",freq_temp);
-        freq_temp=freq_temp*16;
-
 
         //controlamos divisiones por cero
         if (!freq_temp) freq_temp++;
 
+        freq_temp=freq_temp*AY_DIVISOR_FRECUENCIA;
+
+
+
+
         freq_tono=FRECUENCIA_AY/freq_temp;
 
 	return freq_tono;
+}
+
+
+//Retorna la frecuencia de un registro concreto del chip AY de sonido
+int ay_retorna_frecuencia(int registro,int chip)
+{
+
+
+		return ay_retorna_frecuencia_valor_registro(ay_3_8912_registros[chip][registro*2],ay_3_8912_registros[chip][registro*2+1]);
+
+
 }
 
 /*
@@ -1511,3 +1538,27 @@ z80_byte ay_retorna_mixer_register(int chip)
 
 	return valor;
 }
+
+
+
+void ay_establece_frecuencias_todos_canales(void)
+{
+		
+	int chips=ay_retorna_numero_chips();
+	int j;
+	for (j=0;j<chips;j++) {
+
+		ay_chip_selected=j;
+
+		ay_establece_frecuencia_tono(0,&freq_tono_A[j]);
+
+		ay_establece_frecuencia_tono(2,&freq_tono_B[j]);
+
+		ay_establece_frecuencia_tono(4,&freq_tono_C[j]);
+
+		ay_establece_frecuencia_ruido();
+
+		ay_establece_frecuencia_envelope();
+	}
+		
+}	

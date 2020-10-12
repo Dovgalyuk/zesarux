@@ -1,0 +1,174 @@
+--------Para esta versión 9.1:
+
+-Que algunas tareas como store scanline se hagan en thread aparte. Problema: que la mayoria de datos de ese scanline
+pueden variar mientras se está ejecutando el thread con el loop del siguiente scanline
+
+
+-Meter file browser zxuno en imagen zxuno mmc
+
+https://spectrumcomputing.co.uk/forums/viewtopic.php?t=2553
+
+ 
+-Cinta de juegos y programas zx81 pasar a digital
+
+-algun tipo de build que no sea ni linux ni mac ni windows, sino simplemente UNIX_GENERIC o algo similar
+
+-meter real tape en linea comandos siempre acelera la carga, aunque este desactivado
+ ejemplo: ./zesarux --realtape tetris2.pzx
+
+ -Cuando haya fat driver, poder descargar cp/m dentro de la imagen mmc de TBBlue 
+
+ -Quizá file utilities que pueda navegar dentro de archivos mmc. Usando librería fat
+
+
+-para comprobar coordenada y footer, calcular desde abajo de alto ventana. Y usar funcion comun en screen.c
+-quiza funcion footer a scr_putchar_footer_comun_zoom se tiene que hacer con coordenadas 0,1 o 2 simplemente
+
+
+-al cargar smartload, por ejemplo ultimo cargado es thelosttapesofalbion. situa el cursor ahi bien, 
+pero al subir para arriba desplaza desde scroll sin mover
+cursor hasta que esta arriba. O sea, deberia mover siempre cursor y no empezar a hacer scroll hasta que no esta arriba
+
+-Probar malloc en 32 bit de 2 gb
+
+
+-utils.c: In function ‘util_extract_hdf’:
+utils.c:11099:18: warning: this decimal constant is unsigned only in ISO C90
+                  2147483648L, //8. 2 GB
+                  ^
+utils.c: In function ‘util_ascii_to_binary’:
+utils.c:11248:9: warning: this decimal constant is unsigned only in ISO C90
+         const unsigned int mascara=(unsigned int)2147483648;
+
+Puede dar problemas?
+
+
+-Con carga top speed salen dos footer ? El nuevo de rojo también...  
+Quizá el Rojo debería ser el Tspeed que ya sale en la carga...
+Pues porque al ser un hotkey, se abre el menu y al cerrar el menu, se pierde el footer
+
+
+-codetests falla si no hay pthreads con:
+
+
+Running zsock http tests
+Paranoid: Found free socket at index 0
+Error: Pthreads unavailable but trying to use TCP/IP sockets
+Segmentation fault: 11
+
+Al parecer en alguna parte no se gestiona correctamente que se haya retornado -1 en la función de red
+
+
+-ejemplos para spool, como:
+./txt_to_basic_lines.sh FAQ 3 si si no > pruebaspool2.txt
+
+-quiza archivos de updates deban tener algo asi como major version, minor version
+Esto podria corregir el problema de que avise de updates que realmente son versiones anteriores.
+Ejemplo:
+*uso version snapshot 8.1-SN
+*me actualizo a la estable 8.2
+*al arrancar la primera 8.2-SN, verá que hay 8.2-SN ok no pasa nada
+
+*pero:
+*uso version snapshot 8.1-SN
+*paso a usar 8.0. Ultima estable leida: 8.0
+*paso a usar snapshot 8.1-SN, verá que hay 8.2-SN ok no pasa nada
+
+En que casos puede dar problema? Si cambio a mano version snapshot a estable en cpu.h
+Pero esto no deberia suceder: pues al hacer ese cambio se supone que habrá ya un update,
+entonces en el servidor, en el archivo de update de la estable, ya habré actualizado el archivo y dirá la nueva versión
+
+
+-Info ZENG en FAQ: ya está en ayuda. Quizá extender mas?
+
+- meter en extras de docs Benchmark legacy tbblue: de momento está en el código, en el menú como comentarios
+
+-ROM zx85 de Daniel incluir   Y zx82?
+
+-parece que si hay joystick conectado, el splash de Z logo no aparece toda la animacion, se cierra a la primera barra de color
+
+-soporte joystick usb para msx, coleco etc
+
+
+-ayuda zdesktop / background windows: que ya no esta zlogo y si que hay botones ahora
+
+                      
+- bios zxuno, no hace update desde la mmc. condiciones de compilacion en la bios para ZEsarUX:
+
+http://svn.zxuno.com/svn/zxuno/firmware/firmware.asm
+
+
+
+
+-redraws de zxdesktop en determinados cambios (redimensionado/cierre ventana?) donde se queda a veces en negro
+
+-Agregar screenshots versiones anteriores 
+
+-Ventanas con contadores de rendimiento y estado, tipo kms/h y cosas así
+Ver ejemplos de grafana
+Por ejemplo uno circular con aguja que indique el volumen de la señal de salida
+Otro el uso de cpu
+Etc
+
+Quizá ventana con vistas configurables. Poder agregar diferentes sensores numéricos con diferente estilo:
+-kms/h
+-vumeter
+-gráfica con tiempo en la horizontal
+-valor instantáneo
+Poder indicar tiempo de refresco 
+
+Centralizarlo en una función que tenga sensores, que retorne máximo y mínimo valor posible. Y nombre de sensores 
+
+Nombre de esa ventana?
+ZX Graph
+ZEsarUX graph
+Emu Graph
+Emu view
+Emu sensors
+ZEsarUX sensors
+Etc... 
+
+
+-puerto kempston y puerto 223. Juego El cid
+
+https://foro.speccy.org/viewtopic.php?t=1502
+
+
+-combinacion de teclas para conmutar entre ventanas
+
+-parpadeo cursor status
+
+SV_FSTAT $AA word flashing cursor status
+
+Ver en uqlx:
+
+void FrameInt(void)
+{
+  if((intReg&8)!=0) /* controlla che sia abilitato */
+    {
+      theInt=8;
+      intReg^=8;
+      pendingInterrupt=2;
+      *((uw8*)theROM+0x280a0l)=16;
+      extraFlag=true;
+      nInst2=nInst;
+      nInst=0;
+    }
+}
+
+y en la doc de uqlx:
+
+Q: How do you manage the 50 hz interrupt of the 8049 and the Keyboard interrupt?
+
+
+-QL. editor.zip tiene el TK_TOOLKIT? se queda residente?
+miniview.zip usa: TK2_EXT
+estan en subcarpeta editview/
+
+-tecla ESC QL?
+
+-sonido en QL
+
+-En ventana sprite navigator Tbblue, indicar parámetros de sprite relativo etc
+
+-file previews: que detecte si lo seleccionado es un archivo realmente (y no directorio por ejemplo)

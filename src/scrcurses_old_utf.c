@@ -1567,7 +1567,7 @@ scr_detectedchar_print=scrcurses_detectedchar_print;
 curses_last_message_shown[0]=0x0;
 
 //Esto debe estar al final, para que funcione correctamente desde menu, cuando se selecciona un driver, y no va, que pueda volver al anterior
-scr_driver_name="curses";
+scr_set_driver_name("curses");
 
 
 scrcurses_blank_footer();

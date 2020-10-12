@@ -56,11 +56,16 @@ extern z80_bit aymidi_rs232_enabled;
 #define FRECUENCIA_SPECTRUM_AY 1773400
 #define FRECUENCIA_CPC_AY      1000000
 #define FRECUENCIA_ZX81_AY     1625000
+#define FRECUENCIA_MSX_AY      1789772
+#define FRECUENCIA_SVI_AY      1789772
 
 
 extern int ay_chip_frequency;
 
 //#define FRECUENCIA_NOISE 886700
+
+
+#define AY_DIVISOR_FRECUENCIA 16
 
 #define FRECUENCIA_NOISE (FRECUENCIA_AY/2)
 
@@ -89,6 +94,7 @@ extern void set_total_ay_chips(int total);
 extern int ay_chip_selected;
 
 extern int ay_retorna_frecuencia(int registro,int chip);
+extern int ay_retorna_frecuencia_valor_registro(z80_byte value_l,z80_byte value_h);
 
 extern char da_output_ay_izquierdo(void);
 extern char da_output_ay_derecho(void);
@@ -103,5 +109,7 @@ extern z80_byte ay_retorna_mixer_register(int chip);
 
 extern z80_byte ay_filtros[];
 extern void ay_init_filters(void);
+
+extern void ay_establece_frecuencias_todos_canales(void);
 
 #endif

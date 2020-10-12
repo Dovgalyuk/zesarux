@@ -200,6 +200,11 @@ z80_bit setting_mostrar_ay_piano_grafico={1};
 //Sensibilidad usada al leer kempston mouse desde spectrum
 int kempston_mouse_factor_sensibilidad=1;
 
+z80_bit ql_replace_underscore_dot={1};
+z80_bit ql_replace_underscore_dot_only_one={1};
+
+z80_bit ql_flp1_follow_mdv1={0};
+
 //
 // Display Settings
 //
@@ -229,7 +234,18 @@ z80_bit tbblue_store_scanlines={0};
 //Lo mismo pero para el border
 z80_bit tbblue_store_scanlines_border={0};
 
+//Sin limites de sprites por linea en chip vdp 9918a
+z80_bit vdp_9918a_unlimited_sprites_line={0};
 
+//Cambiar color paper en carga de msx
+z80_bit msx_loading_stripes={0};
+
+//Simular parpadeo cursor QL
+z80_bit ql_simular_parpadeo_cursor={1};
+
+
+//Reduccion ruido
+z80_bit msx_loading_noise_reduction={0};
 
 //
 // Windows Settings
@@ -240,3 +256,12 @@ int menu_allow_background_windows=0;
 
 //Reabrir ventanas al iniciar el emulador 
 z80_bit menu_reopen_background_windows_on_start={0};
+
+
+//
+// GUI Settings
+//
+
+
+//Si se selecciona maquina con listado ordenado por nombre, en vez de por fabricante
+z80_bit setting_machine_selection_by_name={0};

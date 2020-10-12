@@ -103,10 +103,20 @@
 #include "zeng.h"
 #include "network.h"
 #include "stats.h"
-
+#include "vdp_9918a.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "sn76489an.h"
+#include "svi.h"
 
 #ifdef COMPILE_ALSA
 #include "audioalsa.h"
+#endif
+
+
+#ifdef COMPILE_PCSPEAKER
+#include "audiopcspeaker.h"
 #endif
 
  
@@ -189,6 +199,8 @@ int ide_divide_opcion_seleccionada=0;
 int display_settings_opcion_seleccionada=0;
 int debug_tsconf_opcion_seleccionada=0;
 int windows_opcion_seleccionada=0;
+int zxpand_opcion_seleccionada=0;
+int ql_mdv_flp_opcion_seleccionada=0;
 
 
 //Fin opciones seleccionadas para cada menu
@@ -431,13 +443,21 @@ void menu_debug_poke_pok_file(MENU_ITEM_PARAMETERS)
 
         ret=menu_filesel("Select POK File",filtros,pokfile);
 
+	
 	//contenido
 	//MAX_LINEAS_POK_FILE es maximo de lineas de pok file
 	//normalmente la tabla de pokes sera menor que el numero de lineas en el archivo .pok
-	struct s_pokfile tabla_pokes[MAX_LINEAS_POK_FILE];
+	//struct s_pokfile tabla_pokes[MAX_LINEAS_POK_FILE];
+	struct s_pokfile *tabla_pokes;
+	tabla_pokes=malloc(sizeof(struct s_pokfile)*MAX_LINEAS_POK_FILE);	
 
 	//punteros
-	struct s_pokfile *punteros_pokes[MAX_LINEAS_POK_FILE];
+	//struct s_pokfile *punteros_pokes[MAX_LINEAS_POK_FILE];
+	struct s_pokfile **punteros_pokes;
+	punteros_pokes=malloc(sizeof(struct s_pokfile *)*MAX_LINEAS_POK_FILE);
+
+
+	if (tabla_pokes==NULL || punteros_pokes==NULL) cpu_panic("Can not allocate memory for poke table");
 
 	int i;
 	for (i=0;i<MAX_LINEAS_POK_FILE;i++) punteros_pokes[i]=&tabla_pokes[i];
@@ -569,6 +589,9 @@ void menu_debug_poke_pok_file(MENU_ITEM_PARAMETERS)
 
 
         }
+
+	free(tabla_pokes);
+	free(punteros_pokes);
 
 }
 
@@ -837,7 +860,7 @@ void menu_settings_debug(MENU_ITEM_PARAMETERS)
 		menu_add_item_menu(array_menu_settings_debug,"",MENU_OPCION_SEPARADOR,NULL,NULL);		
 
 
-#ifdef USE_PTHREADS
+#ifndef NETWORKING_DISABLED
 		menu_add_item_menu_format(array_menu_settings_debug,MENU_OPCION_NORMAL, menu_debug_configuration_remoteproto,NULL,"[%c] ZRCP Remote protocol",(remote_protocol_enabled.v ? 'X' : ' ') );
 		menu_add_item_menu_tooltip(array_menu_settings_debug,"Enables or disables ZEsarUX remote command protocol (ZRCP)");
 		menu_add_item_menu_ayuda(array_menu_settings_debug,"Enables or disables ZEsarUX remote command protocol (ZRCP)");
@@ -925,8 +948,8 @@ void menu_change_audio_driver_get(void)
 {
         int i;
         for (i=0;i<num_audio_driver_array;i++) {
-		//printf ("actual: %s buscado: %s indice: %d\n",audio_driver_name,audio_driver_array[i].driver_name,i);
-                if (!strcmp(audio_driver_name,audio_driver_array[i].driver_name)) {
+		//printf ("actual: %s buscado: %s indice: %d\n",audio_new_driver_name,audio_driver_array[i].driver_name,i);
+                if (!strcmp(audio_new_driver_name,audio_driver_array[i].driver_name)) {
                         num_menu_audio_driver=i;
                         num_previo_menu_audio_driver=i;
 			return;
@@ -960,7 +983,7 @@ void menu_change_audio_driver_apply(MENU_ITEM_PARAMETERS)
                 }
 
                 else {
-                        debug_printf(VERBOSE_ERR,"Can not set audio driver. Restoring to previous driver %s",audio_driver_name);
+                        debug_printf(VERBOSE_ERR,"Can not set audio driver. Restoring to previous driver %s",audio_new_driver_name);
 			menu_change_audio_driver_get();
 
                         //Restaurar audio driver
@@ -1020,6 +1043,11 @@ int menu_cond_ay_chip(void)
 	return ay_chip_present.v;
 }
 
+int menu_cond_ay_or_sn_chip(void)
+{
+	if (ay_chip_present.v || sn_chip_present.v) return 1;
+	else return 0;
+}
 
 void menu_audio_beep_filter_on_rom_save(MENU_ITEM_PARAMETERS)
 {
@@ -1060,12 +1088,18 @@ void menu_audio_beeper_real (MENU_ITEM_PARAMETERS)
 
 void menu_audio_volume(MENU_ITEM_PARAMETERS)
 {
+	menu_ventana_scanf_numero_enhanced("Volume in %",&audiovolume,4,+20,0,100,0);
+
+/*
         char string_perc[4];
 
         sprintf (string_perc,"%d",audiovolume);
 
 
-        menu_ventana_scanf("Volume in %",string_perc,4);
+        //menu_ventana_scanf("Volume in %",string_perc,4);
+		int retorno=menu_ventana_scanf_numero("Volume in %",string_perc,4,+20,0,100,0);
+
+		if (retorno<0) return;
 
         int v=parse_string_to_number(string_perc);
 
@@ -1075,6 +1109,7 @@ void menu_audio_volume(MENU_ITEM_PARAMETERS)
 	}
 
 	audiovolume=v;
+*/
 }
 
 void menu_audio_ay_chip(MENU_ITEM_PARAMETERS)
@@ -1268,6 +1303,50 @@ void menu_silence_detector(MENU_ITEM_PARAMETERS)
 	silence_detector_setting.v ^=1;
 }
 
+void menu_audio_resample_1bit(MENU_ITEM_PARAMETERS)
+{
+	audio_resample_1bit.v ^=1;
+}
+
+
+
+
+
+void menu_pcspeaker_wait_time(MENU_ITEM_PARAMETERS)
+{
+
+
+        char string_time[3];
+
+        sprintf (string_time,"%d",audiopcspeaker_tiempo_espera);
+
+        menu_ventana_scanf("Wait time (0-64)",string_time,3);
+
+        int valor_tiempo=parse_string_to_number(string_time);
+
+        if (valor_tiempo<0 || valor_tiempo>64) {
+                                        debug_printf (VERBOSE_ERR,"Invalid value %d",valor_tiempo);
+                                        return;
+        }
+
+        audiopcspeaker_tiempo_espera=valor_tiempo;
+
+
+}
+
+
+void menu_pcspeaker_auto_calibrate_wait_time(MENU_ITEM_PARAMETERS)
+{
+
+//Esta funcion solo disponible si se compila audiopcspeaker
+#ifdef COMPILE_PCSPEAKER
+	audiopcspeaker_calibrate_tiempo_espera();
+#endif
+	salir_todos_menus=1;
+
+}
+
+
 void menu_settings_audio(MENU_ITEM_PARAMETERS)
 {
         menu_item *array_menu_settings_audio;
@@ -1398,10 +1477,11 @@ void menu_settings_audio(MENU_ITEM_PARAMETERS)
 			menu_add_item_menu_ayuda(array_menu_settings_audio,"Real beeper produces beeper sound more realistic but uses a bit more cpu. Needs beeper enabled (or vsync sound on zx80/81)");
 		}
 
+		menu_add_item_menu(array_menu_settings_audio,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+
 
 		if (MACHINE_IS_SPECTRUM) {
-			menu_add_item_menu_format(array_menu_settings_audio,MENU_OPCION_NORMAL,menu_audio_beep_filter_on_rom_save,NULL,"[%c] Audio ~~filter ROM SAVE",(output_beep_filter_on_rom_save.v ? 'X' : ' '));
-			menu_add_item_menu_shortcut(array_menu_settings_audio,'f');
+			menu_add_item_menu_format(array_menu_settings_audio,MENU_OPCION_NORMAL,menu_audio_beep_filter_on_rom_save,NULL,"[%c] ROM SAVE filter",(output_beep_filter_on_rom_save.v ? 'X' : ' '));
 			menu_add_item_menu_tooltip(array_menu_settings_audio,"Apply filter on ROM save routines");
 			menu_add_item_menu_ayuda(array_menu_settings_audio,"It detects when on ROM save routines and alter audio output to use only "
 					"the MIC bit of the FEH port");
@@ -1419,12 +1499,17 @@ void menu_settings_audio(MENU_ITEM_PARAMETERS)
 
 
 				if (output_beep_filter_alter_volume.v) {
-					menu_add_item_menu_format(array_menu_settings_audio,MENU_OPCION_NORMAL,menu_audio_beep_volume,NULL,"[%d] Volume",output_beep_filter_volume);
+					menu_add_item_menu_format(array_menu_settings_audio,MENU_OPCION_NORMAL,menu_audio_beep_volume,NULL,"[%d] Beeper volume",output_beep_filter_volume);
 				}
 			}
 
 		}
 
+
+		menu_add_item_menu_format(array_menu_settings_audio,MENU_OPCION_NORMAL,menu_audio_resample_1bit,NULL,"[%c] 1 bit filter",(audio_resample_1bit.v ? 'X' : ' '));
+		menu_add_item_menu_tooltip(array_menu_settings_audio,"Resample audio output to 1 bit only");
+		menu_add_item_menu_ayuda(array_menu_settings_audio,"Resample audio output to 1 bit only");
+		
 	
 		menu_add_item_menu(array_menu_settings_audio,"",MENU_OPCION_SEPARADOR,NULL,NULL);
 
@@ -1450,6 +1535,18 @@ void menu_settings_audio(MENU_ITEM_PARAMETERS)
 
                 menu_add_item_menu_format(array_menu_settings_audio,MENU_OPCION_NORMAL,menu_change_audio_driver,NULL,"    C~~hange Audio Driver");
 				menu_add_item_menu_shortcut(array_menu_settings_audio,'h');
+
+
+			if (!strcmp(audio_new_driver_name,"pcspeaker")) {
+				menu_add_item_menu_format(array_menu_settings_audio,MENU_OPCION_NORMAL,menu_pcspeaker_wait_time,NULL,"[%2d] PC Speaker Wait time",audiopcspeaker_tiempo_espera);
+				menu_add_item_menu_tooltip(array_menu_settings_audio,"Wait time between every audio byte sent, in microseconds");
+				menu_add_item_menu_ayuda(array_menu_settings_audio,"Wait time between every audio byte sent, in microseconds. Values between 0 and 64 microseconds. "
+										"It is supposed that if you have a fast machine, you need to increase the value. If you have a slow machine, decrease it");
+
+				menu_add_item_menu_format(array_menu_settings_audio,MENU_OPCION_NORMAL,menu_pcspeaker_auto_calibrate_wait_time,NULL,"     Autocalibrate Wait time");					
+			}				
+	
+
 
 
 
@@ -2486,6 +2583,7 @@ Calculando ese tiempo: 12% cpu
 int ayregisters_previo_valor_volume_A[MAX_AY_CHIPS];
 int ayregisters_previo_valor_volume_B[MAX_AY_CHIPS];
 int ayregisters_previo_valor_volume_C[MAX_AY_CHIPS];
+int ayregisters_previo_valor_volume_noise;
 
 	int menu_ayregisters_valor_contador_segundo_anterior;
 
@@ -2513,7 +2611,136 @@ void menu_ay_registers_overlay(void)
 
 	menu_speech_tecla_pulsada=1; //Si no, envia continuamente todo ese texto a speech
 
-		int vol_A[MAX_AY_CHIPS],vol_B[MAX_AY_CHIPS],vol_C[MAX_AY_CHIPS];
+	int vol_A[MAX_AY_CHIPS],vol_B[MAX_AY_CHIPS],vol_C[MAX_AY_CHIPS],vol_noise;
+
+
+	if (sn_chip_present.v) {
+
+		//Para chip SN76489A de coleco y sg1000
+		total_chips=1;
+
+
+
+      		vol_A[0]=sn_chip_registers[6] & 15;
+        	vol_B[0]=sn_chip_registers[7] & 15;
+        	vol_C[0]=sn_chip_registers[8] & 15;
+			vol_noise=sn_chip_registers[10] & 15;
+
+			//Controlar limites, dado que las variables entran sin inicializar
+			if (ayregisters_previo_valor_volume_A[0]>16) ayregisters_previo_valor_volume_A[0]=16;
+			if (ayregisters_previo_valor_volume_B[0]>16) ayregisters_previo_valor_volume_B[0]=16;
+			if (ayregisters_previo_valor_volume_C[0]>16) ayregisters_previo_valor_volume_C[0]=16;
+			if (ayregisters_previo_valor_volume_noise>16) ayregisters_previo_valor_volume_noise=16;
+			
+
+			ayregisters_previo_valor_volume_A[0]=menu_decae_ajusta_valor_volumen(ayregisters_previo_valor_volume_A[0],vol_A[0]);
+			ayregisters_previo_valor_volume_B[0]=menu_decae_ajusta_valor_volumen(ayregisters_previo_valor_volume_B[0],vol_B[0]);
+			ayregisters_previo_valor_volume_C[0]=menu_decae_ajusta_valor_volumen(ayregisters_previo_valor_volume_C[0],vol_C[0]);
+			ayregisters_previo_valor_volume_noise=menu_decae_ajusta_valor_volumen(ayregisters_previo_valor_volume_noise,vol_noise);
+
+
+			z80_byte volumen_canal;
+
+			volumen_canal=15 - (sn_chip_registers[6] & 15);
+			menu_string_volumen(volumen,volumen_canal,ayregisters_previo_valor_volume_A[0]);
+			sprintf (textovolumen,"Volume A: %s",volumen);
+			//menu_escribe_linea_opcion(linea++,-1,1,textovolumen);
+			zxvision_print_string_defaults(menu_ay_registers_overlay_window,1,linea++,textovolumen);
+
+			volumen_canal=15 - (sn_chip_registers[7] & 15);
+			menu_string_volumen(volumen,volumen_canal,ayregisters_previo_valor_volume_B[0]);
+			sprintf (textovolumen,"Volume B: %s",volumen);
+			//menu_escribe_linea_opcion(linea++,-1,1,textovolumen);
+			zxvision_print_string_defaults(menu_ay_registers_overlay_window,1,linea++,textovolumen);
+
+			volumen_canal=15 - (sn_chip_registers[8] & 15);
+			menu_string_volumen(volumen,volumen_canal,ayregisters_previo_valor_volume_C[0]);
+			sprintf (textovolumen,"Volume C: %s",volumen);
+			//menu_escribe_linea_opcion(linea++,-1,1,textovolumen);
+			zxvision_print_string_defaults(menu_ay_registers_overlay_window,1,linea++,textovolumen);
+
+
+			volumen_canal=15 - (sn_chip_registers[10] & 15);
+			menu_string_volumen(volumen,volumen_canal,ayregisters_previo_valor_volume_noise);
+								//"Volume C: %s"
+			sprintf (textovolumen,"V Noise:  %s",volumen);
+			//menu_escribe_linea_opcion(linea++,-1,1,textovolumen);
+			zxvision_print_string_defaults(menu_ay_registers_overlay_window,1,linea++,textovolumen);
+
+
+
+			int freq_a=sn_retorna_frecuencia(0);
+			int freq_b=sn_retorna_frecuencia(1);
+			int freq_c=sn_retorna_frecuencia(2);
+			sprintf (textotono,"Channel A:  %3s %7d Hz",get_note_name(freq_a),freq_a);
+			//menu_escribe_linea_opcion(linea++,-1,1,textotono);
+			zxvision_print_string_defaults(menu_ay_registers_overlay_window,1,linea++,textotono);
+
+			sprintf (textotono,"Channel B:  %3s %7d Hz",get_note_name(freq_b),freq_b);
+			//menu_escribe_linea_opcion(linea++,-1,1,textotono);
+			zxvision_print_string_defaults(menu_ay_registers_overlay_window,1,linea++,textotono);
+
+			sprintf (textotono,"Channel C:  %3s %7d Hz",get_note_name(freq_c),freq_c);
+			zxvision_print_string_defaults(menu_ay_registers_overlay_window,1,linea++,textotono);
+
+
+					                        //Tipo ruido
+											/*
++--+--+--+--+--+--+--+--+
+|1 |1 |1 |0 |xx|FB|M1|M0|
++--+--+--+--+--+--+--+--+
+
+FB= Feedback:
+
+0= 'Periodic' noise
+1= 'white' noise 
+
+The white noise sounds, well, like white noise.
+The periodic noise is intresting.  Depending on the frequency, it can
+sound very tonal and smooth.
+
+M1-M0= mode bits:
+
+00= Fosc/512  Very 'hissy'; like grease frying
+01= Fosc/1024 Slightly lower
+10= Fosc/2048 More of a high rumble
+11= output of tone generator #3											
+											*/
+
+						z80_byte noise_control=sn_chip_registers[9];
+
+
+						sprintf (textotono,"Noise Type: %s",(noise_control & 4 ? "White" : "Periodic"));
+						zxvision_print_string_defaults_fillspc(menu_ay_registers_overlay_window,1,linea++,textotono);
+
+						
+						sprintf (textotono,"Noise Mode: %d",noise_control & 3);
+						zxvision_print_string_defaults(menu_ay_registers_overlay_window,1,linea++,textotono);							
+						
+					
+
+											/*
+                        int freq_temp=ay_3_8912_registros[chip][6] & 31;
+                        //printf ("Valor registros ruido : %d Hz\n",freq_temp);
+                        freq_temp=freq_temp*16;
+
+                        //controlamos divisiones por cero
+                        if (!freq_temp) freq_temp++;
+
+                        int freq_ruido=FRECUENCIA_NOISE/freq_temp;
+
+                        sprintf (textotono,"Frequency Noise: %6d Hz",freq_ruido);
+                        //menu_escribe_linea_opcion(linea++,-1,1,textotono);
+						zxvision_print_string_defaults(menu_ay_registers_overlay_window,1,linea++,textotono);
+							*/
+
+						
+
+
+	}
+
+
+	else {
 
 	for (chip=0;chip<total_chips;chip++) {
 
@@ -2531,6 +2758,7 @@ void menu_ay_registers_overlay(void)
 			ayregisters_previo_valor_volume_A[chip]=menu_decae_ajusta_valor_volumen(ayregisters_previo_valor_volume_A[chip],vol_A[chip]);
 			ayregisters_previo_valor_volume_B[chip]=menu_decae_ajusta_valor_volumen(ayregisters_previo_valor_volume_B[chip],vol_B[chip]);
 			ayregisters_previo_valor_volume_C[chip]=menu_decae_ajusta_valor_volumen(ayregisters_previo_valor_volume_C[chip],vol_C[chip]);
+
 
 
         		//if (ayregisters_previo_valor_volume_A[chip]<vol_A[chip]) ayregisters_previo_valor_volume_A[chip]=vol_A[chip];
@@ -2641,10 +2869,12 @@ void menu_ay_registers_overlay(void)
 
 	}
 
+	}
 
 
 
-	//Hacer decaer volumenes
+
+	//Hacer decaer volumenes si multitarea off
                         //Decrementar volumenes que caen, pero hacerlo no siempre, sino 2 veces por segundo
             //esto hara ejecutar esto 2 veces por segundo
             if ( ((contador_segundo%500) == 0 && menu_ayregisters_valor_contador_segundo_anterior!=contador_segundo) || menu_multitarea==0) {
@@ -2660,6 +2890,9 @@ void menu_ay_registers_overlay(void)
 
 
 				}
+				
+
+				ayregisters_previo_valor_volume_noise=menu_decae_dec_valor_volumen(ayregisters_previo_valor_volume_noise,vol_noise);
 
 
         }
@@ -2677,7 +2910,7 @@ zxvision_window zxvision_ay_registers_overlay;
 
 void menu_ay_registers_crea_ventana(zxvision_window *ventana,int xventana,int yventana,int ancho_ventana,int alto_ventana)
 {
-		zxvision_new_window(ventana,xventana,yventana,ancho_ventana,alto_ventana,ancho_ventana-1,alto_ventana-2,"AY Registers");
+		zxvision_new_window(ventana,xventana,yventana,ancho_ventana,alto_ventana,ancho_ventana-1,alto_ventana-2,"Audio Chip Registers");
 		ventana->can_be_backgrounded=1;	
 		//indicar nombre del grabado de geometria
 		strcpy(ventana->geometry_name,"ayregisters");
@@ -2828,22 +3061,22 @@ void menu_ay_registers(MENU_ITEM_PARAMETERS)
 
 
 
-int menu_debug_tsconf_tbblue_videoregisters_valor_contador_segundo_anterior;
+int menu_debug_tsconf_tbblue_msx_videoregisters_valor_contador_segundo_anterior;
 
-zxvision_window *menu_debug_tsconf_tbblue_videoregisters_overlay_window;
+zxvision_window *menu_debug_tsconf_tbblue_msx_videoregisters_overlay_window;
 
-void menu_debug_tsconf_tbblue_videoregisters_overlay(void)
+void menu_debug_tsconf_tbblue_msx_videoregisters_overlay(void)
 {
 	if (!zxvision_drawing_in_background) normal_overlay_texto_menu();
 
 
 	zxvision_window *ventana;
 
-	ventana=menu_debug_tsconf_tbblue_videoregisters_overlay_window;	
+	ventana=menu_debug_tsconf_tbblue_msx_videoregisters_overlay_window;	
 
 //esto hara ejecutar esto 2 veces por segundo
-			if ( ((contador_segundo%500) == 0 && menu_debug_tsconf_tbblue_videoregisters_valor_contador_segundo_anterior!=contador_segundo) || menu_multitarea==0) {
-											menu_debug_tsconf_tbblue_videoregisters_valor_contador_segundo_anterior=contador_segundo;
+			if ( ((contador_segundo%500) == 0 && menu_debug_tsconf_tbblue_msx_videoregisters_valor_contador_segundo_anterior!=contador_segundo) || menu_multitarea==0) {
+											menu_debug_tsconf_tbblue_msx_videoregisters_valor_contador_segundo_anterior=contador_segundo;
 				//printf ("Refrescando. contador_segundo=%d\n",contador_segundo);
 
 				int linea=0;
@@ -3001,6 +3234,43 @@ z80_byte clip_windows[TBBLUE_CLIP_WINDOW_TILEMAP][4];
 
 				}
 
+				if (MACHINE_HAS_VDP_9918A) {
+	
+					sprintf (texto_buffer,"Video mode:%s",get_vdp_9918_string_video_mode() );
+					zxvision_print_string_defaults_fillspc(ventana,1,linea++,texto_buffer);
+
+
+					sprintf (texto_buffer,"Background Color: %2d",vdp_9918a_get_border_color());
+					zxvision_print_string_defaults(ventana,1,linea++,texto_buffer);		
+
+					sprintf (texto_buffer,"Foreground Color: %2d",vdp_9918a_get_foreground_color());
+					zxvision_print_string_defaults(ventana,1,linea++,texto_buffer);						
+
+					int sprite_size=vdp_9918a_get_sprite_size();
+					sprintf (texto_buffer,"Sprite size: %dX%d",sprite_size,sprite_size);
+					zxvision_print_string_defaults(ventana,1,linea++,texto_buffer);		
+
+					sprintf (texto_buffer,"Magnification: %dX",vdp_9918a_get_sprite_double());
+					zxvision_print_string_defaults(ventana,1,linea++,texto_buffer);		
+
+					sprintf (texto_buffer,"Name Table:           %04XH",vdp_9918a_get_pattern_name_table());
+					zxvision_print_string_defaults(ventana,1,linea++,texto_buffer);	
+
+					sprintf (texto_buffer,"Color Table:          %04XH",vdp_9918a_get_pattern_color_table());
+					zxvision_print_string_defaults(ventana,1,linea++,texto_buffer);	
+
+					sprintf (texto_buffer,"Pattern Generator:    %04XH",vdp_9918a_get_pattern_base_address());
+					zxvision_print_string_defaults(ventana,1,linea++,texto_buffer);						
+
+
+					sprintf (texto_buffer,"Sprite Attr. Table:   %04XH",vdp_9918a_get_sprite_attribute_table());
+					zxvision_print_string_defaults(ventana,1,linea++,texto_buffer);		
+
+					sprintf (texto_buffer,"Sprite Pattern Table: %04XH",vdp_9918a_get_sprite_pattern_table());
+					zxvision_print_string_defaults(ventana,1,linea++,texto_buffer);						
+
+
+				}
 
 
 				zxvision_draw_window_contents(ventana);	
@@ -3009,10 +3279,10 @@ z80_byte clip_windows[TBBLUE_CLIP_WINDOW_TILEMAP][4];
 
 
 
-zxvision_window menu_debug_tsconf_tbblue_videoregisters_ventana;
+zxvision_window menu_debug_tsconf_tbblue_msx_videoregisters_ventana;
 
 
-void menu_debug_tsconf_tbblue_videoregisters(MENU_ITEM_PARAMETERS)
+void menu_debug_tsconf_tbblue_msx_videoregisters(MENU_ITEM_PARAMETERS)
 {
 
 	menu_espera_no_tecla();
@@ -3020,7 +3290,7 @@ void menu_debug_tsconf_tbblue_videoregisters(MENU_ITEM_PARAMETERS)
 
 	zxvision_window *ventana;
 		
-	ventana=&menu_debug_tsconf_tbblue_videoregisters_ventana;	
+	ventana=&menu_debug_tsconf_tbblue_msx_videoregisters_ventana;	
 
 	//IMPORTANTE! no crear ventana si ya existe. Esto hay que hacerlo en todas las ventanas que permiten background.
 	//si no se hiciera, se crearia la misma ventana, y en la lista de ventanas activas , al redibujarse,
@@ -3039,6 +3309,10 @@ void menu_debug_tsconf_tbblue_videoregisters(MENU_ITEM_PARAMETERS)
 			//yventana=0;
 			alto_ventana=24;
 		}
+
+		else if (MACHINE_HAS_VDP_9918A) {
+			alto_ventana=12;
+		}		
 
 		else {
 			//yventana=7;
@@ -3061,13 +3335,13 @@ void menu_debug_tsconf_tbblue_videoregisters(MENU_ITEM_PARAMETERS)
 	zxvision_draw_window(ventana);
 
 
-	menu_debug_tsconf_tbblue_videoregisters_overlay_window=ventana;
+	menu_debug_tsconf_tbblue_msx_videoregisters_overlay_window=ventana;
 
 
 
 	//Cambiamos funcion overlay de texto de menu
 	//Se establece a la de funcion de onda + texto
-	set_menu_overlay_function(menu_debug_tsconf_tbblue_videoregisters_overlay);
+	set_menu_overlay_function(menu_debug_tsconf_tbblue_msx_videoregisters_overlay);
 
 
        //Toda ventana que este listada en zxvision_known_window_names_array debe permitir poder salir desde aqui
@@ -3122,34 +3396,36 @@ void menu_debug_tsconf_tbblue_videoregisters(MENU_ITEM_PARAMETERS)
 
 
 
-//int menu_debug_tsconf_tbblue_spritenav_current_palette=0;
-int menu_debug_tsconf_tbblue_spritenav_current_sprite=0;
+//int menu_debug_tsconf_tbblue_msx_spritenav_current_palette=0;
+int menu_debug_tsconf_tbblue_msx_spritenav_current_sprite=0;
 
 
-zxvision_window *menu_debug_tsconf_tbblue_spritenav_draw_sprites_window;
+zxvision_window *menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window;
 
-int menu_debug_tsconf_tbblue_spritenav_get_total_sprites(void)
+int menu_debug_tsconf_tbblue_msx_spritenav_get_total_sprites(void)
 {
 	int limite;
 
 	limite=TSCONF_MAX_SPRITES; //85 sprites max
 
 	if (MACHINE_IS_TBBLUE) limite=TBBLUE_MAX_SPRITES;
+	else if (MACHINE_HAS_VDP_9918A) limite=VDP_9918A_MAX_SPRITES;
 
 	return limite;
 }
 
 
-int menu_debug_tsconf_tbblue_spritenav_get_total_height_win(void)
+int menu_debug_tsconf_tbblue_msx_spritenav_get_total_height_win(void)
 {
 
-	if (MACHINE_IS_TSCONF) return menu_debug_tsconf_tbblue_spritenav_get_total_sprites()*2;
-	else return menu_debug_tsconf_tbblue_spritenav_get_total_sprites()*3;
+	if (MACHINE_IS_TSCONF) return menu_debug_tsconf_tbblue_msx_spritenav_get_total_sprites()*2;
+	else if (MACHINE_HAS_VDP_9918A) return menu_debug_tsconf_tbblue_msx_spritenav_get_total_sprites()*2;
+	else return menu_debug_tsconf_tbblue_msx_spritenav_get_total_sprites()*3;
 
 }
 
 //Muestra lista de sprites
-void menu_debug_tsconf_tbblue_spritenav_lista_sprites(void)
+void menu_debug_tsconf_tbblue_msx_spritenav_lista_sprites(void)
 {
 
 	char dumpmemoria[64];
@@ -3158,11 +3434,9 @@ void menu_debug_tsconf_tbblue_spritenav_lista_sprites(void)
 	int limite;
 
 	int linea=0;
-	/*limite=TSCONF_MAX_SPRITES; //85 sprites max
 
-	if (MACHINE_IS_TBBLUE) limite=TBBLUE_MAX_SPRITES;*/
 
-	limite=menu_debug_tsconf_tbblue_spritenav_get_total_sprites();
+	limite=menu_debug_tsconf_tbblue_msx_spritenav_get_total_sprites();
 
 	//z80_byte tbsprite_sprites[TBBLUE_MAX_SPRITES][4];
 	/*
@@ -3177,7 +3451,7 @@ void menu_debug_tsconf_tbblue_spritenav_lista_sprites(void)
 
 		for (linea_color=0;linea_color<limite;linea_color++) {					
 
-			current_sprite=menu_debug_tsconf_tbblue_spritenav_current_sprite+linea_color;
+			current_sprite=menu_debug_tsconf_tbblue_msx_spritenav_current_sprite+linea_color;
 
 			if (MACHINE_IS_TSCONF) {
 
@@ -3208,7 +3482,7 @@ void menu_debug_tsconf_tbblue_spritenav_lista_sprites(void)
 
 				sprintf (dumpmemoria,"%02d X: %3d Y: %3d (%2dX%2d)",current_sprite,x,y,xsize,ysize);
 				//menu_escribe_linea_opcion(linea++,-1,1,dumpmemoria);
-				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
+				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
 
 				sprintf (dumpmemoria,"Tile:%2d,%2d %s %s %s %s P:%2d",tnum_x,tnum_y,
 					(sprite_act ? "ACT" : "   "),(sprite_leap ? "LEAP": "    "),
@@ -3216,7 +3490,7 @@ void menu_debug_tsconf_tbblue_spritenav_lista_sprites(void)
 					spal );
 
 				//menu_escribe_linea_opcion(linea++,-1,1,dumpmemoria);
-				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
+				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
 			}
 
 			if (MACHINE_IS_TBBLUE) {
@@ -3280,29 +3554,68 @@ void menu_debug_tsconf_tbblue_spritenav_lista_sprites(void)
 				sprintf (dumpmemoria,"%03d%s X: %3d Y: %3d %s %s %s",current_sprite,buf_subindex_4_bit,x,y,
 						(mirror_x ? "MX" : "  "),(mirror_y ? "MY" : "  "),(rotate ? "ROT" : "   ")
 				);				
-				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
+				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
 
 
 				sprintf (dumpmemoria," Pattn: %2d Palof: %3d Vis: %s"
 					,pattern,paloff, (visible ? "Yes" : "No ") );
-				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
+				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
 
 
 				sprintf(dumpmemoria," %dbpp ZX: %d ZY: %d",(sprite_es_4bpp ? 4 : 8) ,zoom_x,zoom_y);
-				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_spritenav_draw_sprites_window,1,linea++,dumpmemoria);				
+				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window,1,linea++,dumpmemoria);				
 
 				
 			}
+
+			if (MACHINE_HAS_VDP_9918A) {
+				z80_int sprite_attribute_table=vdp_9918a_get_sprite_attribute_table();
+
+
+				int offset_sprite=current_sprite*4;
+
+
+				sprite_attribute_table +=offset_sprite; 
+
+
+				z80_byte (*vram_read_function_pointer)(z80_int address);
+
+
+				if (MACHINE_IS_COLECO) vram_read_function_pointer=coleco_read_vram_byte;
+				else if (MACHINE_IS_SG1000) vram_read_function_pointer=sg1000_read_vram_byte;
+				else if (MACHINE_IS_SVI) vram_read_function_pointer=svi_read_vram_byte;
+				else vram_read_function_pointer=msx_read_vram_byte;
+								
+
+				z80_byte vert_pos=vram_read_function_pointer(sprite_attribute_table);
+				z80_byte horiz_pos=vram_read_function_pointer(sprite_attribute_table+1);
+				z80_byte sprite_name=vram_read_function_pointer(sprite_attribute_table+2);
+				z80_byte attr_color_etc=vram_read_function_pointer(sprite_attribute_table+3);					
+
+				vert_pos++;
+
+				sprintf (dumpmemoria,"%02d X: %3d Y: %3d",
+					current_sprite,horiz_pos,vert_pos);
+				
+				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
+
+				sprintf (dumpmemoria," Name: %3d Color: %02d EC: %d",
+					sprite_name,attr_color_etc & 15,(attr_color_etc>>7) & 1);
+				
+				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window,1,linea++,dumpmemoria);
+
+				
+			}			
 	
 					
 		}
 
-	zxvision_draw_window_contents(menu_debug_tsconf_tbblue_spritenav_draw_sprites_window); 
+	zxvision_draw_window_contents(menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window); 
 
 
 }
 
-void menu_debug_tsconf_tbblue_spritenav_draw_sprites(void)
+void menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites(void)
 {
 
 
@@ -3311,7 +3624,7 @@ void menu_debug_tsconf_tbblue_spritenav_draw_sprites(void)
 
 
 				//Mostrar lista sprites
-				menu_debug_tsconf_tbblue_spritenav_lista_sprites();
+				menu_debug_tsconf_tbblue_msx_spritenav_lista_sprites();
 
 				//Esto tiene que estar despues de escribir la lista de sprites, para que se refresque y se vea
 				//Si estuviese antes, al mover el cursor hacia abajo dejándolo pulsado, el texto no se vería hasta que no se soltase la tecla
@@ -3320,7 +3633,7 @@ void menu_debug_tsconf_tbblue_spritenav_draw_sprites(void)
 
 				menu_speech_tecla_pulsada=1; //Si no, envia continuamente todo ese texto a speech
 				if (!zxvision_drawing_in_background) normal_overlay_texto_menu();
-				menu_debug_tsconf_tbblue_spritenav_lista_sprites();
+				menu_debug_tsconf_tbblue_msx_spritenav_lista_sprites();
 
 
 
@@ -3328,7 +3641,7 @@ void menu_debug_tsconf_tbblue_spritenav_draw_sprites(void)
 
 zxvision_window zxvision_window_tsconf_tbblue_spritenav;
 
-void menu_debug_tsconf_tbblue_spritenav(MENU_ITEM_PARAMETERS)
+void menu_debug_tsconf_tbblue_msx_spritenav(MENU_ITEM_PARAMETERS)
 {
 	menu_espera_no_tecla();
 	menu_reset_counters_tecla_repeticion();
@@ -3354,7 +3667,7 @@ void menu_debug_tsconf_tbblue_spritenav(MENU_ITEM_PARAMETERS)
 
 
 	zxvision_new_window(ventana,xventana,yventana,ancho_ventana,alto_ventana,
-							TSCONF_SPRITENAV_WINDOW_ANCHO-1,menu_debug_tsconf_tbblue_spritenav_get_total_height_win(),"Sprite navigator");
+							TSCONF_SPRITENAV_WINDOW_ANCHO-1,menu_debug_tsconf_tbblue_msx_spritenav_get_total_height_win(),"Sprite navigator");
 
 	ventana->can_be_backgrounded=1;
 	//indicar nombre del grabado de geometria
@@ -3362,9 +3675,9 @@ void menu_debug_tsconf_tbblue_spritenav(MENU_ITEM_PARAMETERS)
 
 	zxvision_draw_window(ventana);		
 
-    set_menu_overlay_function(menu_debug_tsconf_tbblue_spritenav_draw_sprites);
+    set_menu_overlay_function(menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites);
 
-	menu_debug_tsconf_tbblue_spritenav_draw_sprites_window=ventana; //Decimos que el overlay lo hace sobre la ventana que tenemos aqui
+	menu_debug_tsconf_tbblue_msx_spritenav_draw_sprites_window=ventana; //Decimos que el overlay lo hace sobre la ventana que tenemos aqui
 
 
        //Toda ventana que este listada en zxvision_known_window_names_array debe permitir poder salir desde aqui
@@ -3427,11 +3740,11 @@ void menu_debug_tsconf_tbblue_spritenav(MENU_ITEM_PARAMETERS)
 
 
 
-int menu_debug_tsconf_tbblue_tilenav_current_tilelayer=0;
+int menu_debug_tsconf_tbblue_msx_tilenav_current_tilelayer=0;
 
-z80_bit menu_debug_tsconf_tbblue_tilenav_showmap={0};
+z80_bit menu_debug_tsconf_tbblue_msx_tilenav_showmap={0};
 
-zxvision_window *menu_debug_tsconf_tbblue_tilenav_lista_tiles_window;
+zxvision_window *menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window;
 
 
 #define DEBUG_TSCONF_TILENAV_MAX_TILES (64*64)
@@ -3439,7 +3752,7 @@ zxvision_window *menu_debug_tsconf_tbblue_tilenav_lista_tiles_window;
 //#define DEBUG_TBBLUE_TILENAV_MAX_TILES_4032 (40*32)
 
 
-char menu_debug_tsconf_tbblue_tiles_retorna_visualchar(int tnum)
+char menu_debug_tsconf_tbblue_msx_tiles_retorna_visualchar(int tnum)
 {
 	//Hacer un conjunto de 64 caracteres. Mismo set de caracteres que para Base64. Por que? Por que si :)
 			   //0123456789012345678901234567890123456789012345678901234567890123
@@ -3449,31 +3762,39 @@ char menu_debug_tsconf_tbblue_tiles_retorna_visualchar(int tnum)
 	return caracter_list[index];
 }
 
-int menu_debug_tsconf_tbblue_tilenav_total_vert(void)
+int menu_debug_tsconf_tbblue_msx_tilenav_total_vert(void)
 {
 
 	int limite_vertical;
 
 	if (MACHINE_IS_TSCONF) {
 		limite_vertical=DEBUG_TSCONF_TILENAV_MAX_TILES;
-		if (menu_debug_tsconf_tbblue_tilenav_showmap.v) limite_vertical=TSCONF_TILENAV_TILES_VERT_PER_WINDOW;	
+		if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v) limite_vertical=TSCONF_TILENAV_TILES_VERT_PER_WINDOW;	
 	}
+
+	else if (MACHINE_HAS_VDP_9918A) { 
+		limite_vertical=vdp_9918a_get_tile_heigth()*vdp_9918a_get_tile_width();
+
+		if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v) limite_vertical=vdp_9918a_get_tile_heigth();	
+	}	
 
 	else  { //TBBLUE
 		limite_vertical=tbblue_get_tilemap_width()*32;
 
-		if (menu_debug_tsconf_tbblue_tilenav_showmap.v) limite_vertical=32;	
+		if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v) limite_vertical=32;	
 	}
 
 	return limite_vertical;
 }
 
 //Muestra lista de tiles
-void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
+void menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles(void)
 {
 
 	//Suficientemente grande para almacenar regla superior en modo visual
-	char dumpmemoria[84]; //80 + 3 espacios izquierda + 0 final
+	//80 + 3 espacios izquierda + 0 final	
+#define DEBUG_TILENAV_TEXTO_LINEA 84
+	char dumpmemoria[DEBUG_TILENAV_TEXTO_LINEA]; 
 
 	
 	//int limite;
@@ -3486,9 +3807,16 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 	z80_byte *puntero_tilemap;
 	z80_byte *puntero_tilemap_orig;
 
+	z80_int msx_pattern_name_table; 
+
 	if (MACHINE_IS_TSCONF) {
 		puntero_tilemap=tsconf_ram_mem_table[0]+tsconf_return_tilemappage();
 	}
+
+	else if (MACHINE_HAS_VDP_9918A) {
+		msx_pattern_name_table=vdp_9918a_get_pattern_name_table();
+		puntero_tilemap=NULL; //no se usa, pero para evitar warnings del compilador
+	}	
 
 	else {  //TBBLUE
 		//puntero_tilemap=tbblue_ram_mem_table[5]+tbblue_get_offset_start_tilemap();
@@ -3521,23 +3849,38 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 
 	}
 
+	if (MACHINE_HAS_VDP_9918A) {
+		tilemap_width=vdp_9918a_get_tile_width();
+	}
+
 	puntero_tilemap_orig=puntero_tilemap;
 
-	int limite_vertical=menu_debug_tsconf_tbblue_tilenav_total_vert();
+	int limite_vertical=menu_debug_tsconf_tbblue_msx_tilenav_total_vert();
 
 
 	int offset_vertical=0;
 
-	if (menu_debug_tsconf_tbblue_tilenav_showmap.v) {
+	if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v) {
 		if (MACHINE_IS_TSCONF) {
 				  //0123456789012345678901234567890123456789012345678901234567890123
 		strcpy(dumpmemoria,"   0    5    10   15   20   25   30   35   40   45   50   55   60  ");
 		}
 
+		else if (MACHINE_HAS_VDP_9918A) {
+			if (tilemap_width==32) {
+				  			 //01234567890123456789012345678901
+		strcpy(dumpmemoria,"   0    5    10   15   20   25   30        ");
+			}
+			else {
+				  			 //0123456789012345678901234567890123456789012345678901234567890123
+		strcpy(dumpmemoria,"   0    5    10   15   20   25   30   35   ");
+			}
+		}		
+
 		else { //TBBLUE
 			if (tilemap_width==40) {
 				             //0123456789012345678901234567890123456789012345678901234567890123
-		strcpy(dumpmemoria,"   0    5    10   15   20   25   30   35   ");
+		strcpy(dumpmemoria,"   0    5    10   15   20   25   30   35                                           ");
 			}
 			else {
 				             //01234567890123456789012345678901234567890123456789012345678901234567890123456789
@@ -3550,12 +3893,12 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 		//dumpmemoria[current_tile_x+TSCONF_TILENAV_TILES_HORIZ_PER_WINDOW+3]=0;  //3 espacios al inicio
 
 		//menu_escribe_linea_opcion(linea++,-1,1,&dumpmemoria[current_tile_x]); //Mostrar regla superior
-		zxvision_print_string_defaults(menu_debug_tsconf_tbblue_tilenav_lista_tiles_window,1,0,dumpmemoria);
+		zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window,1,0,dumpmemoria);
 	}
 	else {
 		//Aumentarlo en cuanto al offset que estamos (si modo lista)
 
-		int offset_y=menu_debug_tsconf_tbblue_tilenav_lista_tiles_window->offset_y;
+		int offset_y=menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window->offset_y;
 		
 
 		offset_vertical=offset_y/2;
@@ -3574,9 +3917,20 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 
 		for (;offset_vertical<limite_vertical;offset_vertical++) {
 
+				//texto linea inicializarlo siempre con espacios
+				//#define DEBUG_TILENAV_TEXTO_LINEA 84
+				//char dumpmemoria[DEBUG_TILENAV_TEXTO_LINEA]; 
+				int i;
+				for (i=0;i<DEBUG_TILENAV_TEXTO_LINEA-1;i++) {
+					dumpmemoria[i]=' ';
+				}
+
+				//Y 0 del final
+				dumpmemoria[i]=0;			
+
 			int repetir_ancho=1;
 			int mapa_tile_x=3;
-			if (menu_debug_tsconf_tbblue_tilenav_showmap.v==0) {
+			if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v==0) {
 				//Modo lista tiles
 				current_tile=offset_vertical;
 			}
@@ -3593,6 +3947,16 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 					else sprintf (dumpmemoria,"   ");
 				}
 
+				else if (MACHINE_HAS_VDP_9918A) {
+					current_tile=offset_vertical*tilemap_width;
+					repetir_ancho=tilemap_width;
+
+					//poner regla vertical
+					int linea_tile=current_tile/tilemap_width;
+					if ( (linea_tile%5)==0) sprintf (dumpmemoria,"%2d ",linea_tile);
+					else sprintf (dumpmemoria,"   ");
+				}				
+
 				else { //TBBLUE
 					current_tile=offset_vertical*tilemap_width;
 					repetir_ancho=tilemap_width;
@@ -3607,6 +3971,9 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 			//printf ("linea: %3d current tile: %10d puntero: %10d\n",linea_color,current_tile,puntero_tilemap-tsconf_ram_mem_table[0]-tsconf_return_tilemappage()	);
 
 			do {
+
+
+
 				if (MACHINE_IS_TSCONF) {
 					int y=current_tile/64;
 					int x=current_tile%64; 
@@ -3616,7 +3983,7 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 
 					int offset=(256*y)+(x*2);
 
-					offset+=menu_debug_tsconf_tbblue_tilenav_current_tilelayer*128;
+					offset+=menu_debug_tsconf_tbblue_msx_tilenav_current_tilelayer*128;
 
 					int tnum=puntero_tilemap[offset]+256*(puntero_tilemap[offset+1]&0xF);
 
@@ -3630,17 +3997,17 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 					z80_byte tile_xf=puntero_tilemap[offset+1]&64;
 					z80_byte tile_yf=puntero_tilemap[offset+1]&128;
 
-					if (menu_debug_tsconf_tbblue_tilenav_showmap.v==0) {
+					if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v==0) {
 						//Modo lista tiles
 						sprintf (dumpmemoria,"X: %3d Y: %3d                   ",x,y);
 
-						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
+						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
 
 						sprintf (dumpmemoria," Tile: %2d,%2d %s %s P:%2d",tnum_x,tnum_y,
 							(tile_xf ? "XF" : "  "),(tile_yf ? "YF": "  "),
 							tpal );
 
-						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
+						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
 					}
 					else {
 						//Modo mapa tiles
@@ -3650,11 +4017,70 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 							caracter_final=' '; 
 						}
 						else {
-							caracter_final=menu_debug_tsconf_tbblue_tiles_retorna_visualchar(tnum);
+							caracter_final=menu_debug_tsconf_tbblue_msx_tiles_retorna_visualchar(tnum);
 						}
 
 						dumpmemoria[mapa_tile_x++]=caracter_final;
 					}
+				}
+
+				if (MACHINE_HAS_VDP_9918A) {
+					int y=current_tile/tilemap_width;
+					int x=current_tile%tilemap_width; 	
+
+					int tnum;	
+
+
+
+					if (MACHINE_IS_COLECO) {
+						tnum=coleco_read_vram_byte(msx_pattern_name_table+current_tile);	
+					}	
+
+					else if (MACHINE_IS_SG1000) {
+						tnum=sg1000_read_vram_byte(msx_pattern_name_table+current_tile);	
+					}	
+
+					else if (MACHINE_IS_SVI) {
+						tnum=svi_read_vram_byte(msx_pattern_name_table+current_tile);	
+					}						
+
+					else {
+						tnum=msx_read_vram_byte(msx_pattern_name_table+current_tile);	
+					}
+				
+
+					if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v==0) {
+						//Modo lista tiles
+						sprintf (dumpmemoria,"X: %3d Y: %3d                   ",x,y);
+
+						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
+
+						sprintf (dumpmemoria," Tile: %3d %c",tnum,(tnum>=33 && tnum<=126 ? tnum : ' ' ));
+
+						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window,1,linea++,dumpmemoria);						
+
+					}
+					else {
+						//Modo mapa tiles
+						int caracter_final;
+
+						if (tnum==0) {
+							caracter_final=' '; 
+						}
+						else {
+
+							//Si caracter imprimible, mostramos. Si no, mostrar set alternativo
+							if (tnum>=32 && tnum<=126) {
+								caracter_final=tnum;
+							}
+							else {
+								caracter_final=menu_debug_tsconf_tbblue_msx_tiles_retorna_visualchar(tnum);
+							}
+						}
+
+						dumpmemoria[mapa_tile_x++]=caracter_final;
+					}					
+
 				}
 
 				if (MACHINE_IS_TBBLUE) {
@@ -3748,18 +4174,18 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 					//printf ("tnum: %d\n",tnum);
 
 
-					if (menu_debug_tsconf_tbblue_tilenav_showmap.v==0) {
+					if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v==0) {
 						//Modo lista tiles
 						sprintf (dumpmemoria,"X: %3d Y: %3d                   ",x,y);
 
-						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
+						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
 
 						sprintf (dumpmemoria," Tile: %3d %s %s %s %s P:%2d ",tnum,
 							(xmirror ? "MX" : "  "),(ymirror ? "MY": "  "),
 							(rotate ? "R" : " "),(ula_over_tilemap ? "U": " "),
 							tpal );
 
-						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
+						zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
 					}
 					else {
 						//Modo mapa tiles
@@ -3769,7 +4195,7 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 							caracter_final=' '; 
 						}
 						else {
-							caracter_final=menu_debug_tsconf_tbblue_tiles_retorna_visualchar(tnum);
+							caracter_final=menu_debug_tsconf_tbblue_msx_tiles_retorna_visualchar(tnum);
 						}
 
 						dumpmemoria[mapa_tile_x++]=caracter_final;
@@ -3783,8 +4209,8 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 				repetir_ancho--;
 			} while (repetir_ancho);
 
-			if (menu_debug_tsconf_tbblue_tilenav_showmap.v) {
-				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
+			if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v) {
+				zxvision_print_string_defaults(menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window,1,linea++,dumpmemoria);
 				puntero_tilemap=puntero_tilemap_orig;
 			}
 					
@@ -3794,17 +4220,17 @@ void menu_debug_tsconf_tbblue_tilenav_lista_tiles(void)
 
 	//return linea;
 
-	zxvision_draw_window_contents(menu_debug_tsconf_tbblue_tilenav_lista_tiles_window); 
+	zxvision_draw_window_contents(menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window); 
 }
 
-void menu_debug_tsconf_tbblue_tilenav_draw_tiles(void)
+void menu_debug_tsconf_tbblue_msx_tilenav_draw_tiles(void)
 {
 /*
 				menu_speech_tecla_pulsada=1; //Si no, envia continuamente todo ese texto a speech
 
 
 				//Mostrar lista tiles
-				menu_debug_tsconf_tbblue_tilenav_lista_tiles();
+				menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles();
 
 				//Esto tiene que estar despues de escribir la lista de tiles, para que se refresque y se vea
 				//Si estuviese antes, al mover el cursor hacia abajo dejándolo pulsado, el texto no se vería hasta que no se soltase la tecla
@@ -3815,13 +4241,13 @@ void menu_debug_tsconf_tbblue_tilenav_draw_tiles(void)
 
 				menu_speech_tecla_pulsada=1; //Si no, envia continuamente todo ese texto a speech
 				if (!zxvision_drawing_in_background) normal_overlay_texto_menu();
-				menu_debug_tsconf_tbblue_tilenav_lista_tiles();				
+				menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles();				
 
 }
 
 
 
-void menu_debug_tsconf_tbblue_tilenav_new_window(zxvision_window *ventana)
+void menu_debug_tsconf_tbblue_msx_tilenav_new_window(zxvision_window *ventana)
 {
 
 		char titulo[33];
@@ -3834,22 +4260,26 @@ void menu_debug_tsconf_tbblue_tilenav_new_window(zxvision_window *ventana)
         antes_menu_writing_inverse_color.v=menu_writing_inverse_color.v;
         menu_writing_inverse_color.v=1;		
 
-		int total_height=menu_debug_tsconf_tbblue_tilenav_total_vert();
+		int total_height=menu_debug_tsconf_tbblue_msx_tilenav_total_vert();
 		int total_width=31;
 
 		char texto_layer[32];
 
-		//En caso de tbblue, solo hay una capa
-		if (MACHINE_IS_TBBLUE) texto_layer[0]=0;
+		//En caso de tbblue y msx, solo hay una capa
+		if (MACHINE_IS_TBBLUE || MACHINE_HAS_VDP_9918A) texto_layer[0]=0;
 
-		else sprintf (texto_layer,"~~Layer %d",menu_debug_tsconf_tbblue_tilenav_current_tilelayer);
+		else sprintf (texto_layer,"~~Layer %d",menu_debug_tsconf_tbblue_msx_tilenav_current_tilelayer);
 
-		if (menu_debug_tsconf_tbblue_tilenav_showmap.v) {
+		if (menu_debug_tsconf_tbblue_msx_tilenav_showmap.v) {
 			sprintf (linea_leyenda,"~~Mode: Visual %s",texto_layer);
 
 			if (MACHINE_IS_TSCONF) {
 			total_width=TSCONF_TILENAV_TILES_HORIZ_PER_WINDOW+4;
 			}
+			else if (MACHINE_HAS_VDP_9918A) {
+				//Le ponemos siempre el maximo
+				total_width=40+4; 
+			}			
 			else {
 				//TBBLUE
 				total_width=tbblue_get_tilemap_width()+4;
@@ -3888,6 +4318,9 @@ void menu_debug_tsconf_tbblue_tilenav_new_window(zxvision_window *ventana)
 		ventana->can_be_backgrounded=1;
 		//indicar nombre del grabado de geometria
 		strcpy(ventana->geometry_name,"tsconftbbluetilenav");
+
+		//Permitir hotkeys desde raton
+		ventana->can_mouse_send_hotkeys=1;			
 		
 		//Leyenda inferior
 		//zxvision_print_string_defaults_fillspc(ventana,1,1,"-----");
@@ -3905,14 +4338,14 @@ void menu_debug_tsconf_tbblue_tilenav_new_window(zxvision_window *ventana)
 }
 
 
-void menu_debug_tsconf_tbblue_save_geometry(zxvision_window *ventana)
+void menu_debug_tsconf_tbblue_msx_save_geometry(zxvision_window *ventana)
 {
 	util_add_window_geometry_compact(ventana);
 }
 
 zxvision_window zxvision_window_tsconf_tbblue_tilenav;
 
-void menu_debug_tsconf_tbblue_tilenav(MENU_ITEM_PARAMETERS)
+void menu_debug_tsconf_tbblue_msx_tilenav(MENU_ITEM_PARAMETERS)
 {
 
 	menu_espera_no_tecla();
@@ -3927,11 +4360,11 @@ void menu_debug_tsconf_tbblue_tilenav(MENU_ITEM_PARAMETERS)
     //la primera ventana repetida apuntaria a la segunda, que es el mismo puntero, y redibujaria la misma, y se quedaria en bucle colgado
     zxvision_delete_window_if_exists(ventana);	
 
-	menu_debug_tsconf_tbblue_tilenav_new_window(ventana);
+	menu_debug_tsconf_tbblue_msx_tilenav_new_window(ventana);
 
-	set_menu_overlay_function(menu_debug_tsconf_tbblue_tilenav_draw_tiles);
+	set_menu_overlay_function(menu_debug_tsconf_tbblue_msx_tilenav_draw_tiles);
 
-	menu_debug_tsconf_tbblue_tilenav_lista_tiles_window=ventana; //Decimos que el overlay lo hace sobre la ventana que tenemos aqui
+	menu_debug_tsconf_tbblue_msx_tilenav_lista_tiles_window=ventana; //Decimos que el overlay lo hace sobre la ventana que tenemos aqui
 
 
        //Toda ventana que este listada en zxvision_known_window_names_array debe permitir poder salir desde aqui
@@ -3964,18 +4397,18 @@ void menu_debug_tsconf_tbblue_tilenav(MENU_ITEM_PARAMETERS)
 			case 'l':
 				//En caso de tbblue, hay una sola capa
 				if (!MACHINE_IS_TBBLUE) {			
-					menu_debug_tsconf_tbblue_save_geometry(ventana);		
+					menu_debug_tsconf_tbblue_msx_save_geometry(ventana);		
 					zxvision_destroy_window(ventana);	
-					menu_debug_tsconf_tbblue_tilenav_current_tilelayer ^=1;
-					menu_debug_tsconf_tbblue_tilenav_new_window(ventana);
+					menu_debug_tsconf_tbblue_msx_tilenav_current_tilelayer ^=1;
+					menu_debug_tsconf_tbblue_msx_tilenav_new_window(ventana);
 				}
 			break;
 
 			case 'm':
-				menu_debug_tsconf_tbblue_save_geometry(ventana);
+				menu_debug_tsconf_tbblue_msx_save_geometry(ventana);
 				zxvision_destroy_window(ventana);		
-				menu_debug_tsconf_tbblue_tilenav_showmap.v ^=1;
-				menu_debug_tsconf_tbblue_tilenav_new_window(ventana);
+				menu_debug_tsconf_tbblue_msx_tilenav_showmap.v ^=1;
+				menu_debug_tsconf_tbblue_msx_tilenav_new_window(ventana);
 
 			break;
 
@@ -3998,7 +4431,7 @@ void menu_debug_tsconf_tbblue_tilenav(MENU_ITEM_PARAMETERS)
     cls_menu_overlay();
 
     //Grabar geometria ventana. Usamos funcion auxiliar pues la llamamos tambien al cambiar de modo y layer
-	menu_debug_tsconf_tbblue_save_geometry(ventana);
+	menu_debug_tsconf_tbblue_msx_save_geometry(ventana);
 
 
     if (tecla==3) {
@@ -4183,6 +4616,7 @@ void menu_audio_draw_sound_wave(void)
 
 
 	//Scroll izquierda de array waveform
+	//Sinceramente no me acuerdo realmente que efecto queria mostrar con esto...
 	if (menu_sound_wave_llena==2) {
 		int scroll_x,scroll_y;
 
@@ -4214,7 +4648,7 @@ void menu_audio_draw_sound_wave(void)
 		//ydestino=menu_audio_draw_sound_wave_ycentro-ydestino;
 		//ydestino=alto/2-ydestino;
 
-		ydestino=alto/2-audiostats.medio*alto/256;
+		ydestino=alto/2-(audiostats.medio*alto)/256;
 		//printf ("y destino: %d\n",ydestino);
 
 		//Siempre que estemos en el rango
@@ -4409,6 +4843,9 @@ void menu_audio_new_waveform(MENU_ITEM_PARAMETERS)
 	//printf("despues util_find_window_geometry\n");
 
 	zxvision_new_window_nocheck_staticsize(ventana,x,y,ancho,alto,ancho-1,alto-2,"Waveform");
+
+	//printf("despues zxvision_new_window_nocheck_staticsize\n");
+
 	ventana->can_be_backgrounded=1;	
 	//indicar nombre del grabado de geometria
 	strcpy(ventana->geometry_name,"waveform");
@@ -4722,6 +5159,9 @@ void menu_visualmem_putpixel(zxvision_window *ventana,int x,int y,int color_pixe
 							for (x2=0;x2<4;x2++) {
 								int color_final=color_pixel;
 								if (x2==3 || y2==3) color_final=ESTILO_GUI_PAPEL_NORMAL;
+								
+								//if (x2==0 && x<30) printf("%d %d\n",x,x*4+x2);
+
 								zxvision_putpixel(ventana,x*4+x2,y*4+y2,color_final);
 							}
 						}
@@ -4758,15 +5198,47 @@ void menu_debug_draw_visualmem(void)
 		int multiplicar_alto=8;
 
 		if (menu_visualmem_modo_defrag) {
-			multiplicar_ancho /=4;
+
+			//Original
+			//multiplicar_ancho /=4;
+			
+			//Para que con char width =8 resulte /2
+			//multiplicar_ancho /=(menu_char_width/2); 
+			//A/(A/2)=A/1  / A/2 = A*2 /A=2 -> simplificado
+			//Nuevo calculo
+			//multiplicar_ancho=2;
+
+
+
+			//Antiguo calculo
+			//TODO: ajustes segun char size 7,6,5 mejor que lo que hay ahora
+			//multiplicar_ancho /=4;
+			
+
+			//ancho *=multiplicar_ancho;
+			//en modo defrag cada cuadradito son 4 pixeles de anchoXalto
+
+			
+			ancho=((ancho*multiplicar_ancho)/4);  //-5 //Quitamos 5 para dar margen por la derecha
+
 			multiplicar_alto /=4;
+			alto *=multiplicar_alto;	
+
+			//No alterar xorigen. Para que no quede tanto margen por la derecha
+			//xorigen *=multiplicar_ancho;
+			yorigen *=multiplicar_alto;					
 		}
 
-		ancho *=multiplicar_ancho;
-		alto *=multiplicar_alto;
+		else {
 
-		xorigen *=multiplicar_ancho;
-		yorigen *=multiplicar_alto;
+			ancho *=multiplicar_ancho;
+			alto *=multiplicar_alto;
+
+			xorigen *=multiplicar_ancho;
+			yorigen *=multiplicar_alto;			
+		}
+
+
 	}
 
 
@@ -5051,8 +5523,8 @@ void menu_debug_new_visualmem(MENU_ITEM_PARAMETERS)
 		menu_add_item_menu_format(array_menu_debug_new_visualmem,MENU_OPCION_NORMAL,menu_debug_new_visualmem_looking,NULL,"~~Looking: %s",texto_looking);
 		menu_add_item_menu_shortcut(array_menu_debug_new_visualmem,'l');
 
-		menu_add_item_menu_ayuda(array_menu_debug_new_visualmem,"Which visualmem to look at.\n\nIf you select all MEM, the final color will be a RGB color result of:\n"
-					"Blue component por Written Mem\nGreen component for Read Mem\nRed component for Opcode.\n"
+		menu_add_item_menu_ayuda(array_menu_debug_new_visualmem,"Which visualmem to look at.\n\nIf you select all MEM, the final color will be a RGB color result of:\n\n"
+					"-Blue component por Written Mem\n-Green component for Read Mem\n-Red component for Opcode.\n\n"
 					"Yellow for example is red+green, so opcode fetch+read memory. As an opcode fetch implies a read access,"
 					" you won't ever see a red pixel (only opcode fetch) but all opcode fetch will always be yellow.\n"
 					"Cyan is green+blue, so read+write\n\n"
@@ -6045,6 +6517,9 @@ void menu_debug_hexdump_crea_ventana(zxvision_window *ventana,int x,int y,int an
 
 	//indicar nombre del grabado de geometria
 	strcpy(ventana->geometry_name,"hexeditor");
+
+	//Permitir hotkeys desde raton
+	ventana->can_mouse_send_hotkeys=1;	
 
 	zxvision_draw_window(ventana);
 
@@ -7281,39 +7756,39 @@ void menu_tsconf_layer_overlay_mostrar_texto(void)
 
 				if (MACHINE_IS_TSCONF) {
 
-				//menu_escribe_linea_opcion(linea,-1,1,"Border: ");
-				zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,"Border: ");
-				linea +=3;
+					//menu_escribe_linea_opcion(linea,-1,1,"Border: ");
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,"Border: ");
+					linea +=3;
 
-                sprintf (texto_layer,"ULA:       %s",menu_tsconf_layer_aux_usedunused(tsconf_if_ula_enabled()));
-                //menu_escribe_linea_opcion(linea,-1,1,texto_layer);
-				zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
-				linea +=3;
+					sprintf (texto_layer,"ULA:       %s",menu_tsconf_layer_aux_usedunused(tsconf_if_ula_enabled()));
+					//menu_escribe_linea_opcion(linea,-1,1,texto_layer);
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
+					linea +=3;
 
-                sprintf (texto_layer,"Sprites 0: %s",menu_tsconf_layer_aux_usedunused(tsconf_if_sprites_enabled()));
-                //menu_escribe_linea_opcion(linea,-1,1,texto_layer);	
-				zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
-				linea +=3;		
+					sprintf (texto_layer,"Sprites 0: %s",menu_tsconf_layer_aux_usedunused(tsconf_if_sprites_enabled()));
+					//menu_escribe_linea_opcion(linea,-1,1,texto_layer);	
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
+					linea +=3;		
 
-				sprintf (texto_layer,"Tiles 0:   %s",menu_tsconf_layer_aux_usedunused(tsconf_if_tiles_zero_enabled()));
-                //menu_escribe_linea_opcion(linea,-1,1,texto_layer);
-				zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
-				linea +=3;	
+					sprintf (texto_layer,"Tiles 0:   %s",menu_tsconf_layer_aux_usedunused(tsconf_if_tiles_zero_enabled()));
+					//menu_escribe_linea_opcion(linea,-1,1,texto_layer);
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
+					linea +=3;	
 
-                sprintf (texto_layer,"Sprites 1: %s",menu_tsconf_layer_aux_usedunused(tsconf_if_sprites_enabled()));
-                //menu_escribe_linea_opcion(linea,-1,1,texto_layer);	
-				zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
-				linea +=3;	
+					sprintf (texto_layer,"Sprites 1: %s",menu_tsconf_layer_aux_usedunused(tsconf_if_sprites_enabled()));
+					//menu_escribe_linea_opcion(linea,-1,1,texto_layer);	
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
+					linea +=3;	
 
-		    	sprintf (texto_layer,"Tiles 1:   %s",menu_tsconf_layer_aux_usedunused(tsconf_if_tiles_one_enabled()));
-                //menu_escribe_linea_opcion(linea,-1,1,texto_layer);
-				zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
-				linea +=3;
+					sprintf (texto_layer,"Tiles 1:   %s",menu_tsconf_layer_aux_usedunused(tsconf_if_tiles_one_enabled()));
+					//menu_escribe_linea_opcion(linea,-1,1,texto_layer);
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
+					linea +=3;
 
-                sprintf (texto_layer,"Sprites 2: %s",menu_tsconf_layer_aux_usedunused(tsconf_if_sprites_enabled()));
-                //menu_escribe_linea_opcion(linea,-1,1,texto_layer);	
-				zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
-				linea +=3;		
+					sprintf (texto_layer,"Sprites 2: %s",menu_tsconf_layer_aux_usedunused(tsconf_if_sprites_enabled()));
+					//menu_escribe_linea_opcion(linea,-1,1,texto_layer);	
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,texto_layer);
+					linea +=3;		
 				}
 
 				if (MACHINE_IS_TBBLUE) {
@@ -7378,10 +7853,24 @@ void menu_tsconf_layer_overlay_mostrar_texto(void)
 
 					}
 				
-				}			
+				}		
 
 
-         
+				if (MACHINE_HAS_VDP_9918A) {
+
+					//menu_escribe_linea_opcion(linea,-1,1,"Border: ");
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,"Border: ");
+					linea +=3;
+
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,"Pixels:");
+					linea +=3;
+
+					zxvision_print_string_defaults_fillspc(menu_tsconf_layer_overlay_window,1,linea,"Sprites:");
+					linea +=3;		
+
+	
+				}					
+
 
 
 
@@ -7522,6 +8011,38 @@ void menu_tsconf_layer_reveal_tiles_one(MENU_ITEM_PARAMETERS)
 	tsconf_reveal_layer_tiles_one.v ^=1;
 }
 
+
+
+void menu_msx_layer_settings_border(MENU_ITEM_PARAMETERS)
+{
+	vdp_9918a_force_disable_layer_border.v ^=1;
+}
+
+
+void menu_msx_layer_settings_ula(MENU_ITEM_PARAMETERS)
+{
+	vdp_9918a_force_disable_layer_ula.v ^=1;
+}
+
+void menu_msx_layer_settings_sprites(MENU_ITEM_PARAMETERS)
+{
+	vdp_9918a_force_disable_layer_sprites.v ^=1;
+}
+
+
+
+
+void menu_msx_layer_reveal_ula(MENU_ITEM_PARAMETERS)
+{
+	vdp_9918a_reveal_layer_ula.v ^=1;
+}
+
+void menu_msx_layer_reveal_sprites(MENU_ITEM_PARAMETERS)
+{
+	vdp_9918a_reveal_layer_sprites.v ^=1;
+}
+
+
 void menu_tsconf_layer_settings(MENU_ITEM_PARAMETERS)
 {
 
@@ -7538,6 +8059,11 @@ void menu_tsconf_layer_settings(MENU_ITEM_PARAMETERS)
 	if (MACHINE_IS_TBBLUE) {
 		alto=20;
 		//y=1;
+	}
+
+
+	else if (MACHINE_HAS_VDP_9918A) {
+		alto=11;
 	}
 
 
@@ -7641,7 +8167,24 @@ void menu_tsconf_layer_settings(MENU_ITEM_PARAMETERS)
 			lin+=3;				
 		}
 
+		if (MACHINE_HAS_VDP_9918A) {
 
+ 			menu_add_item_menu_inicial_format(&array_menu_tsconf_layer_settings,MENU_OPCION_NORMAL,menu_msx_layer_settings_border,NULL,"%s",(vdp_9918a_force_disable_layer_border.v ? "Disabled" : "Enabled "));
+			menu_add_item_menu_tabulado(array_menu_tsconf_layer_settings,1,lin);
+			lin+=3;			
+
+			menu_add_item_menu_format(array_menu_tsconf_layer_settings,MENU_OPCION_NORMAL,menu_msx_layer_settings_ula,NULL,"%s",(vdp_9918a_force_disable_layer_ula.v ? "Disabled" : "Enabled "));
+			menu_add_item_menu_tabulado(array_menu_tsconf_layer_settings,1,lin);
+			menu_add_item_menu_format(array_menu_tsconf_layer_settings,MENU_OPCION_NORMAL,menu_msx_layer_reveal_ula,NULL,"%s",(vdp_9918a_reveal_layer_ula.v ? "Reveal" : "Normal"));
+			menu_add_item_menu_tabulado(array_menu_tsconf_layer_settings,12,lin);		
+			lin+=3;
+
+			menu_add_item_menu_format(array_menu_tsconf_layer_settings,MENU_OPCION_NORMAL,menu_msx_layer_settings_sprites,NULL,"%s",(vdp_9918a_force_disable_layer_sprites.v ? "Disabled" : "Enabled "));
+			menu_add_item_menu_tabulado(array_menu_tsconf_layer_settings,1,lin);
+			menu_add_item_menu_format(array_menu_tsconf_layer_settings,MENU_OPCION_NORMAL,menu_msx_layer_reveal_sprites,NULL,"%s",(vdp_9918a_reveal_layer_sprites.v ? "Reveal" : "Normal"));
+			menu_add_item_menu_tabulado(array_menu_tsconf_layer_settings,12,lin);				
+			lin+=3;
+		}
 				
 
         retorno_menu=menu_dibuja_menu(&tsconf_layer_settings_opcion_seleccionada,&item_seleccionado,array_menu_tsconf_layer_settings,"TSConf Layers" );
@@ -8155,6 +8698,10 @@ void menu_debug_disassemble(MENU_ITEM_PARAMETERS)
 
 	zxvision_new_window(&ventana,0,1,32,20,
 							ancho_total,20-2,"Disassemble");
+
+	//Permitir hotkeys desde raton
+	ventana.can_mouse_send_hotkeys=1;
+
 	zxvision_draw_window(&ventana);			
 
     //Inicializar info de tamanyo zona
@@ -8213,8 +8760,8 @@ void menu_debug_disassemble(MENU_ITEM_PARAMETERS)
 
         zxvision_print_string_defaults_fillspc(&ventana,1,linea++,"");
 
-        zxvision_print_string_defaults_fillspc(&ventana,1,linea++,"~~M: Ch. pointer ~~E: Export");
-		zxvision_print_string_defaults_fillspc(&ventana,1,linea++,"~~T: Toggle hexa");
+        zxvision_print_string_defaults_fillspc(&ventana,1,linea++,"~~memptr ~~export");
+		zxvision_print_string_defaults_fillspc(&ventana,1,linea++,"~~togglehexa");
 
 		zxvision_draw_window_contents(&ventana);
 
@@ -8759,12 +9306,18 @@ void menu_display_emulate_zx8081display_spec(MENU_ITEM_PARAMETERS)
 
 void menu_display_osd_word_kb_length(MENU_ITEM_PARAMETERS)
 {
+	menu_ventana_scanf_numero_enhanced("Length? (10-100)",&adventure_keyboard_key_length,4,+10,10,100,0);
 
+/*
 	char string_length[4];
 
         sprintf (string_length,"%d",adventure_keyboard_key_length);
 
-        menu_ventana_scanf("Length? (10-100)",string_length,4);
+        //menu_ventana_scanf("Length? (10-100)",string_length,4);
+
+		int ret=menu_ventana_scanf_numero("Length? (10-100)",string_length,4,+10,10,100,0);
+
+		if (ret<0) return;
 
         int valor=parse_string_to_number(string_length);
 	if (valor<10 || valor>100) {
@@ -8774,6 +9327,7 @@ void menu_display_osd_word_kb_length(MENU_ITEM_PARAMETERS)
 	else {
 		adventure_keyboard_key_length=valor;
 	}
+	*/
 
 }
 
@@ -8803,7 +9357,7 @@ int menu_display_settings_disp_zx8081_spectrum(void)
 {
 
 	//esto solo en spectrum y si el driver no es curses y si no hay rainbow
-	if (!strcmp(scr_driver_name,"curses")) return 0;
+	if (!strcmp(scr_new_driver_name,"curses")) return 0;
 	if (rainbow_enabled.v==1) return 0;
 
 	return !menu_cond_zx8081();
@@ -8846,8 +9400,12 @@ void menu_display_zx8081_wrx(MENU_ITEM_PARAMETERS)
 
 void menu_display_x_offset(MENU_ITEM_PARAMETERS)
 {
-	offset_zx8081_t_coordx +=8;
-        if (offset_zx8081_t_coordx>=30*8) offset_zx8081_t_coordx=-30*8;
+
+	//offset_zx8081_t_coordx +=8;
+    //    if (offset_zx8081_t_coordx>=30*8) offset_zx8081_t_coordx=-30*8;
+
+	menu_ventana_scanf_numero_enhanced("X offset",&offset_zx8081_t_coordx,5,+8,-30*8,30*8,1);
+
 }
 
 
@@ -8869,7 +9427,7 @@ void menu_display_autodetect_wrx(MENU_ITEM_PARAMETERS)
 
 int menu_display_aa_cond(void)
 {
-        if (!strcmp(scr_driver_name,"aa")) return 1;
+        if (!strcmp(scr_new_driver_name,"aa")) return 1;
 
         else return 0;
 }
@@ -9001,7 +9559,7 @@ void menu_vofile_fps(MENU_ITEM_PARAMETERS)
 
 int menu_display_curses_cond(void)
 {
-	if (!strcmp(scr_driver_name,"curses")) return 1;
+	if (!strcmp(scr_new_driver_name,"curses")) return 1;
 
 	else return 0;
 }
@@ -9334,6 +9892,20 @@ void menu_display_tbblue_store_scanlines_border(MENU_ITEM_PARAMETERS)
 	tbblue_store_scanlines_border.v ^=1;
 }
 
+void menu_display_vdp_9918a_unlimited_sprites_line(MENU_ITEM_PARAMETERS)
+{
+	vdp_9918a_unlimited_sprites_line.v ^=1;
+}
+
+void menu_display_msx_loading_stripes(MENU_ITEM_PARAMETERS)
+{
+	msx_loading_stripes.v ^=1;
+}
+
+void menu_display_ql_simular_parpadeo(MENU_ITEM_PARAMETERS)
+{
+	ql_simular_parpadeo_cursor.v ^=1;
+}
 
 //menu display settings
 void menu_settings_display(MENU_ITEM_PARAMETERS)
@@ -9744,6 +10316,22 @@ void menu_settings_display(MENU_ITEM_PARAMETERS)
 
 		}
 
+		if (MACHINE_HAS_VDP_9918A) {
+			menu_add_item_menu_format(array_menu_settings_display,MENU_OPCION_NORMAL,menu_display_vdp_9918a_unlimited_sprites_line,NULL,"[%c] Unlimited sprites per line", (vdp_9918a_unlimited_sprites_line.v ? 'X' : ' ') );	
+		}
+
+		if (MACHINE_IS_MSX) {
+			menu_add_item_menu_format(array_menu_settings_display,MENU_OPCION_NORMAL,menu_display_msx_loading_stripes,NULL,"[%c] Loading stripes", (msx_loading_stripes.v ? 'X' : ' ') );	
+			menu_add_item_menu_tooltip(array_menu_settings_display,"Simulates loading border stripes when loading from real tape");
+			menu_add_item_menu_ayuda(array_menu_settings_display,"Simulates loading border stripes when loading from real tape");
+		}		
+
+		if (MACHINE_IS_QL) {
+			menu_add_item_menu_format(array_menu_settings_display,MENU_OPCION_NORMAL,menu_display_ql_simular_parpadeo,NULL,"[%c] QL cursor flashing", (ql_simular_parpadeo_cursor.v ? 'X' : ' ') );	
+			menu_add_item_menu_tooltip(array_menu_settings_display,"Simulates QL cursor flashing");
+			menu_add_item_menu_ayuda(array_menu_settings_display,"Simulates QL cursor flashing");
+		}
+
 		menu_add_item_menu_format(array_menu_settings_display,MENU_OPCION_NORMAL,menu_display_ocr_23606,NULL,"[%c] OCR Alternate chars", (ocr_settings_not_look_23606.v==0 ? 'X' : ' ') );
 		menu_add_item_menu_tooltip(array_menu_settings_display,"Tells to look for an alternate character set other than the ROM default on OCR functions");
 		menu_add_item_menu_ayuda(array_menu_settings_display,"Tells to look for an alternate character set other than the ROM default on OCR functions. "
@@ -9888,12 +10476,19 @@ void menu_ext_desk_settings_enable(MENU_ITEM_PARAMETERS)
 	screen_restart_pantalla_restore_overlay(previous_function,menu_antes);	
 
 
+	//Cerrar ventamas y olvidar geometria ventanas
+	zxvision_window_delete_all_windows_and_clear_geometry();
+
+	cls_menu_overlay();
+
+
 }
 
 
 void menu_ext_desk_settings_custom_width(MENU_ITEM_PARAMETERS)
 {
 
+	int reorganize_windows=0;
 
 	char string_width[5];
 
@@ -9908,6 +10503,9 @@ void menu_ext_desk_settings_custom_width(MENU_ITEM_PARAMETERS)
 		debug_printf (VERBOSE_ERR,"Invalid value");
 		return;
 	}
+
+
+	if (valor<screen_ext_desktop_width) reorganize_windows=1;
 
 	screen_ext_desktop_width=valor;
 
@@ -9932,6 +10530,15 @@ void menu_ext_desk_settings_custom_width(MENU_ITEM_PARAMETERS)
 
 	screen_restart_pantalla_restore_overlay(previous_function,menu_antes);	
 
+	//Cerrar ventamas y olvidar geometria ventanas
+	//zxvision_window_delete_all_windows_and_clear_geometry();
+
+	//Reorganizar ventanas solo si conviene (cuando tamaño pasa a ser menor)
+	if (reorganize_windows)	zxvision_rearrange_background_windows();
+
+	//Conveniente esto para borrar "restos" de ventanas
+	cls_menu_overlay();
+
 
 }
 
@@ -9947,6 +10554,8 @@ void menu_ext_desk_settings_width(MENU_ITEM_PARAMETERS)
 	screen_end_pantalla_save_overlay(&previous_function,&menu_antes);
 
 
+	int reorganize_windows=0;
+
 
 	//Cambio ancho
 	//screen_ext_desktop_width *=2;
@@ -9959,7 +10568,10 @@ void menu_ext_desk_settings_width(MENU_ITEM_PARAMETERS)
 
 
 	if (screen_ext_desktop_width>=1024 && screen_ext_desktop_width<2048) screen_ext_desktop_width=2048;
-	else if (screen_ext_desktop_width>=2048) screen_ext_desktop_width=128;
+	else if (screen_ext_desktop_width>=2048) {
+		screen_ext_desktop_width=128;
+		reorganize_windows=1;
+	}
 	else screen_ext_desktop_width +=128;
         
 
@@ -9970,29 +10582,62 @@ void menu_ext_desk_settings_width(MENU_ITEM_PARAMETERS)
 	menu_init_footer();
 
 	screen_restart_pantalla_restore_overlay(previous_function,menu_antes);	
+
+
+	//Cerrar ventamas y olvidar geometria ventanas
+	//zxvision_window_delete_all_windows_and_clear_geometry();
+
+	//Reorganizar ventanas solo si conviene (cuando tamaño pasa a ser menor)
+	if (reorganize_windows) zxvision_rearrange_background_windows();	
+
+	//Conveniente esto para borrar "restos" de ventanas
+	cls_menu_overlay();
+
 }
 
 void menu_ext_desk_settings_filltype(MENU_ITEM_PARAMETERS)
 {
 	menu_ext_desktop_fill++;
-	if (menu_ext_desktop_fill==3) menu_ext_desktop_fill=0;
+	if (menu_ext_desktop_fill>MENU_MAX_EXT_DESKTOP_FILL_NUMBER) menu_ext_desktop_fill=0;
 }
 
 void menu_ext_desk_settings_fillcolor(MENU_ITEM_PARAMETERS)
 {
-	menu_ext_desktop_fill_solid_color++;
-	if (menu_ext_desktop_fill_solid_color==16) menu_ext_desktop_fill_solid_color=0;
+	menu_ext_desktop_fill_first_color++;
+	if (menu_ext_desktop_fill_first_color==16) menu_ext_desktop_fill_first_color=0;
+}
+
+void menu_ext_desk_settings_fillcolor_second(MENU_ITEM_PARAMETERS)
+{
+	menu_ext_desktop_fill_second_color++;
+	if (menu_ext_desktop_fill_second_color==16) menu_ext_desktop_fill_second_color=0;
 }
 
 /*
 int menu_ext_desktop_fill=1;
-int menu_ext_desktop_fill_solid_color=1;
+int menu_ext_desktop_fill_first_color=1;
 */
 
 void menu_ext_desk_settings_placemenu(MENU_ITEM_PARAMETERS)
 {
 	screen_ext_desktop_place_menu ^=1;	
 }
+
+void menu_ext_desk_settings_direct_buttons(MENU_ITEM_PARAMETERS)
+{
+	menu_zxdesktop_buttons_enabled.v ^=1;
+}
+
+void menu_ext_desk_settings_upper_transparent(MENU_ITEM_PARAMETERS)
+{
+	menu_ext_desktop_transparent_upper_icons.v ^=1;
+}
+
+void menu_ext_desk_settings_lower_transparent(MENU_ITEM_PARAMETERS)
+{
+	menu_ext_desktop_transparent_lower_icons.v ^=1;
+}
+
 
 void menu_ext_desktop_settings(MENU_ITEM_PARAMETERS)
 {
@@ -10013,14 +10658,81 @@ void menu_ext_desktop_settings(MENU_ITEM_PARAMETERS)
 
 			menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_custom_width,NULL,"Custom Width");
 
-			menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_filltype,NULL,"[%2d] Fill type",menu_ext_desktop_fill);
-			if (menu_ext_desktop_fill==0) {
-				menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_fillcolor,NULL,"[%2d] Fill Color",menu_ext_desktop_fill_solid_color);
+			char fill_type_name[32];
+			int seleccion_primary=0;
+			int seleccion_secondary=0;
+			switch (menu_ext_desktop_fill) {
+				//solid, rainbow, punteado, ajedrez
+				case 0:
+					strcpy(fill_type_name,"Solid");
+					seleccion_primary=1;
+				break;
+
+				case 1:
+					strcpy(fill_type_name,"Rainbow");
+				break;
+
+				case 2:
+					strcpy(fill_type_name,"RainbowAlive");
+				break;				
+
+				case 3:
+					strcpy(fill_type_name,"Dots");
+					seleccion_primary=1;
+					seleccion_secondary=1;
+				break;
+
+				case 4:
+					strcpy(fill_type_name,"Chess");
+					seleccion_primary=1;
+					seleccion_secondary=1;					
+				break;
+
+				case 5:
+					strcpy(fill_type_name,"Grid");
+					seleccion_primary=1;
+					seleccion_secondary=1;					
+				break;				
+
+				case 6:
+					strcpy(fill_type_name,"Random");
+				break;		
+
+				default:
+					strcpy(fill_type_name,"Unknown");
+				break;
+
 			}
+
+
+			menu_add_item_menu(array_menu_ext_desktop_settings,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+			
 
 			menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_placemenu,NULL,"[%c] Open Menu on ZX Desktop",(screen_ext_desktop_place_menu ? 'X' : ' ' ) );
 			menu_add_item_menu_tooltip(array_menu_ext_desktop_settings,"Try to place new menu items on the ZX Desktop space");
 			menu_add_item_menu_ayuda(array_menu_ext_desktop_settings,"Try to place new menu items on the ZX Desktop space");
+
+			menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_direct_buttons,NULL,"[%c] Direct access buttons",(menu_zxdesktop_buttons_enabled.v ? 'X' : ' ' ) );
+
+			if (menu_zxdesktop_buttons_enabled.v) {
+				menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_upper_transparent,NULL,"[%c] Transparent upper buttons",(menu_ext_desktop_transparent_upper_icons.v ? 'X' : ' ' ) );
+				menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_lower_transparent,NULL,"[%c] Transparent lower buttons",(menu_ext_desktop_transparent_lower_icons.v ? 'X' : ' ' ) );
+			}
+
+			menu_add_item_menu(array_menu_ext_desktop_settings,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+			
+			menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_SEPARADOR,NULL,NULL,"--Background--");
+			menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_filltype,NULL,"[%s] Fill type",fill_type_name);
+			
+			if (seleccion_primary) {
+				menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_fillcolor,NULL,"[%s] Primary Fill Color",spectrum_colour_names[menu_ext_desktop_fill_first_color]);
+			}
+
+			if (seleccion_secondary) {
+				menu_add_item_menu_format(array_menu_ext_desktop_settings,MENU_OPCION_NORMAL,menu_ext_desk_settings_fillcolor_second,NULL,"[%s] Secondary Fill Color",spectrum_colour_names[menu_ext_desktop_fill_second_color]);
+			}
+
+			
 
 		}
 		
@@ -10362,6 +11074,11 @@ int menu_debug_sprites_total_colors_mapped_palette(int paleta)
 			return 256;
 		break;
 
+		//msx
+		case 16:
+			return 16;
+		break;		
+
 	}
 
 	return 16;
@@ -10425,6 +11142,11 @@ int menu_debug_sprites_max_value_mapped_palette(int paleta)
 		case 15:
 			return TSCONF_TOTAL_PALETTE_COLOURS;
 		break;
+
+		//MSX
+		case 16:
+			return VDP_9918_TOTAL_PALETTE_COLOURS;
+		break;		
 
 	}
 
@@ -10519,6 +11241,11 @@ int menu_debug_sprites_return_index_palette(int paleta, z80_byte color)
 			return tsconf_return_cram_color(color);
 		break;
 
+		case 16:
+			//MSX
+			return color; //Dado que realmente no hay mapeo
+		break;		
+
 	}
 
 	return color;
@@ -10575,6 +11302,10 @@ int menu_debug_sprites_return_color_palette(int paleta, z80_byte color)
 		case 15:
 			return TSCONF_INDEX_FIRST_COLOR+index;
 		break;
+
+		case 16:
+			return VDP_9918_INDEX_FIRST_COLOR+index;
+		break;		
 
 	}
 
@@ -10656,6 +11387,9 @@ void menu_debug_sprites_get_palette_name(int paleta, char *s)
 			strcpy(s,"TSConf");
 		break;
 
+		case 16:
+			strcpy(s,"VDP9918A");
+		break;
 
 		default:
 			strcpy(s,"UNKNOWN");
@@ -10687,6 +11421,9 @@ void menu_debug_sprites_change_bpp(void)
 		view_sprites_ppb=8;
 	}
 
+	//En algun caso, cambiando de maquina SG1000 a MSX, parece que este view_sprites_ppb llega a ser 0
+	//Dado que es un parametro que se utiliza para dividir, hacer que nunca pueda ser cero
+	if (view_sprites_ppb==0) view_sprites_ppb=1;
 
 	//printf ("bpp: %d ppb: %d\n",view_sprites_bpp,view_sprites_ppb);
 }
@@ -10729,6 +11466,10 @@ menu_z80_moto_int menu_debug_draw_sprites_get_pointer_offset(int direccion)
 		}
 
 
+		//if (MACHINE_HAS_VDP_9918A) {
+		//	puntero=view_sprites_direccion+vdp_9918a_get_pattern_base_address();
+		//}
+
 	}
 
 
@@ -10747,11 +11488,14 @@ z80_bit view_sprites_zx81_pseudohires={0}; //Si utiliza puntero a tabla de la ro
 z80_byte menu_debug_draw_sprites_get_byte(menu_z80_moto_int puntero)
 {
 
+	//printf ("menu_debug_draw_sprites_get_byte 1\n");
 	z80_byte byte_leido;
 
 					puntero=adjust_address_memory_size(puntero);
-				byte_leido=menu_debug_get_mapped_byte(puntero);
 
+					//printf ("menu_debug_draw_sprites_get_byte 2\n");
+				byte_leido=menu_debug_get_mapped_byte(puntero);
+					//printf ("menu_debug_draw_sprites_get_byte 3\n");
 				
 
 				//Si hay puntero a valores en rom como algunos juegos pseudo hires de zx81
@@ -10831,9 +11575,89 @@ void menu_debug_draw_sprites(void)
 			puntero_inicio_linea=puntero;
 			finalx=xorigen;
 			for (x=0;x<view_sprites_ancho_sprite;) {
+				//printf ("puntero: %d\n",puntero);
 				puntero=adjust_address_memory_size(puntero);
 
-				byte_leido=menu_debug_draw_sprites_get_byte(puntero);
+
+				menu_z80_moto_int puntero_final;
+
+				puntero_final=puntero;
+
+				//Alterar en el caso de VDP9918A, que es un tanto particular (sobretodo 16x16)
+				if (view_sprites_hardware && MACHINE_HAS_VDP_9918A) {
+
+
+					//Accedemos a la tabla de 32 sprites
+
+					//menu_z80_moto_int puntero_orig=menu_debug_draw_sprites_get_pointer_offset(view_sprites_direccion);
+
+					z80_int attribute_table=vdp_9918a_get_sprite_attribute_table();
+
+					int numero_sprite=menu_debug_draw_sprites_get_pointer_offset(view_sprites_direccion);
+
+					numero_sprite %=32;
+
+					//printf ("numero sprite: %d\n",numero_sprite);
+
+					attribute_table +=numero_sprite*4;
+
+					//printf ("tabla atributo sprite: %04XH\n",attribute_table);
+
+					//printf ("antes\n");
+					//Obtener byte 2, sprite name
+					z80_byte sprite_name=menu_debug_draw_sprites_get_byte(attribute_table+2);
+
+
+					//printf ("despues\n");
+
+					//TODO: asumimos sprites 16x16
+					//TODO: colores del sprite
+
+					menu_z80_moto_int puntero_orig=sprite_name *8;
+					/*
+					QUADRANT   AC
+					           BD
+
+					Orden en memoria:
+					A   0
+					B   8
+					C   16 
+					D   24
+					*/
+					//y<8
+
+					//Quad A
+					if (y<=7 && x<=7) {
+						puntero_final=puntero_orig+y;
+					}
+
+					//Quad B
+					else if (y>=8 && y<=15 && x<=7) {
+						puntero_final=puntero_orig+y;
+					}		
+
+					//Quad C
+					else if (y<=7 && x>=8 && x<=15) {
+						puntero_final=puntero_orig+16+y;
+					}	
+
+					//Quad D		
+					else  {
+						puntero_final=puntero_orig+16+y;
+					}												
+
+		
+					puntero_final +=vdp_9918a_get_sprite_pattern_table();
+
+					//printf ("puntero final: %04XH\n",puntero_final);
+
+
+					
+		
+
+				}
+
+				byte_leido=menu_debug_draw_sprites_get_byte(puntero_final);
 
 				/*byte_leido=menu_debug_get_mapped_byte(puntero);
 
@@ -11116,6 +11940,43 @@ void menu_debug_sprites_get_parameters_hardware(void)
 
 
 		}
+
+		if (MACHINE_HAS_VDP_9918A) {
+//Parametros que alteramos segun sprite activo
+
+
+                	view_sprites_ancho_sprite=16;
+
+	                view_sprites_alto_sprite=16;
+
+
+
+			//offset paleta
+			view_sprites_offset_palette=0;
+
+			view_sprites_increment_cursor_vertical=1; //saltar de 1 en 1
+
+
+
+			//Permitir solo 1bpp
+
+			view_sprites_bpp=1;
+			view_sprites_ppb=8;
+		
+
+
+            view_sprites_bytes_por_linea=16/view_sprites_ppb;
+
+
+			view_sprites_bytes_por_ventana=8; 
+
+
+			if (MACHINE_IS_MSX) menu_debug_set_memory_zone(MEMORY_ZONE_MSX_VRAM);
+			if (MACHINE_IS_COLECO) menu_debug_set_memory_zone(MEMORY_ZONE_COLECO_VRAM);
+			if (MACHINE_IS_SG1000) menu_debug_set_memory_zone(MEMORY_ZONE_SG1000_VRAM);
+			if (MACHINE_IS_SVI) menu_debug_set_memory_zone(MEMORY_ZONE_SVI_VRAM);
+
+		}
 	}
 
 	else {
@@ -11160,6 +12021,10 @@ void menu_debug_view_sprites_textinfo(zxvision_window *ventana)
 
 				strcpy(texto_sprite,"Pattern");
 			}
+
+			if (MACHINE_HAS_VDP_9918A) {
+				max_sprites=VDP_9918A_MAX_SPRITES;
+			}
 			sprintf(texto_memptr,"%s: %3d",texto_sprite,view_sprites_direccion%max_sprites); //dos digitos, tsconf hace 85 y tbblue hace 64. suficiente
 		}
 
@@ -11203,7 +12068,7 @@ void menu_debug_view_sprites_textinfo(zxvision_window *ventana)
 		//por defecto
 		mensaje_texto_hardware[0]=0;
 
-		if (MACHINE_IS_TSCONF || MACHINE_IS_TBBLUE) {
+		if (MACHINE_IS_TSCONF || MACHINE_IS_TBBLUE || MACHINE_HAS_VDP_9918A) {
 			sprintf(mensaje_texto_hardware,"[%c] ~~hardware",(view_sprites_hardware ? 'X' : ' ') );
 		}
 
@@ -11291,7 +12156,7 @@ void menu_debug_view_sprites(MENU_ITEM_PARAMETERS)
     //la primera ventana repetida apuntaria a la segunda, que es el mismo puntero, y redibujaria la misma, y se quedaria en bucle colgado
 	zxvision_delete_window_if_exists(ventana);
 
-	if (!MACHINE_IS_TBBLUE & !MACHINE_IS_TSCONF) view_sprites_hardware=0;
+	if (!MACHINE_IS_TBBLUE && !MACHINE_IS_TSCONF && !MACHINE_HAS_VDP_9918A) view_sprites_hardware=0;
 
 	if (!MACHINE_IS_ZX8081) view_sprites_zx81_pseudohires.v=0;
 
@@ -11310,6 +12175,9 @@ void menu_debug_view_sprites(MENU_ITEM_PARAMETERS)
 	ventana->can_be_backgrounded=1;
 	//indicar nombre del grabado de geometria
 	strcpy(ventana->geometry_name,"sprites");
+
+	//Permitir hotkeys desde raton
+	ventana->can_mouse_send_hotkeys=1;
 
 	zxvision_draw_window(ventana);
 
@@ -11341,6 +12209,8 @@ void menu_debug_view_sprites(MENU_ITEM_PARAMETERS)
 		//porque usa mucha cpu y por ejemplo en maquina tsconf se clava si arrastramos ventana
 		if (redibujar_texto) {
 			//printf ("redibujamos texto\n");
+
+
 			menu_debug_view_sprites_textinfo(ventana);
 
 		
@@ -11408,7 +12278,7 @@ void menu_debug_view_sprites(MENU_ITEM_PARAMETERS)
 					break;
 
 					case 'h':
-						if (MACHINE_IS_TBBLUE || MACHINE_IS_TSCONF) view_sprites_hardware ^=1;								
+						if (MACHINE_IS_TBBLUE || MACHINE_IS_TSCONF || MACHINE_HAS_VDP_9918A) view_sprites_hardware ^=1;								
 					break;
 
 					case 'e':
@@ -13365,6 +14235,8 @@ void menu_debug_registers_zxvision_ventana(zxvision_window *ventana)
 	//indicar nombre del grabado de geometria
 	strcpy(ventana->geometry_name,"debugcpu");
 
+	//Puede enviar hotkeys con raton
+	ventana->can_mouse_send_hotkeys=1;
 
 
 }
@@ -13937,6 +14809,17 @@ int debug_show_fired_breakpoints_type=0;
 }
 
 
+void menu_debug_ret(void)
+{
+	if (CPU_IS_Z80) {
+		reg_pc=pop_valor();
+	}
+
+	else {
+		menu_warn_message("Ret operation only supported on Z80 cpu");
+	}
+}
+
 void menu_debug_toggle_breakpoint(void)
 {
 	//Buscar primero direccion que indica el cursor
@@ -14157,6 +15040,19 @@ void menu_debug_add_daad_special_breakpoint(void)
 	//Y salir
 }*/
 
+void menu_debug_get_legend_short_long(char *destination_string,int ancho_visible,char *short_string,char *long_string)
+{
+
+	int longitud_largo=menu_calcular_ancho_string_item(long_string);
+
+	//Texto mas largo cuando tenemos mas ancho
+
+	//+2 por contar 1 espacio a la izquierda y otro a la derecha
+	if (ancho_visible>=longitud_largo+2) strcpy(destination_string,long_string);
+
+
+	else strcpy(destination_string,short_string);	
+}
 
 
 int menu_debug_registers_show_ptr_text(zxvision_window *w,int linea)
@@ -14166,6 +15062,8 @@ int menu_debug_registers_show_ptr_text(zxvision_window *w,int linea)
 
 
 	char buffer_mensaje[64];
+	char buffer_mensaje_short[64];
+	char buffer_mensaje_long[64];
                 //Forzar a mostrar atajos
                 z80_bit antes_menu_writing_inverse_color;
                 antes_menu_writing_inverse_color.v=menu_writing_inverse_color.v;
@@ -14185,10 +15083,21 @@ int menu_debug_registers_show_ptr_text(zxvision_window *w,int linea)
 
 				if (util_daad_detect() || util_paws_detect() ) maxima_vista='8';
 
-                                //sprintf(buffer_mensaje,"P~~tr: %sH ~~FollowPC: %s",
-								sprintf(buffer_mensaje,"P~~tr:%sH ~~FlwPC:%s ~~1-~~%c:View",
-                                        string_direccion,(menu_debug_follow_pc.v ? "Yes" : "No"),maxima_vista );
-                                //menu_escribe_linea_opcion(linea++,-1,1,buffer_mensaje);
+								sprintf(buffer_mensaje_short,"P~~tr:%sH [%c] ~~FlwPC ~~1-~~%c:View",
+                                        string_direccion,(menu_debug_follow_pc.v ? 'X' : ' '),maxima_vista );
+
+								sprintf(buffer_mensaje_long,"Poin~~ter:%sH [%c] ~~FollowPC ~~1-~~%c:View",
+                                        string_direccion,(menu_debug_follow_pc.v ? 'X' : ' '),maxima_vista );
+
+
+
+								menu_debug_get_legend_short_long(buffer_mensaje,w->visible_width,buffer_mensaje_short,buffer_mensaje_long);
+
+
+								//sprintf(buffer_mensaje,"P~~tr:%sH ~~FlwPC:%s ~~1-~~%c:View",
+                                //        string_direccion,(menu_debug_follow_pc.v ? "Yes" : "No"),maxima_vista );
+
+                                
 				zxvision_print_string_defaults_fillspc(w,1,linea++,buffer_mensaje);
 
 				}
@@ -14206,19 +15115,7 @@ void menu_debug_switch_follow_pc(void)
 }
 
 
-void menu_debug_get_legend_short_long(char *destination_string,int ancho_visible,char *short_string,char *long_string)
-{
 
-	int longitud_largo=menu_calcular_ancho_string_item(long_string);
-
-	//Texto mas largo cuando tenemos mas ancho
-
-	//+2 por contar 1 espacio a la izquierda y otro a la derecha
-	if (ancho_visible>=longitud_largo+2) strcpy(destination_string,long_string);
-
-
-	else strcpy(destination_string,short_string);	
-}
 
 
 
@@ -14330,12 +15227,12 @@ void menu_debug_get_legend(int linea,char *s,zxvision_window *w)
 
 				menu_debug_get_legend_short_long(s,ancho_visible,
 							//01234567890123456789012345678901
-							// Chrg brkp wtch Toggl Run Runto		
-							  "Ch~~rg ~~brkp ~~wtch Togg~~l Ru~~n R~~unto",
+							// Chr brk wtch Togl Run Runto Ret	
+							  "Ch~~r ~~brk ~~wtch Tog~~l Ru~~n R~~unto R~~et",
 
-							// Changeregisters breakpoints watch Toggle Run Runto	
+							// Changeregisters breakpoints watch Toggle Run Runto Ret	
 							//012345678901234567890123456789012345678901234567890123456789012
-							  "Change~~registers ~~breakpoints ~~watches Togg~~le Ru~~n R~~unto"
+							  "Change~~registers ~~breakpoints ~~watches Togg~~le Ru~~n R~~unto R~~et"
 				);
 			}
 
@@ -15523,6 +16420,15 @@ void menu_debug_registers(MENU_ITEM_PARAMETERS)
                     //decirle que despues de pulsar esta tecla no tiene que ejecutar siguiente instruccion
                     si_ejecuta_una_instruccion=0;
                 }
+
+				//Ret
+		        if (tecla=='e' && menu_debug_registers_current_view==1) {
+                    menu_debug_ret();
+                    //Decimos que no hay tecla pulsada
+                    acumulado=MENU_PUERTO_TECLADO_NINGUNA;
+                    //decirle que despues de pulsar esta tecla no tiene que ejecutar siguiente instruccion
+                    si_ejecuta_una_instruccion=0;
+                }				
 								
 				if (tecla=='u' && menu_debug_registers_current_view==1) {
                     menu_debug_runto();
@@ -16074,7 +16980,7 @@ void menu_ay_partitura_putpixel_nota(z80_int *destino GCC_UNUSED,int x,int y,int
 
 void menu_ay_partitura_dibujar_sost(int x,int y)
 {
-	screen_put_asciibitmap_generic(pentagrama_sost,NULL,x,y,PENTAGRAMA_SOST_ANCHO,PENTAGRAMA_SOST_ALTO,0,menu_ay_partitura_putpixel_nota);
+	screen_put_asciibitmap_generic(pentagrama_sost,NULL,x,y,PENTAGRAMA_SOST_ANCHO,PENTAGRAMA_SOST_ALTO,0,menu_ay_partitura_putpixel_nota,1,0);
 }
 
 //duraciones notas
@@ -16255,7 +17161,7 @@ void menu_ay_partitura_dibujar_nota(int x,int y,int incremento_palito,int duraci
 
 
 
-	screen_put_asciibitmap_generic(bitmap_nota,NULL,x,y,PENTAGRAMA_NOTA_ANCHO,PENTAGRAMA_NOTA_ALTO,0,menu_ay_partitura_putpixel_nota);
+	screen_put_asciibitmap_generic(bitmap_nota,NULL,x,y,PENTAGRAMA_NOTA_ANCHO,PENTAGRAMA_NOTA_ALTO,0,menu_ay_partitura_putpixel_nota,1,0);
 	
 
 	//PENTAGRAMA_NOTA_LARGO_PALITO
@@ -16292,7 +17198,7 @@ void menu_ay_partitura_dibujar_nota(int x,int y,int incremento_palito,int duraci
 	//Si hay que dibujar puntillo
 	if (aysheet_tipo_nota_tienepuntillo(tipo_nota_duracion)) {
 		screen_put_asciibitmap_generic(pentagrama_puntillo,NULL,x+PENTAGRAMA_NOTA_ANCHO+1,y+PENTAGRAMA_NOTA_ALTO/2+1,
-				PENTAGRAMA_PUNTILLO_ANCHO,PENTAGRAMA_PUNTILLO_ALTO,0,menu_ay_partitura_putpixel_nota);
+				PENTAGRAMA_PUNTILLO_ANCHO,PENTAGRAMA_PUNTILLO_ALTO,0,menu_ay_partitura_putpixel_nota,1,0);
 	}
 
 
@@ -16302,7 +17208,7 @@ void menu_ay_partitura_dibujar_nota(int x,int y,int incremento_palito,int duraci
 
 void meny_ay_partitura_dibujar_clavesol(int x,int y)
 {
-	screen_put_asciibitmap_generic(pentagrama_clave_sol,NULL,x,y,PENTAGRAMA_CLAVE_SOL_ANCHO,PENTAGRAMA_CLAVE_SOL_ALTO,0,menu_ay_partitura_putpixel_nota);	
+	screen_put_asciibitmap_generic(pentagrama_clave_sol,NULL,x,y,PENTAGRAMA_CLAVE_SOL_ANCHO,PENTAGRAMA_CLAVE_SOL_ALTO,0,menu_ay_partitura_putpixel_nota,1,0);	
 }
 
 
@@ -16532,11 +17438,20 @@ void menu_ay_partitura_overlay(void)
 			char nota_c[4];
 
 
+			int freq_a,freq_b,freq_c;
 
+			if (sn_chip_present.v) {
+				freq_a=sn_retorna_frecuencia(0);
+				freq_b=sn_retorna_frecuencia(1);
+				freq_c=sn_retorna_frecuencia(2);
+			}
 
-			int freq_a=ay_retorna_frecuencia(0,menu_ay_partitura_chip);
-			int freq_b=ay_retorna_frecuencia(1,menu_ay_partitura_chip);
-			int freq_c=ay_retorna_frecuencia(2,menu_ay_partitura_chip);
+			else {
+
+				freq_a=ay_retorna_frecuencia(0,menu_ay_partitura_chip);
+				freq_b=ay_retorna_frecuencia(1,menu_ay_partitura_chip);
+				freq_c=ay_retorna_frecuencia(2,menu_ay_partitura_chip);
+			}
 
 
 			sprintf(nota_a,"%s",get_note_name(freq_a) );
@@ -16548,9 +17463,17 @@ void menu_ay_partitura_overlay(void)
 			sprintf(nota_c,"%s",get_note_name(freq_c) );
 
 			//Si canales no suenan como tono, o volumen 0 meter cadena vacia en nota
-			if (ay_3_8912_registros[menu_ay_partitura_chip][7]&1 || ay_3_8912_registros[menu_ay_partitura_chip][8]==0) nota_a[0]=0;
-			if (ay_3_8912_registros[menu_ay_partitura_chip][7]&2 || ay_3_8912_registros[menu_ay_partitura_chip][9]==0) nota_b[0]=0;
-			if (ay_3_8912_registros[menu_ay_partitura_chip][7]&4 || ay_3_8912_registros[menu_ay_partitura_chip][10]==0) nota_c[0]=0;
+			if (sn_chip_present.v) {
+				if ((sn_chip_registers[6] & 15)==15) nota_a[0]=0;
+				if ((sn_chip_registers[7] & 15)==15) nota_b[0]=0;
+				if ((sn_chip_registers[8] & 15)==15) nota_c[0]=0;
+
+			}
+			else {
+				if (ay_3_8912_registros[menu_ay_partitura_chip][7]&1 || ay_3_8912_registros[menu_ay_partitura_chip][8]==0) nota_a[0]=0;
+				if (ay_3_8912_registros[menu_ay_partitura_chip][7]&2 || ay_3_8912_registros[menu_ay_partitura_chip][9]==0) nota_b[0]=0;
+				if (ay_3_8912_registros[menu_ay_partitura_chip][7]&4 || ay_3_8912_registros[menu_ay_partitura_chip][10]==0) nota_c[0]=0;
+			}
 
 
 	
@@ -16727,7 +17650,7 @@ void menu_ay_partitura(MENU_ITEM_PARAMETERS)
 		//Inicializar array de estado
 		menu_ay_partitura_init_state();
 
-		char *titulo_ventana="AY Sheet (60 BPM)";
+		char *titulo_ventana="Au. Chip Sheet (60 BPM)";
 
 
 		if (!util_find_window_geometry("aysheet",&xventana,&yventana,&ancho_ventana,&alto_ventana)) {				
@@ -16828,7 +17751,7 @@ void menu_ay_partitura(MENU_ITEM_PARAMETERS)
 
 
             	//Nombre de ventana solo aparece en el caso de stdout
-        		retorno_menu=menu_dibuja_menu(&nonamed_opcion_seleccionada,&item_seleccionado,array_menu_nonamed,"AY Sheet (60 BPM)" );
+        		retorno_menu=menu_dibuja_menu(&nonamed_opcion_seleccionada,&item_seleccionado,array_menu_nonamed,"Audio Chip Sheet (60 BPM)" );
 
 
 				if (retorno_menu!=MENU_RETORNO_BACKGROUND) {
@@ -17438,7 +18361,7 @@ menu_item *array_menu_ay_mixer;
 		menu_add_item_menu_ayuda(array_menu_ay_mixer,"It handles values sent to register 14 and 15");
 
 
-		if (MACHINE_IS_SPECTRUM) {
+		if (MACHINE_IS_SPECTRUM || MACHINE_IS_MSX || MACHINE_IS_SVI) {
 
 
 			char ay3_stereo_string[16];
@@ -17511,6 +18434,47 @@ menu_item *array_menu_ay_mixer;
 }
 
 
+
+void menu_audio_chip_info(MENU_ITEM_PARAMETERS)
+{
+
+	int chip_frequency;
+	int max_freq,min_freq;
+
+	if (sn_chip_present.v) {
+		//Chip SN
+		chip_frequency=sn_chip_frequency;
+		max_freq=sn_retorna_frecuencia_valor_registro(0,0);
+		min_freq=sn_retorna_frecuencia_valor_registro(255,255);
+	}
+	else {
+		//Chip AY
+		chip_frequency=ay_chip_frequency;
+		max_freq=ay_retorna_frecuencia_valor_registro(0,0);
+		min_freq=ay_retorna_frecuencia_valor_registro(255,255);		
+	}
+
+	
+	if (sn_chip_present.v) {
+		//SN
+		menu_generic_message_format("Audio Chip Info","Audio Chip: Texas Instruments SN76489AN\nFrequency: %d Hz\n"
+									"Min Tone Frequency: %d Hz\nMax Tone Frequency: %d Hz\n"
+									"3 Tone Channels, 1 Noise Channel",
+			chip_frequency,min_freq,max_freq
+		);
+	}
+
+	else {
+		//AY
+		menu_generic_message_format("Audio Chip Info","Audio Chip: General Instrument AY-3-8910\nFrequency: %d Hz\n"
+									"Min Tone Frequency: %d Hz\nMax Tone Frequency: %d Hz\n"
+									"3 Noise/Tone Channels, 1 Envelope Generator",
+			chip_frequency,min_freq,max_freq
+		);		
+	}
+
+
+}
 
 
 void menu_uartbridge_file(MENU_ITEM_PARAMETERS)
@@ -18249,7 +19213,7 @@ void *menu_menu_zsock_http_thread_function(void *entrada)
 
 	//menu_zsock_http_thread_running=1; 
 
-#ifdef USE_PTHREADS
+#ifndef NETWORKING_DISABLED
 
 	debug_printf (VERBOSE_DEBUG,"Starting zsock http thread. Host=%s Url=%s",
 								((struct menu_zsock_http_struct *)entrada)->host,
@@ -18315,7 +19279,7 @@ int menu_zsock_http(char *host, char *url,int *http_code,char **mem,int *t_leido
 	parametros.redirect_url[0]=0;	
 
 
-#ifdef USE_PTHREADS
+#ifndef NETWORKING_DISABLED
 
 	//Inicializar thread
 	debug_printf (VERBOSE_DEBUG,"Initializing thread menu_menu_zsock_http_thread_function");
@@ -18374,7 +19338,7 @@ void *menu_download_file_thread_function(void *entrada)
 
 	//download_wos_thread_running=1; 
 
-#ifdef USE_PTHREADS
+#ifndef NETWORKING_DISABLED
 
 	debug_printf (VERBOSE_DEBUG,"Starting download content thread. Host=%s Url=%s",
 	((struct download_wos_struct *)entrada)->host,
@@ -18421,7 +19385,7 @@ int menu_download_file(char *host,char *url,char *archivo_temp,int ssl_use,int e
 	parametros.return_code=404;
 
 
-#ifdef USE_PTHREADS
+#ifndef NETWORKING_DISABLED
 
 	//Inicializar thread
 
@@ -18887,7 +19851,7 @@ void menu_online_browse_zxinfowos(MENU_ITEM_PARAMETERS)
 			int ret=menu_download_file(host_final,url_juego_final,archivo_temp,ssl_use,1024*1024);  //1 MB mas que suficiente
 
 			if (ret==200) {                    
-				//y habrimos menu de smartload
+				//y abrimos menu de smartload
 				strcpy(quickload_file,archivo_temp);
 	
 				quickfile=quickload_file;
@@ -19002,6 +19966,92 @@ void menu_network_http_request(MENU_ITEM_PARAMETERS)
 }
 
 
+void menu_online_download_extras(MENU_ITEM_PARAMETERS)
+{
+
+
+	//printf("URL: %s\n",ZESARUX_EXTRAS_URL);
+
+
+
+	char host_final[NETWORK_MAX_URL];
+	strcpy(host_final,ZESARUX_EXTRAS_HOST);
+
+
+	char url[NETWORK_MAX_URL];
+
+	strcpy(url,ZESARUX_EXTRAS_URL);
+
+
+	//200 MB. En versión 9.0 son 100 MB. Mas que suficiente para el futuro
+	int estimated_size=200*1024*1024;
+
+
+
+	debug_printf(VERBOSE_DEBUG,"Selected url %s",url);
+
+	char archivo_zip[PATH_MAX];
+
+	//Ruta destino en el home
+	char dest_dir[PATH_MAX];
+
+
+
+//Aunque en Windows no le acaba de gustar, por alguna razón, la ruta al unzip. En Windows lo metemos en la ruta actual
+#ifdef MINGW
+	dest_dir[0]=0; //Cadena vacia -> carpeta actual
+#else
+	util_get_home_dir(dest_dir);
+#endif
+
+	
+
+
+	char zipfilename[PATH_MAX];
+	util_get_file_no_directory(url,zipfilename);
+
+	sprintf(archivo_zip,"%s%s",dest_dir,zipfilename);
+
+	int ssl_use=1;
+
+
+	int ret=menu_download_file(host_final,url,archivo_zip,ssl_use,estimated_size);  
+
+	if (ret==200) {       
+		//descomprimimos zip
+		char final_mmc_dir[PATH_MAX];
+		sprintf(final_mmc_dir,"%s.dir",archivo_zip);
+
+		//Descomprimir con ventana de progreso y pthread aparte de descompresion
+		menu_uncompress_zip_progress(archivo_zip,final_mmc_dir);
+
+		if (dest_dir[0]==0) menu_generic_message_format("File downloaded","File has been downloaded and uncompressed to current folder");
+
+		else menu_generic_message_format("File downloaded","File has been downloaded and uncompressed to %s",dest_dir);
+
+		//y abrimos menu de smartload
+		strcpy(quickload_file,final_mmc_dir);
+
+		quickfile=quickload_file;
+		menu_smartload(0);		
+
+
+		return;
+	}
+	else {
+		if (ret<0) {	
+			menu_network_error(ret);
+		}
+		else {
+			debug_printf(VERBOSE_ERR,"Error downloading software. Return code: %d",ret);
+		}
+
+	}
+
+
+}
+
+
 void menu_network(MENU_ITEM_PARAMETERS)
 {
         //Dado que es una variable local, siempre podemos usar este nombre array_menu_common
@@ -19020,7 +20070,7 @@ void menu_network(MENU_ITEM_PARAMETERS)
 				"Available for ZX-Uno, TBBlue and ZX Evolution TSConf");
 			
 
-#ifdef USE_PTHREADS
+#ifndef NETWORKING_DISABLED
 			menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_zeng,NULL,"Z~~ENG");
 			menu_add_item_menu_shortcut(array_menu_common,'e');
 			menu_add_item_menu_tooltip(array_menu_common,"Setup ZEsarUX Network Gaming");
@@ -19047,17 +20097,30 @@ void menu_network(MENU_ITEM_PARAMETERS)
             menu_add_item_menu_ayuda(array_menu_common,"Connects to the www.zx81.nl site to download ZX81 games. Many thanks to ZXwebmaster for allowing it"); 
 
 
+//online browser ya solo es accesible con ssl
+
+#ifdef COMPILE_SSL
 			menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_online_browse_zxinfowos,NULL,"~~Speccy online browser"); 
 			menu_add_item_menu_shortcut(array_menu_common,'s');  
 
-#ifdef COMPILE_SSL
+
 			//Versión con SSL usa zxinfo, spectrum computing y mirror archive.org
 			menu_add_item_menu_tooltip(array_menu_common,"It uses zxinfo, spectrum computing and archive.org to download the software. Thanks to Thomas Heckmann and Peter Jones for allowing it");
 			menu_add_item_menu_ayuda(array_menu_common,  "It uses zxinfo, spectrum computing and archive.org to download the software. Thanks to Thomas Heckmann and Peter Jones for allowing it");
-#else
+			
+			
+//#else
 			//Versión sin SSL usa zxinfo, servidor WOS
-			menu_add_item_menu_tooltip(array_menu_common,"It uses zxinfo and WOS to download the software. Thanks to Thomas Heckmann and Lee Fogarty for allowing it");
-			menu_add_item_menu_ayuda(array_menu_common,  "It uses zxinfo and WOS to download the software. Thanks to Thomas Heckmann and Lee Fogarty for allowing it");
+			//menu_add_item_menu_tooltip(array_menu_common,"It uses zxinfo and WOS to download the software. Thanks to Thomas Heckmann and Lee Fogarty for allowing it");
+			//menu_add_item_menu_ayuda(array_menu_common,  "It uses zxinfo and WOS to download the software. Thanks to Thomas Heckmann and Lee Fogarty for allowing it");
+
+
+
+			menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_online_download_extras,NULL,"Download ZEsarUX e~~xtras");
+			menu_add_item_menu_shortcut(array_menu_common,'x');   
+			menu_add_item_menu_tooltip(array_menu_common,"Download ZEsarUX extras package");
+			menu_add_item_menu_ayuda(array_menu_common,"ZEsarUX extras package contains lots of documentation, sample games, demos, etc");
+			
 #endif    
 
 
@@ -19101,6 +20164,10 @@ void menu_settings_enable_check_updates(MENU_ITEM_PARAMETERS)
 	stats_check_updates_enabled.v ^=1;	
 }
 
+void menu_settings_enable_check_yesterday_users(MENU_ITEM_PARAMETERS)
+{
+	stats_check_yesterday_users_enabled.v ^=1;
+}
 
 void menu_settings_statistics(MENU_ITEM_PARAMETERS)
 {
@@ -19112,6 +20179,13 @@ void menu_settings_statistics(MENU_ITEM_PARAMETERS)
 
 			menu_add_item_menu_inicial_format(&array_menu_common,MENU_OPCION_NORMAL,menu_settings_enable_check_updates,NULL,"[%c] Check updates",
 					(stats_check_updates_enabled.v ? 'X' : ' ') );
+
+
+			menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_settings_enable_check_yesterday_users,NULL,"[%c] Check yesterday users",
+					(stats_check_yesterday_users_enabled.v ? 'X' : ' ') );  
+
+			menu_add_item_menu_tooltip(array_menu_common,"Retrieve ZEsarUX yesterday users");
+			menu_add_item_menu_ayuda(array_menu_common,"Retrieve ZEsarUX yesterday users");
 
 
                 
@@ -19420,6 +20494,7 @@ void menu_storage_divmmc_diviface_total_ram(MENU_ITEM_PARAMETERS)
 void menu_storage_mmc_download_tbblue(void)
 {
 
+	menu_first_aid("tbblue_download_sd_bug");
 
 	//http://www.zxspectrumnext.online/cspect/tbbluemmc-32mb.zip
 
@@ -19558,7 +20633,7 @@ void menu_storage_mmc_autoconfigure_tbblue(MENU_ITEM_PARAMETERS)
 	int tipo_imagen;
 	
 //Si no hay phreads, solo se puede usar la opcion local
-#ifndef USE_PTHREADS
+#ifdef NETWORKING_DISABLED
 	tipo_imagen=1;
 #else
 	tipo_imagen=menu_simple_two_choices("SD Image type","Included or download?","Use included in ZEsarUX","Download from official repo");
@@ -20276,106 +21351,19 @@ void menu_display_window_reduce_all(MENU_ITEM_PARAMETERS)
 
 void menu_display_window_rearrange(MENU_ITEM_PARAMETERS)
 {
-	int origen_x=menu_origin_x();
-
-	//printf ("origen_x: %d\n",origen_x);
-
-	//Si abrir ventanas en zxdesktop o no, contar todo el ancho visible o bien solo el de zxdesktop
-
-	int ancho;
-
-	if (menu_ext_desktop_enabled_place_menu() ) {
-		//ancho=screen_ext_desktop_width/menu_char_width/menu_gui_zoom;
-		ancho=menu_get_width_characters_ext_desktop();
-	}
-
-	else ancho=scr_get_menu_width();
-
-	//printf ("ancho: %d\n",ancho);
-
-	int xfinal=origen_x+ancho;
-
-
-	int alto=scr_get_menu_height();
-
-	//printf ("alto: %d\n",alto);
-
-	int yfinal=alto;
-
-
-	//Empezamos una a una, desde la de mas abajo
-	zxvision_window *ventana;
-
-	ventana=zxvision_current_window;
-
-	if (ventana==NULL) return;
-
-	ventana=zxvision_find_first_window_below_this(ventana);
-
-	if (ventana==NULL) return;
-
-	int origen_y=0;
-
-	//Y de ahi para arriba
-	int x=origen_x;
-	int y=origen_y;
-
-	int alto_maximo_en_fila=0;
-
-	int cambio_coords_origen=0;
-
-	while (ventana!=NULL) {
-
-		debug_printf (VERBOSE_DEBUG,"Setting window %s to %d,%d",ventana->window_title,x,y);
-
-		ventana->x=x;
-		ventana->y=y;
-
-		//Y guardar la geometria
-		util_add_window_geometry_compact(ventana);
-
-		if (ventana->visible_height>alto_maximo_en_fila) alto_maximo_en_fila=ventana->visible_height;
-
-		int ancho_antes=ventana->visible_width;
-
-		ventana=ventana->next_window;
-		if (ventana!=NULL) {
-			x +=ancho_antes;
-			//printf ("%d %d %d\n",x,ventana->visible_width,ancho);
-			if (x+ventana->visible_width>xfinal) {
-
-				//printf ("Next column\n");
-				//Siguiente fila
-				x=origen_x;
-
-				y+=alto_maximo_en_fila;
-
-				alto_maximo_en_fila=0;
-
-
-			}
-
-			//Si volver al principio
-			if (y+ventana->visible_height>yfinal) {
-
-				debug_printf (VERBOSE_DEBUG,"Restart x,y coordinates");
-
-				//alternamos coordenadas origen, para darles cierto "movimiento", 4 caracteres derecha y abajo
-				cambio_coords_origen ^=4;
-
-				x=origen_x + cambio_coords_origen;
-				y=origen_y + cambio_coords_origen;
-						
-			}
-		}
-	}
-
-	cls_menu_overlay();
+	zxvision_rearrange_background_windows();
 }
+
 
 
 void menu_windows(MENU_ITEM_PARAMETERS)
 {
+
+	if (!menu_allow_background_windows) {
+		menu_warn_message("Background windows setting is not enabled. You can enable it on Settings-> GUI-> Windows-> Background windows");
+		return;
+	}
+
         //Dado que es una variable local, siempre podemos usar este nombre array_menu_common
         menu_item *array_menu_common;
         menu_item item_seleccionado;
@@ -20985,6 +21973,9 @@ void menu_ay_pianokeyboard_overlay(void)
 	if (total_chips>3) total_chips=3;
 
 
+	if (sn_chip_present.v) total_chips=1;
+
+
 
 	//if (total_chips>2) total_chips=2;
 
@@ -20997,9 +21988,19 @@ void menu_ay_pianokeyboard_overlay(void)
 	for (chip=0;chip<total_chips;chip++) {
 
 
-			int freq_a=ay_retorna_frecuencia(0,chip);
-			int freq_b=ay_retorna_frecuencia(1,chip);
-			int freq_c=ay_retorna_frecuencia(2,chip);
+			int freq_a,freq_b,freq_c;
+
+			if (sn_chip_present.v) {
+				freq_a=sn_retorna_frecuencia(0);
+				freq_b=sn_retorna_frecuencia(1);
+				freq_c=sn_retorna_frecuencia(2);			
+			}
+
+			else {
+				freq_a=ay_retorna_frecuencia(0,chip);
+				freq_b=ay_retorna_frecuencia(1,chip);
+				freq_c=ay_retorna_frecuencia(2,chip);			
+			}
 
 			char nota_a[4];
 			sprintf(nota_a,"%s",get_note_name(freq_a) );
@@ -21011,9 +22012,17 @@ void menu_ay_pianokeyboard_overlay(void)
 			sprintf(nota_c,"%s",get_note_name(freq_c) );
 
 			//Si canales no suenan como tono, o volumen 0 meter cadena vacia en nota
-			if (ay_3_8912_registros[chip][7]&1 || ay_3_8912_registros[chip][8]==0) nota_a[0]=0;
-			if (ay_3_8912_registros[chip][7]&2 || ay_3_8912_registros[chip][9]==0) nota_b[0]=0;
-			if (ay_3_8912_registros[chip][7]&4 || ay_3_8912_registros[chip][10]==0) nota_c[0]=0;
+			if (sn_chip_present.v) {
+				if ((sn_chip_registers[6] & 15)==15) nota_a[0]=0;
+				if ((sn_chip_registers[7] & 15)==15) nota_b[0]=0;
+				if ((sn_chip_registers[8] & 15)==15) nota_c[0]=0;				
+			}
+
+			else {
+				if (ay_3_8912_registros[chip][7]&1 || ay_3_8912_registros[chip][8]==0) nota_a[0]=0;
+				if (ay_3_8912_registros[chip][7]&2 || ay_3_8912_registros[chip][9]==0) nota_b[0]=0;
+				if (ay_3_8912_registros[chip][7]&4 || ay_3_8912_registros[chip][10]==0) nota_c[0]=0;
+			}
 
 			int incremento_linea=3;
 
@@ -21071,7 +22080,7 @@ void menu_ay_pianokeyboard(MENU_ITEM_PARAMETERS)
 		//Max 3 ay chips
 		if (total_chips>3) total_chips=3;
 
-		char *titulo_ventana="AY Piano";
+		char *titulo_ventana="Audio Chip Piano";
 
 		if (!util_find_window_geometry("aypiano",&xventana,&yventana,&ancho_ventana,&alto_ventana)) {				
 
@@ -21540,32 +22549,232 @@ void menu_beeper_pianokeyboard(MENU_ITEM_PARAMETERS)
 }
 
 
-void menu_debug_tsconf_tbblue(MENU_ITEM_PARAMETERS)
+void menu_debug_msx_memory_info_slot_segment(MENU_ITEM_PARAMETERS)
 {
-        menu_item *array_menu_debug_tsconf_tbblue;
+	//Le indicamos el valor de slot y segmento, codificandolo en valor hexadecimal: slot*16+segment
+
+	int slot=(valor_opcion>>4) & 0xF;
+	int segment=valor_opcion & 0xF;
+
+	int tipo=msx_memory_slots[slot][segment];
+
+	int inicio_bloque=segment*16384;
+	int fin_bloque=((segment+1)*16384)-1;
+
+	if (MACHINE_IS_SVI) {
+		inicio_bloque=segment*32768;
+		fin_bloque=((segment+1)*32768)-1;	
+	}
+	else {
+	inicio_bloque=segment*16384;
+	fin_bloque=((segment+1)*16384)-1;	
+	}
+
+
+	
+
+
+	if (MACHINE_IS_SVI) {
+		char buffer_mem_type[32];
+		char long_buffer_mem_type[32];
+		svi_get_string_memory_slot(buffer_mem_type,long_buffer_mem_type,slot,segment);
+
+		menu_generic_message_format("Block info","Slot: %d Segment: %d Type: %s Uses: %04XH-%04XH"
+			,slot,segment,long_buffer_mem_type,inicio_bloque,fin_bloque);		
+	}
+		
+	else {
+		//MSX
+	
+		menu_generic_message_format("Block info","Slot: %d Segment: %d Type: %s Uses: %04XH-%04XH"
+			,slot,segment,msx_get_string_memory_type(tipo),inicio_bloque,fin_bloque);
+	}
+
+
+}
+
+
+void menu_debug_msx_svi_memory_info(MENU_ITEM_PARAMETERS)
+{
+
+	int total_segmentos=4-1;
+
+	if (MACHINE_IS_SVI) total_segmentos=2-1;	
+
+	int ancho_ventana=32;
+	int alto_ventana=7+(total_segmentos+1)*2;
+
+
+	int xventana=menu_center_x()-ancho_ventana/2;
+	int yventana=menu_center_y()-alto_ventana/2;
+
+	zxvision_window ventana;
+
+	zxvision_new_window(&ventana,xventana,yventana,ancho_ventana,alto_ventana,
+                                                        ancho_ventana-1,alto_ventana-2,"Memory Info");
+
+	//Dado que es una variable local, siempre podemos usar este nombre array_menu_common
+	menu_item *array_menu_common;
+	menu_item item_seleccionado;
+	int retorno_menu;
+
+	int comun_opcion_seleccionada=0;
+
+
+	//Donde van los bloques
+
+	int inicio_bloque_x=8;
+	int inicio_bloque_y=2;
+	int ancho_bloque=6;
+
+	int linea=inicio_bloque_y;
+	
+	if (!MACHINE_IS_SVI) {
+	zxvision_print_string_defaults(&ventana,1,linea,"C000H");
+	linea+=2;
+	}
+
+	zxvision_print_string_defaults(&ventana,1,linea,"8000H");
+	linea+=2;
+
+	if (!MACHINE_IS_SVI) {
+	zxvision_print_string_defaults(&ventana,1,linea,"4000H");
+	linea+=2;
+	}
+
+	zxvision_print_string_defaults(&ventana,1,linea,"0000H");
+	linea+=2;
+
+	do {
+
+
+		
+		menu_add_item_menu_inicial_format(&array_menu_common,MENU_OPCION_NORMAL,NULL,NULL,"       Slot0 Slot1 Slot2 Slot3");
+		menu_add_item_menu_tabulado(array_menu_common,1,0);
+
+		int slot, segment;
+
+		////slots asignados, y sus 4 segmentos
+//tipos: rom, ram, vacio
+//int msx_memory_slots[4][4];
+/*
+#define MSX_SLOT_MEMORY_TYPE_ROM 0
+#define MSX_SLOT_MEMORY_TYPE_RAM 1
+#define MSX_SLOT_MEMORY_TYPE_EMPTY 2
+*/
+
+		//SVI:
+		//Siempre estan los slots fijos en svi
+/*
+  FFFF      BANK 02 RAM     |      BANK 12 CARTRIDGE ROM    |   BANK 22 RAM     |       BANK 32 RAM
+  8000
+
+
+  7FFF      BANK 01 ROM     |      BANK 11 CARTRIDGE ROM    |   BANK 21 RAM     |       BANK 31 RAM
+  0000
+*/
+		
+
+
+		for (segment=total_segmentos;segment>=0;segment--) {
+			for (slot=0;slot<4;slot++) {
+			
+
+				char buffer_mem_type[32];
+
+
+				if (MACHINE_IS_SVI) {
+					svi_get_string_memory_slot(buffer_mem_type,NULL,slot,segment);
+				}
+				else {
+					//MSX
+				
+				int tipo=msx_memory_slots[slot][segment];
+		
+				strcpy (buffer_mem_type,msx_get_string_memory_type(tipo));
+			
+				
+				}
+
+				menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_debug_msx_memory_info_slot_segment,NULL,buffer_mem_type);
+
+				int coordenada_y;
+
+
+				coordenada_y=inicio_bloque_y+(total_segmentos-segment)*2;
+				
+
+				menu_add_item_menu_tabulado(array_menu_common,inicio_bloque_x+slot*ancho_bloque,coordenada_y);
+
+				//Le indicamos el valor de slot y segmento, codificandolo en valor hexadecimal: slot*16+segment
+
+				int valor_opcion=slot*16+segment;
+				menu_add_item_menu_valor_opcion(array_menu_common,valor_opcion);
+			}
+		}
+		
+
+
+
+		//if (!total_ventanas) menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,NULL,NULL,"(Empty)");
+
+		//menu_add_item_menu(array_menu_common,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+
+		menu_add_ESC_item(array_menu_common);
+		menu_add_item_menu_tabulado(array_menu_common,1,alto_ventana-4);
+
+		retorno_menu=menu_dibuja_menu(&comun_opcion_seleccionada,&item_seleccionado,array_menu_common,"Window management");
+
+			
+			if ((item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu>=0) {
+					//llamamos por valor de funcion
+					if (item_seleccionado.menu_funcion!=NULL) {
+							//printf ("actuamos por funcion\n");
+							item_seleccionado.menu_funcion(item_seleccionado.valor_opcion);
+							
+					}
+			}
+
+    } while ( (item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu!=MENU_RETORNO_ESC && !salir_todos_menus);
+
+
+                                //En caso de menus tabulados, es responsabilidad de este de liberar ventana
+                zxvision_destroy_window(&ventana);	
+
+}
+
+
+void menu_debug_tsconf_tbblue_msx(MENU_ITEM_PARAMETERS)
+{
+        menu_item *array_menu_debug_tsconf_tbblue_msx;
         menu_item item_seleccionado;
 	int retorno_menu;
         do {
 
 
 
-		menu_add_item_menu_inicial_format(&array_menu_debug_tsconf_tbblue,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue_videoregisters,NULL,"Video ~~Info");
-		menu_add_item_menu_shortcut(array_menu_debug_tsconf_tbblue,'i');
+		menu_add_item_menu_inicial_format(&array_menu_debug_tsconf_tbblue_msx,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue_msx_videoregisters,NULL,"Video ~~Info");
+		menu_add_item_menu_shortcut(array_menu_debug_tsconf_tbblue_msx,'i');
 
-		menu_add_item_menu_format(array_menu_debug_tsconf_tbblue,MENU_OPCION_NORMAL,menu_tsconf_layer_settings,NULL,"Video ~~Layers");
-		menu_add_item_menu_shortcut(array_menu_debug_tsconf_tbblue,'l');
+		menu_add_item_menu_format(array_menu_debug_tsconf_tbblue_msx,MENU_OPCION_NORMAL,menu_tsconf_layer_settings,NULL,"Video ~~Layers");
+		menu_add_item_menu_shortcut(array_menu_debug_tsconf_tbblue_msx,'l');
 
-		menu_add_item_menu_format(array_menu_debug_tsconf_tbblue,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue_spritenav,NULL,"~~Sprite navigator");
-		menu_add_item_menu_shortcut(array_menu_debug_tsconf_tbblue,'s');
+		menu_add_item_menu_format(array_menu_debug_tsconf_tbblue_msx,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue_msx_spritenav,NULL,"~~Sprite navigator");
+		menu_add_item_menu_shortcut(array_menu_debug_tsconf_tbblue_msx,'s');
 
-		if (MACHINE_IS_TSCONF || MACHINE_IS_TBBLUE) {
-			menu_add_item_menu_format(array_menu_debug_tsconf_tbblue,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue_tilenav,NULL,"~~Tile navigator");
-			menu_add_item_menu_shortcut(array_menu_debug_tsconf_tbblue,'t');
+		if (MACHINE_IS_TSCONF || MACHINE_IS_TBBLUE || MACHINE_HAS_VDP_9918A) {
+			menu_add_item_menu_format(array_menu_debug_tsconf_tbblue_msx,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue_msx_tilenav,NULL,"~~Tile navigator");
+			menu_add_item_menu_shortcut(array_menu_debug_tsconf_tbblue_msx,'t');
 		}
 
-                menu_add_item_menu(array_menu_debug_tsconf_tbblue,"",MENU_OPCION_SEPARADOR,NULL,NULL);
-                //menu_add_item_menu(array_menu_debug_tsconf_tbblue,"ESC Back",MENU_OPCION_NORMAL|MENU_OPCION_ESC,NULL,NULL);
-		menu_add_ESC_item(array_menu_debug_tsconf_tbblue);
+		if (MACHINE_IS_MSX || MACHINE_IS_SVI) {
+			menu_add_item_menu_format(array_menu_debug_tsconf_tbblue_msx,MENU_OPCION_NORMAL,menu_debug_msx_svi_memory_info,NULL,"~~Memory Info");
+			menu_add_item_menu_shortcut(array_menu_debug_tsconf_tbblue_msx,'m');		
+		}
+
+                menu_add_item_menu(array_menu_debug_tsconf_tbblue_msx,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+                //menu_add_item_menu(array_menu_debug_tsconf_tbblue_msx,"ESC Back",MENU_OPCION_NORMAL|MENU_OPCION_ESC,NULL,NULL);
+		menu_add_ESC_item(array_menu_debug_tsconf_tbblue_msx);
 
 		char titulo_ventana[33];
 
@@ -21573,8 +22782,12 @@ void menu_debug_tsconf_tbblue(MENU_ITEM_PARAMETERS)
 		strcpy(titulo_ventana,"Debug TSConf");
 
 		if (MACHINE_IS_TBBLUE) strcpy(titulo_ventana,"Debug TBBlue");
+		if (MACHINE_IS_MSX) strcpy(titulo_ventana,"Debug MSX");
+		if (MACHINE_IS_COLECO) strcpy(titulo_ventana,"Debug Colecovision");
+		if (MACHINE_IS_SG1000) strcpy(titulo_ventana,"Debug SG1000");
+		if (MACHINE_IS_SVI) strcpy(titulo_ventana,"Debug Spectravideo");
 
-                retorno_menu=menu_dibuja_menu(&debug_tsconf_opcion_seleccionada,&item_seleccionado,array_menu_debug_tsconf_tbblue,titulo_ventana);
+                retorno_menu=menu_dibuja_menu(&debug_tsconf_opcion_seleccionada,&item_seleccionado,array_menu_debug_tsconf_tbblue_msx,titulo_ventana);
 
                 
 
@@ -21610,6 +22823,8 @@ void menu_help_keyboard_overlay(void)
 	//Si no hay archivo bmp cargado
 	if (help_keyboard_bmp_file_mem==NULL) return;
 
+	menu_speech_tecla_pulsada=1; //Si no, envia continuamente todo ese texto a speech
+
 
 	zxvision_window *ventana;
 
@@ -21619,8 +22834,8 @@ void menu_help_keyboard_overlay(void)
      
      
 
-			//esto hara ejecutar esto 2 veces por segundo
-			if ( ((contador_segundo%500) == 0 && help_keyboard_valor_contador_segundo_anterior!=contador_segundo) || menu_multitarea==0) {
+			//esto hara ejecutar esto 5 veces por segundo (lo habitual en muchos de estos que no actualizan siempre es 2 veces por segundo)
+			if ( ((contador_segundo%200) == 0 && help_keyboard_valor_contador_segundo_anterior!=contador_segundo) || menu_multitarea==0) {
 											help_keyboard_valor_contador_segundo_anterior=contador_segundo;
 				//printf ("Refrescando. contador_segundo=%d\n",contador_segundo);
 
@@ -21684,12 +22899,9 @@ void menu_help_show_keyboard(MENU_ITEM_PARAMETERS)
 
 	}		
 
-	//int originx=menu_origin_x();
 
 	zxvision_new_window(ventana,x,y,ancho,alto,
 							ancho-1,alto-2,"Keyboard Help");
-
-
 
 
 	ventana->can_be_backgrounded=1;	
@@ -21699,24 +22911,42 @@ void menu_help_show_keyboard(MENU_ITEM_PARAMETERS)
 
 	
 		//Cargar el archivo bmp
+		/*
+		Deben ser, idealmente: 540x201.  (puede ser otro tamaño)
+		bmp. 256 colour (indexed)
+		*/
 
 		char nombrebmp[PATH_MAX];
 
 
-		if (MACHINE_IS_ZX80) strcpy(nombrebmp,"keyboard_zx80.bmp");
-		else if (MACHINE_IS_ZX81) strcpy(nombrebmp,"keyboard_zx81.bmp");
+		if (MACHINE_IS_CHLOE) strcpy(nombrebmp,"keyboard_chloe.bmp");
+		else if (MACHINE_IS_COLECO) strcpy(nombrebmp,"keyboard_coleco.bmp");
+		else if (MACHINE_IS_CPC) strcpy(nombrebmp,"keyboard_cpc.bmp");
 		else if (MACHINE_IS_INVES) strcpy(nombrebmp,"keyboard_inves.bmp");
+		else if (MACHINE_IS_ACE) strcpy(nombrebmp,"keyboard_ace.bmp");
+		else if (MACHINE_IS_MICRODIGITAL_TK90X || MACHINE_IS_MICRODIGITAL_TK90X_SPA) strcpy(nombrebmp,"keyboard_tk90x.bmp");
+		else if (MACHINE_IS_MICRODIGITAL_TK95) strcpy(nombrebmp,"keyboard_tk95.bmp");
+		else if (MACHINE_IS_MK14) strcpy(nombrebmp,"keyboard_mk14.bmp");
+		else if (MACHINE_IS_MSX) strcpy(nombrebmp,"keyboard_msx.bmp");
+		else if (MACHINE_IS_PENTAGON) strcpy(nombrebmp,"keyboard_pentagon.bmp");
+		else if (MACHINE_IS_QL) strcpy(nombrebmp,"keyboard_ql.bmp");
+		else if (MACHINE_IS_SAM) strcpy(nombrebmp,"keyboard_sam.bmp");
+		else if (MACHINE_IS_SG1000) strcpy(nombrebmp,"keyboard_sg1000.bmp");
+		else if (MACHINE_IS_SVI) strcpy(nombrebmp,"keyboard_svi.bmp");
 		else if (MACHINE_IS_TBBLUE) strcpy(nombrebmp,"keyboard_next.bmp");
-		else if (MACHINE_IS_ZXUNO) strcpy(nombrebmp,"keyboard_zxuno.bmp");
-		else if (MACHINE_IS_ZXEVO) strcpy(nombrebmp,"keyboard_zxevo.bmp");
-		else if (MACHINE_IS_SPECTRUM_128) strcpy(nombrebmp,"keyboard_128.bmp");
-		else if (MACHINE_IS_SPECTRUM_128_SPA) strcpy(nombrebmp,"keyboard_128s.bmp");
+		else if (MACHINE_IS_TIMEX_TS2068) strcpy(nombrebmp,"keyboard_ts2068.bmp");
+		else if (MACHINE_IS_Z88) strcpy(nombrebmp,"keyboard_z88.bmp");
 		else if (MACHINE_IS_SPECTRUM_P2) strcpy(nombrebmp,"keyboard_p2.bmp");
 		else if (MACHINE_IS_SPECTRUM_P2A_P3) strcpy(nombrebmp,"keyboard_p3.bmp");
-		else if (MACHINE_IS_CHLOE) strcpy(nombrebmp,"keyboard_chloe.bmp");
-		else if (MACHINE_IS_QL) strcpy(nombrebmp,"keyboard_ql.bmp");
-		
-		else strcpy(nombrebmp,"keyboard_speccy.bmp");
+		else if (MACHINE_IS_SPECTRUM_16) strcpy(nombrebmp,"keyboard_16.bmp");
+		else if (MACHINE_IS_SPECTRUM_48_SPA) strcpy(nombrebmp,"keyboard_48s.bmp");
+		else if (MACHINE_IS_SPECTRUM_128) strcpy(nombrebmp,"keyboard_128.bmp");
+		else if (MACHINE_IS_SPECTRUM_128_SPA) strcpy(nombrebmp,"keyboard_128s.bmp");		
+		else if (MACHINE_IS_ZX80) strcpy(nombrebmp,"keyboard_zx80.bmp");
+		else if (MACHINE_IS_ZX81) strcpy(nombrebmp,"keyboard_zx81.bmp");
+		else if (MACHINE_IS_ZXEVO) strcpy(nombrebmp,"keyboard_zxevo.bmp");
+		else if (MACHINE_IS_ZXUNO) strcpy(nombrebmp,"keyboard_zxuno.bmp");
+		else strcpy(nombrebmp,"keyboard_48.bmp");
 
 		//localizarlo
         char buffer_nombre[PATH_MAX];
@@ -21813,6 +23043,191 @@ void menu_help_show_keyboard(MENU_ITEM_PARAMETERS)
  	}
 
 
+
+
+}
+
+void menu_storage_zxpand_enable(MENU_ITEM_PARAMETERS)
+{
+	if (zxpand_enabled.v) zxpand_disable();
+	else zxpand_enable();
+}
+
+void menu_storage_zxpand_root_dir(MENU_ITEM_PARAMETERS)
+{
+
+	int ret;
+	ret=menu_storage_string_root_dir(zxpand_root_dir);
+
+	//Si sale con ESC
+	if (ret==0) {
+       	//directorio zxpand vacio
+        zxpand_cwd[0]=0;
+	}		
+
+} 
+
+
+void menu_zxpand(MENU_ITEM_PARAMETERS)
+{
+
+	
+
+        //Dado que es una variable local, siempre podemos usar este nombre array_menu_common
+        menu_item *array_menu_common;
+        menu_item item_seleccionado;
+        int retorno_menu;
+        do {
+
+                
+				
+			menu_add_item_menu_inicial_format(&array_menu_common,MENU_OPCION_NORMAL,menu_storage_zxpand_enable,NULL,"[%c] ZX~~pand emulation",(zxpand_enabled.v ? 'X' : ' ') );
+                        menu_add_item_menu_shortcut(array_menu_common,'p');
+			menu_add_item_menu_tooltip(array_menu_common,"Enable ZXpand emulation");
+			menu_add_item_menu_ayuda(array_menu_common,"Enable ZXpand emulation");
+
+
+			if (zxpand_enabled.v) {
+				char string_zxpand_root_folder_shown[20];
+				menu_tape_settings_trunc_name(zxpand_root_dir,string_zxpand_root_folder_shown,20);
+
+				menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_storage_zxpand_root_dir,NULL,"~~Root dir: %s",string_zxpand_root_folder_shown);
+                        	menu_add_item_menu_shortcut(array_menu_common,'r');
+				menu_add_item_menu_tooltip(array_menu_common,"Sets the root directory for ZXpand filesystem");
+				menu_add_item_menu_ayuda(array_menu_common,"Sets the root directory for ZXpand filesystem. "
+					"Only file and folder names valid for zxpand will be shown:\n"
+					"-Maximum 8 characters for name and 3 for extension\n"
+					"-Files and folders will be shown always in uppercase. Folders which are not uppercase, are shown but can not be accessed\n"
+					);
+
+			}
+		
+
+						
+			menu_add_item_menu(array_menu_common,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+
+            menu_add_ESC_item(array_menu_common);
+
+            retorno_menu=menu_dibuja_menu(&zxpand_opcion_seleccionada,&item_seleccionado,array_menu_common,"ZXpand" );
+
+                
+                if ((item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu>=0) {
+                        //llamamos por valor de funcion
+                        if (item_seleccionado.menu_funcion!=NULL) {
+                                //printf ("actuamos por funcion\n");
+                                item_seleccionado.menu_funcion(item_seleccionado.valor_opcion);
+                                
+                        }
+                }
+
+        } while ( (item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu!=MENU_RETORNO_ESC && !salir_todos_menus);
+
+
+}
+
+void menu_ql_microdrive_floppy(MENU_ITEM_PARAMETERS)
+{
+	ql_microdrive_floppy_emulation ^=1;
+}
+
+void menu_ql_mdv1(MENU_ITEM_PARAMETERS)
+{
+	menu_storage_string_root_dir(ql_mdv1_root_dir);
+
+	//Copiar misma ruta a flp1
+	if (ql_flp1_follow_mdv1.v) strcpy(ql_flp1_root_dir,ql_mdv1_root_dir);
+}
+
+void menu_ql_mdv2(MENU_ITEM_PARAMETERS)
+{
+	menu_storage_string_root_dir(ql_mdv2_root_dir);
+}
+
+void menu_ql_flp1(MENU_ITEM_PARAMETERS)
+{
+	menu_storage_string_root_dir(ql_flp1_root_dir);
+}
+
+
+void menu_ql_replace_underscore(MENU_ITEM_PARAMETERS)
+{
+	ql_replace_underscore_dot.v ^=1;
+}
+
+
+void menu_ql_replace_underscore_only_one(MENU_ITEM_PARAMETERS)
+{
+	ql_replace_underscore_dot_only_one.v ^=1;
+}
+
+void menu_ql_flp1_follow_mdv1(MENU_ITEM_PARAMETERS)
+{
+	ql_flp1_follow_mdv1.v ^=1;
+}
+
+void menu_ql_mdv_flp(MENU_ITEM_PARAMETERS)
+{
+
+	
+
+        //Dado que es una variable local, siempre podemos usar este nombre array_menu_common
+        menu_item *array_menu_common;
+        menu_item item_seleccionado;
+        int retorno_menu;
+        do {
+
+                
+				
+
+            menu_add_item_menu_inicial_format(&array_menu_common,MENU_OPCION_NORMAL,menu_ql_microdrive_floppy,NULL,"[%c] Microdrive&Floppy",
+                    (ql_microdrive_floppy_emulation ? 'X' : ' ') );
+
+                    if (ql_microdrive_floppy_emulation) {
+                            char string_ql_mdv1_root_dir_shown[13];
+                            char string_ql_mdv2_root_dir_shown[13];
+                            char string_ql_flp1_root_dir_shown[13];
+                            menu_tape_settings_trunc_name(ql_mdv1_root_dir,string_ql_mdv1_root_dir_shown,13);
+                            menu_tape_settings_trunc_name(ql_mdv2_root_dir,string_ql_mdv2_root_dir_shown,13);
+                            menu_tape_settings_trunc_name(ql_flp1_root_dir,string_ql_flp1_root_dir_shown,13);
+
+                            menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_ql_mdv1,NULL,"Mdv1 root dir: %s",string_ql_mdv1_root_dir_shown);
+                            menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_ql_mdv2,NULL,"Mdv2 root dir: %s",string_ql_mdv2_root_dir_shown);
+                            menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_ql_flp1,NULL,"Flp1 root dir: %s",string_ql_flp1_root_dir_shown);
+
+							menu_add_item_menu(array_menu_common,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+
+
+							menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_ql_replace_underscore,NULL,"[%c] Replace _ to . in filename",
+                    			(ql_replace_underscore_dot.v ? 'X' : ' ') );
+ 
+							if (ql_replace_underscore_dot.v) {
+								menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_ql_replace_underscore_only_one,NULL,"[%c] Replace only the extension",
+                    				(ql_replace_underscore_dot_only_one.v ? 'X' : ' ') );
+							}
+
+
+							menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_ql_flp1_follow_mdv1,NULL,"[%c] FLP1 path follows MDV1",
+                    (ql_flp1_follow_mdv1.v ? 'X' : ' ') );
+                    }
+
+						
+			menu_add_item_menu(array_menu_common,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+
+            menu_add_ESC_item(array_menu_common);
+
+            retorno_menu=menu_dibuja_menu(&ql_mdv_flp_opcion_seleccionada,&item_seleccionado,array_menu_common,"Microdrive & Floppy" );
+
+                
+                if ((item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu>=0) {
+                        //llamamos por valor de funcion
+                        if (item_seleccionado.menu_funcion!=NULL) {
+                                //printf ("actuamos por funcion\n");
+                                item_seleccionado.menu_funcion(item_seleccionado.valor_opcion);
+                                
+                        }
+                }
+
+        } while ( (item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu!=MENU_RETORNO_ESC && !salir_todos_menus);
 
 
 }

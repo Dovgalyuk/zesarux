@@ -118,6 +118,12 @@
 #include "zeng.h"
 #include "hilow.h"
 #include "ds1307.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "sn76489an.h"
+#include "vdp_9918a.h"
+#include "svi.h"
 
 #ifdef COMPILE_STDOUT
 #include "scrstdout.h"
@@ -168,6 +174,10 @@
 
 #ifdef COMPILE_DSP
 #include "audiodsp.h"
+#endif
+
+#ifdef COMPILE_PCSPEAKER
+#include "audiopcspeaker.h"
 #endif
 
 #ifdef COMPILE_SDL
@@ -376,7 +386,7 @@ void do_fallback_video(void)
 		funcion_init=scr_driver_array[i].funcion_init;
 		funcion_set=scr_driver_array[i].funcion_set;
 		if ( (funcion_init()) ==0) {
-			debug_printf(VERBOSE_DEBUG,"Ok video driver i:%d %s",i,scr_driver_name);
+			debug_printf(VERBOSE_DEBUG,"Ok video driver i:%d %s",i,scr_new_driver_name);
 			funcion_set();
 			return;
 		}
@@ -402,7 +412,7 @@ void do_fallback_audio(void)
                 funcion_init=audio_driver_array[i].funcion_init;
                 funcion_set=audio_driver_array[i].funcion_set;
                 if ( (funcion_init()) ==0) {
-                        debug_printf (VERBOSE_DEBUG,"Ok audio driver i:%d %s",i,audio_driver_name);
+                        debug_printf (VERBOSE_DEBUG,"Ok audio driver i:%d %s",i,audio_new_driver_name);
                         funcion_set();
                         return;
                 }
@@ -607,6 +617,11 @@ z80_bit allow_write_rom={0};
 //0=default
 //1=spanish
 int z88_cpc_keymap_type=0;
+
+char *realmachine_keymap_strings_types[]={
+	"Default",
+	"Spanish"
+};
 
 //Modo turbo. 1=normal. 2=7 Mhz, 3=14 Mhz, etc
 int cpu_turbo_speed=1;
@@ -1061,6 +1076,24 @@ void reset_cpu(void)
 
 	}
 
+	if (MACHINE_IS_MSX) {
+		msx_reset();
+	}
+
+	if (MACHINE_IS_SVI) {
+		svi_reset();
+	}	
+
+	if (MACHINE_IS_COLECO) {
+		coleco_reset();
+	}	
+
+	if (MACHINE_IS_SG1000) {
+		sg1000_reset();
+	}	
+
+	vdp_9918a_reset();	
+
 	t_estados=0;
 	t_scanline=0;
 	t_scanline_draw=0;
@@ -1071,6 +1104,8 @@ void reset_cpu(void)
         }
 
 	init_chip_ay();
+
+	init_chip_sn();
 
 #ifdef EMULATE_CPU_STATS
 util_stats_init();
@@ -1253,6 +1288,12 @@ char *string_machines_list_description=
 
 							" CPC464   Amstrad CPC 464\n"
 							" CPC4128  Amstrad CPC 4128\n"
+							
+							" MSX1     MSX1\n"
+							" Coleco   Colecovision\n"
+							" SG1000   Sega SG1000\n"
+							" SVI318   Spectravideo SVI 318\n"
+							" SVI328   Spectravideo SVI 328\n"
 							;
 
 
@@ -1335,6 +1376,10 @@ void cpu_help(void)
 
 #ifdef COMPILE_DSP
         printf ("dsp ");
+#endif
+
+#ifdef COMPILE_PCSPEAKER
+        printf ("pcspeaker ");
 #endif
 
 #ifdef COMPILE_COREAUDIO
@@ -1554,6 +1599,11 @@ printf (
 		"--disable-silencedetector  Disable silence detector. Silence detector is disabled by default\n"
 
 
+#ifdef COMPILE_PCSPEAKER
+		"--pcspeaker-wait-time      Wait time between every audio byte sent. Values between 0 and 64 microseconds\n"
+#endif
+
+
 
 #ifdef COMPILE_ALSA
 		"--alsaperiodsize n         Alsa audio periodsize multiplier (2 or 4). Default 2. Lower values reduce latency but can increase cpu usage\n"
@@ -1701,11 +1751,15 @@ printf (
 		"--watermark-position n     Where to put watermark. 0: Top left, 1: Top right. 2: Bottom left. 3: Bottom right\n"
 
 
-		"--enable-zxdesktop              Enable ZX Desktop space\n"
-		"--zxdesktop-width n             ZX Desktop width\n"
-		"--zxdesktop-fill-type n         ZX Desktop fill type (0,1 or 2)\n"
-		"--zxdesktop-fill-solid-color n  ZX Desktop fill solid color on fill type 0 (0-15)\n"
-		"--zxdesktop-new-items           Try to place new menu items on the ZX Desktop space\n"
+		"--enable-zxdesktop                     Enable ZX Desktop space\n"
+		"--zxdesktop-width n                    ZX Desktop width\n"
+		"--zxdesktop-fill-type n                ZX Desktop fill type (0,1,2,3,4 or 5)\n"
+		"--zxdesktop-fill-primary-color n       ZX Desktop primary fill color (0-15)\n"
+		"--zxdesktop-fill-secondary-color n     ZX Desktop secondary fill color (0-15)\n"
+		"--zxdesktop-new-items                  Try to place new menu items on the ZX Desktop space\n"
+		"--zxdesktop-disable-buttons            Disable ZX Desktop direct access buttons\n"
+		"--zxdesktop-transparent-upper-buttons  Make ZX Desktop upper buttons transparent\n"
+		"--zxdesktop-transparent-lower-buttons  Make ZX Desktop lower buttons transparent\n"
 
 				
 
@@ -1781,7 +1835,9 @@ printf (
 printf (
 		"\n"
 		"--hide-dirs                Do not show directories on file selector menus\n"
+		"--no-file-previews         Do not show file previews on file selector menus\n"
 		"--limitopenmenu            Limit the action to open menu (F5 by default, joystick button). To open it, you must press the key 3 times in one second\n"
+		"--setmachinebyname         Select machine by name instead of manufacturer\n"
 		"--disablemenu              Disable menu\n"
 		"--disablemenuandexit       Disable menu. Any event that opens the menu will exit the emulator\n"
 		"--disablemenufileutils     Disable File Utilities menu\n"
@@ -1808,10 +1864,12 @@ printf (
 		"--printerbitmapfile f      Sends printer output to image file. Supported formats: pbm, txt\n"
 		"--printertextfile f        Sends printer output to text file using OCR method. Printer output is saved to a text file using OCR method to guess text.\n"
 		"--redefinekey src dest     Redefine key scr to be key dest. You can write maximum 10 redefined keys\n"
-                "                           Key must be ascii character numbers or a character included in escaped quotes, like: 97 (for 'a') or \\'q\\'\n"
-                "                           (the escaped quotes are used only in command line; on configuration file, they are normal quotes '')\n"
+        "                           Key must be ascii character numbers or a character included in escaped quotes, like: 97 (for 'a') or \\'q\\'\n"
+        "                           (the escaped quotes are used only in command line; on configuration file, they are normal quotes '')\n"
 
-                "--recreatedzx              Enable support for Recreated ZX Spectrum Keyboard\n"
+        "--recreatedzx              Enable support for Recreated ZX Spectrum Keyboard\n"
+
+		"--keymap n                 Which kind of physical keyboard you have. Default 0 (English) or 1 (Spanish)\n"
 
 
 		);
@@ -2064,6 +2122,8 @@ printf (
 		"--stats-send-enabled           Enable send statistics\n"
 		"--stats-uuid s                 UUID to send statistics\n"
 		"--stats-disable-check-updates  Disable checking of available ZEsarUX updates\n"
+		"--stats-disable-check-yesterday-users  Disable checking ZEsarUX yesterday users\n"
+
 		"--stats-last-avail-version s   ZEsarUX last available version to download\n"
 		
 		
@@ -2289,6 +2349,21 @@ int set_audiodriver_dsp(void) {
                 }
 #endif
 
+
+#ifdef COMPILE_PCSPEAKER
+int set_audiodriver_pcspeaker(void) {
+                        audio_init=audiopcspeaker_init;
+                        audio_send_frame=audiopcspeaker_send_frame;
+			audio_thread_finish=audiopcspeaker_thread_finish;
+			audio_end=audiopcspeaker_end;
+			audio_get_buffer_info=audiopcspeaker_get_buffer_info;
+			return 0;
+
+                }
+#endif
+
+
+
 #ifdef COMPILE_SDL
 int set_audiodriver_sdl(void) {
                         audio_init=audiosdl_init;
@@ -2421,10 +2496,7 @@ void random_ram_inves(z80_byte *puntero,int longitud)
 
 }
 
-struct s_machine_names {
-	char nombre_maquina[40];  //40 mas que suficiente
-	int id;
-};
+
 
 struct s_machine_names machine_names[]={
 
@@ -2460,6 +2532,11 @@ struct s_machine_names machine_names[]={
                                             {"ZX Spectrum +3 (ROM v4.1)",		MACHINE_ID_SPECTRUM_P3_41},
                                             {"ZX Spectrum +3 (Spanish)",		MACHINE_ID_SPECTRUM_P3_SPA},
 
+{"MSX1",MACHINE_ID_MSX1},
+{"ColecoVision",MACHINE_ID_COLECO},
+{"SG-1000",MACHINE_ID_SG1000},
+{"Spectravideo 318",MACHINE_ID_SVI_318},
+{"Spectravideo 328",MACHINE_ID_SVI_328},
 
                                             {"ZX80",  				120},
                                             {"ZX81",  				121},
@@ -2799,6 +2876,64 @@ void malloc_mem_machine(void) {
 
 
         }
+        
+        else if (MACHINE_IS_MSX1) {
+                //total 64kb * 4
+                malloc_machine(65536*4);
+                random_ram(memoria_spectrum+32768,32768);
+
+
+				//y 16kb para vram
+				msx_alloc_vram_memory();
+
+
+				msx_init_memory_tables();
+
+        }
+
+
+        else if (MACHINE_IS_SVI) {
+			//Total:  5 RAMS de 32 kb, 3 ROMS de 32 kb -> 5*32 + 3*32 = 160 + 96 = 256
+                
+                malloc_machine(256*1024);
+                random_ram(memoria_spectrum,256*1024);
+
+
+				//y 16kb para vram
+				svi_alloc_vram_memory();
+
+
+				svi_init_memory_tables();
+
+        }		
+
+        else if (MACHINE_IS_COLECO) {
+                //total 64kb 
+                malloc_machine(65536);
+                random_ram(memoria_spectrum+32768,32768);
+
+
+				//y 16kb para vram
+				coleco_alloc_vram_memory();
+
+
+				coleco_init_memory_tables();
+
+        }		
+
+        else if (MACHINE_IS_SG1000) {
+                //total 64kb 
+                malloc_machine(65536);
+                random_ram(memoria_spectrum,65536);
+
+
+				//y 16kb para vram
+				sg1000_alloc_vram_memory();
+
+
+				sg1000_init_memory_tables();
+
+        }			
 
 
 	else if (MACHINE_IS_Z88) {
@@ -2868,6 +3003,12 @@ void set_machine_params(void)
 27=Amstrad +3 - Espa�ol
 
 28-29 Reservado (Spectrum)
+100=colecovision
+101=sega sg1000
+102=Spectravideo 318
+103=Spectravideo 328
+110-119 msx:
+110 msx1
 120=zx80 (old 20)
 121=zx81 (old 21)
 122=jupiter ace (old 22)
@@ -2887,6 +3028,7 @@ void set_machine_params(void)
 
 		//defaults
 		ay_chip_present.v=0;
+		sn_chip_present.v=0;
 
 		if (!MACHINE_IS_Z88) {
 			//timer_sleep_machine=original_timer_sleep_machine=20000;
@@ -2967,6 +3109,22 @@ void set_machine_params(void)
 			cpu_core_loop_active=CPU_CORE_MK14;
 		}
 
+		else if (MACHINE_IS_MSX) {
+			cpu_core_loop_active=CPU_CORE_MSX;
+		}		
+
+		else if (MACHINE_IS_SVI) {
+			cpu_core_loop_active=CPU_CORE_SVI;
+		}			
+
+		else if (MACHINE_IS_COLECO) {
+			cpu_core_loop_active=CPU_CORE_COLECO;
+		}	
+
+		else if (MACHINE_IS_SG1000) {
+			cpu_core_loop_active=CPU_CORE_SG1000;
+		}			
+
 
 		else {
 			cpu_core_loop_active=CPU_CORE_Z88;
@@ -3030,7 +3188,11 @@ void set_machine_params(void)
 		realtape_volumen=0;
 
 
-
+		//Resetear a zona memoria por defecto. Evita cuelgues al intentar usar una zona de memoria que ya no esta disponible,
+		//ejemplo: iniciar maquina msx. abrir view sprites->activar hardware. F5 y cambiar a spectravideo. F5. Floating point exception.
+		//menu_debug_set_memory_zone_mapped();
+		//En principio esto ya no hace falta, desde menu_debug_set_memory_zone_attr, menu_debug_get_mapped_byte y menu_debug_write_mapped_byte
+		//ya se está conmutando correctamente a memory mapped cuando la zona anterior ya no está disponible
 
 		screen_set_parameters_slow_machines();
 
@@ -3320,6 +3482,59 @@ You don't need timings for H/V sync =)
 
 
                 }
+
+		else if (MACHINE_IS_MSX) {
+			contend_read=contend_read_msx1;
+			contend_read_no_mreq=contend_read_no_mreq_msx1;
+			contend_write_no_mreq=contend_write_no_mreq_msx1;
+
+			ula_contend_port_early=ula_contend_port_early_msx1;
+			ula_contend_port_late=ula_contend_port_late_msx1;
+
+			
+			// 3579545 / 312 / 50
+			screen_testados_linea=229;
+
+		}		
+
+		else if (MACHINE_IS_SVI) {
+			contend_read=contend_read_svi;
+			contend_read_no_mreq=contend_read_no_mreq_svi;
+			contend_write_no_mreq=contend_write_no_mreq_svi;
+
+			ula_contend_port_early=ula_contend_port_early_svi;
+			ula_contend_port_late=ula_contend_port_late_svi;
+
+
+			screen_testados_linea=228;
+
+		}			
+
+		else if (MACHINE_IS_COLECO) {
+			contend_read=contend_read_coleco;
+			contend_read_no_mreq=contend_read_no_mreq_coleco;
+			contend_write_no_mreq=contend_write_no_mreq_coleco;
+
+			ula_contend_port_early=ula_contend_port_early_coleco;
+			ula_contend_port_late=ula_contend_port_late_coleco;
+
+			
+			screen_testados_linea=215;
+
+		}		
+
+		else if (MACHINE_IS_SG1000) {
+			contend_read=contend_read_sg1000;
+			contend_read_no_mreq=contend_read_no_mreq_sg1000;
+			contend_write_no_mreq=contend_write_no_mreq_sg1000;
+
+			ula_contend_port_early=ula_contend_port_early_sg1000;
+			ula_contend_port_late=ula_contend_port_late_sg1000;
+
+			
+			screen_testados_linea=228;
+
+		}						
 
 		else if (MACHINE_IS_SAM) {
 			contend_read=contend_read_sam;
@@ -3620,7 +3835,55 @@ You don't need timings for H/V sync =)
 
 								break;
 
+		case MACHINE_ID_COLECO:
+                poke_byte=poke_byte_coleco;
+                peek_byte=peek_byte_coleco;
+				peek_byte_no_time=peek_byte_no_time_coleco;
+				poke_byte_no_time=poke_byte_no_time_coleco;
+                lee_puerto=lee_puerto_coleco;
+				out_port=out_port_coleco;
+				fetch_opcode=fetch_opcode_coleco;
+				sn_chip_present.v=1;
+        break;
 
+		case MACHINE_ID_SG1000:
+                poke_byte=poke_byte_sg1000;
+                peek_byte=peek_byte_sg1000;
+				peek_byte_no_time=peek_byte_no_time_sg1000;
+				poke_byte_no_time=poke_byte_no_time_sg1000;
+                lee_puerto=lee_puerto_sg1000;
+				out_port=out_port_sg1000;
+				fetch_opcode=fetch_opcode_sg1000;
+				sn_chip_present.v=1;
+        break;
+
+		case MACHINE_ID_MSX1:
+                poke_byte=poke_byte_msx1;
+                peek_byte=peek_byte_msx1;
+				peek_byte_no_time=peek_byte_no_time_msx1;
+				poke_byte_no_time=poke_byte_no_time_msx1;
+                lee_puerto=lee_puerto_msx1;
+				out_port=out_port_msx1;
+				fetch_opcode=fetch_opcode_msx;
+				ay_chip_present.v=1;
+				ay_chip_selected=0;
+				total_ay_chips=1;
+        break;
+
+
+		case MACHINE_ID_SVI_318:
+		case MACHINE_ID_SVI_328:
+                poke_byte=poke_byte_svi;
+                peek_byte=peek_byte_svi;
+				peek_byte_no_time=peek_byte_no_time_svi;
+				poke_byte_no_time=poke_byte_no_time_svi;
+                lee_puerto=lee_puerto_svi;
+				out_port=out_port_svi;
+				fetch_opcode=fetch_opcode_svi;
+				ay_chip_present.v=1;
+				ay_chip_selected=0;
+				total_ay_chips=1;
+        break;
 
 
 		case 120:
@@ -3793,6 +4056,8 @@ You don't need timings for H/V sync =)
 		out_port=out_port_legacy_ql;
 		fetch_opcode=fetch_opcode_legacy_ql;
 
+		ql_readbyte_no_ports_function=ql_readbyte_no_ports;
+
 
 							//Hagamoslo mas lento
 								screen_testados_linea=80;
@@ -3844,7 +4109,7 @@ void set_menu_gui_zoom(void)
 {
 	//Ajustar zoom del gui. por defecto 1
 	menu_gui_zoom=1;
-	//printf ("calling set_menu_gui_zoom. driver: %s\n",scr_driver_name);
+	//printf ("calling set_menu_gui_zoom. driver: %s\n",scr_new_driver_name);
 
 	if (si_complete_video_driver() ) {
 		if (MACHINE_IS_QL || MACHINE_IS_TSCONF || MACHINE_IS_CPC || MACHINE_IS_PRISM || MACHINE_IS_SAM || MACHINE_IS_TBBLUE) menu_gui_zoom=2;
@@ -3863,13 +4128,35 @@ void post_set_mach_reopen_screen(void)
 			//scr_init_pantalla();
 }
 
+//Reabrir ventana en caso de que maquina seleccionada sea diferente a la anterior
+void post_set_machine_no_rom_load_reopen_window(void)
+{
+	set_menu_gui_zoom();
+
+	//printf ("last: %d current: %d\n",last_machine_type,current_machine_type);
+
+	if (last_machine_type!=255 && last_machine_type!=current_machine_type) {
+		debug_printf (VERBOSE_INFO,"Reopening window so current machine is different and may have different window size");
+		//printf ("Reopening window so current machine is different and may have different window size\n");
+		post_set_mach_reopen_screen();
+
+		//Rearrange de ventanas en segundo plano, por si la maquina actual es una ventana de ZEsarUX mas pequeña 
+		//y se saldrian las ventanas zxvision de rango
+		debug_printf (VERBOSE_DEBUG,"Rearrange zxvision windows so current machine is different and may have different window size");
+		zxvision_rearrange_background_windows();
+		return;		
+	}
+}
+
 /*
+Vieja funcion
 Reabrir ventana en caso de que maquina seleccionada tenga tamanyo diferente que la anterior
 TODO: Quiza se podria simplificar esto, se empezó con Z88 a spectrum y se han ido agregando,
 se exponen todos los casos de maquinas con diferentes tamanyos de ventana,
 pero quiza simplemente habria que ver que el tamanyo anterior fuera diferente al actual y entonces reabrir ventana
+O que la maquina actual es diferente de la anterior
 */
-void post_set_machine_no_rom_load_reopen_window(void)
+void old_post_set_machine_no_rom_load_reopen_window(void)
 {
 
 	set_menu_gui_zoom();
@@ -4170,6 +4457,23 @@ void rom_load(char *romfilename)
                 romfilename="pentagon.rom";
                 break;
 
+                case MACHINE_ID_COLECO:
+                romfilename="coleco.rom";
+                break;	
+
+                case MACHINE_ID_SG1000:
+                romfilename="sg1000.rom"; 
+                break;							
+                
+                case MACHINE_ID_MSX1:
+                romfilename="msx.rom";
+                break;
+
+                case MACHINE_ID_SVI_318:
+				case MACHINE_ID_SVI_328:
+                romfilename="svi.rom";
+                break;				
+
 								case MACHINE_ID_CHROME:
 								romfilename="chrome.rom";
 								break;
@@ -4415,6 +4719,37 @@ Total 20 pages=320 Kb
 
 
                 }
+
+                else if (MACHINE_IS_COLECO) {
+			//coleco 8 kb rom
+                        	leidos=fread(memoria_spectrum,1,8192,ptr_romfile);
+				if (leidos!=8192) {
+				 	cpu_panic("Error loading ROM");
+				}
+		}				
+                
+                else if (MACHINE_IS_SG1000) {
+					//no tiene rom. No cargamos nada, aunque mas arriba intenta siempre abrir un archivo de rom,
+					//es por eso que es necesario que exista el archivo de rom, aunque no se cargue ni se use para nada
+			
+		}	
+
+                else if (MACHINE_IS_MSX1) {
+			//msx 32 kb rom
+                        	leidos=fread(memoria_spectrum,1,32768,ptr_romfile);
+				if (leidos!=32768) {
+				 	cpu_panic("Error loading ROM");
+				}
+		}
+
+
+                else if (MACHINE_IS_SVI) {
+			//svi 32 kb rom
+                        	leidos=fread(memoria_spectrum,1,32768,ptr_romfile);
+				if (leidos!=32768) {
+				 	cpu_panic("Error loading ROM");
+				}
+		}
 
 
 		else if (MACHINE_IS_ZX80) {
@@ -4780,6 +5115,14 @@ void main_init_audio(void)
                 }
 #endif
 
+#ifdef COMPILE_PCSPEAKER
+                add_audio_init_array("pcspeaker",audiopcspeaker_init,set_audiodriver_pcspeaker);
+                if (!strcmp(driver_audio,"pcspeaker")) {
+                        set_audiodriver_pcspeaker();
+
+                }
+#endif
+
 
 
 
@@ -4809,7 +5152,7 @@ void main_init_audio(void)
 }
 
 char *param_custom_romfile=NULL;
-z80_bit opcion_no_splash;
+z80_bit opcion_no_welcome_message;
 
 
 z80_bit command_line_zx8081_vsync_sound={0};
@@ -4966,23 +5309,38 @@ int parse_cmdline_options(void) {
 				siguiente_parametro_argumento();
 				int valor=parse_string_to_number(argv[puntero_parametro]);
 
-				if (valor<0 || valor>2) {
+				if (valor<0 || valor>MENU_MAX_EXT_DESKTOP_FILL_NUMBER) {
 					printf ("Invalid value for ZX Desktop fill type\n");
 					exit(1);
 				}
 				menu_ext_desktop_fill=valor;
 			}		
 
-			else if (!strcmp(argv[puntero_parametro],"--zxdesktop-fill-solid-color")) {
+			//Deprecated --zxdesktop-fill-solid-color
+			else if (!strcmp(argv[puntero_parametro],"--zxdesktop-fill-solid-color") ||
+					!strcmp(argv[puntero_parametro],"--zxdesktop-fill-primary-color")
+			
+			) {
 				siguiente_parametro_argumento();
 				int valor=parse_string_to_number(argv[puntero_parametro]);
 
 				if (valor<0 || valor>15) {
-					printf ("Invalid value for ZX Desktop fill solid color on fill type 0\n");
+					printf ("Invalid value for ZX Desktop primary fill solid color\n");
 					exit(1);
 				}
-				menu_ext_desktop_fill_solid_color=valor;
-			}				
+				menu_ext_desktop_fill_first_color=valor;
+			}		
+
+			else if (!strcmp(argv[puntero_parametro],"--zxdesktop-fill-secondary-color")) {
+				siguiente_parametro_argumento();
+				int valor=parse_string_to_number(argv[puntero_parametro]);
+
+				if (valor<0 || valor>15) {
+					printf ("Invalid value for ZX Desktop seconday fill solid color\n");
+					exit(1);
+				}
+				menu_ext_desktop_fill_second_color=valor;
+			}						
 
 
 
@@ -4990,7 +5348,17 @@ int parse_cmdline_options(void) {
 				screen_ext_desktop_place_menu=1;
 			}
 
+			else if (!strcmp(argv[puntero_parametro],"--zxdesktop-disable-buttons")) {
+				menu_zxdesktop_buttons_enabled.v=0;
+			} 
 
+			else if (!strcmp(argv[puntero_parametro],"--zxdesktop-transparent-upper-buttons")) {
+				menu_ext_desktop_transparent_upper_icons.v=1;
+			}
+
+			else if (!strcmp(argv[puntero_parametro],"--zxdesktop-transparent-lower-buttons")) {
+				menu_ext_desktop_transparent_lower_icons.v=1;
+			}		
 
 
 			else if (!strcmp(argv[puntero_parametro],"--watermark-position")) {
@@ -5320,6 +5688,10 @@ int parse_cmdline_options(void) {
                                 if (!strcmp(driver_audio,"dsp")) driveraook=1;
 #endif
 
+#ifdef COMPILE_PCSPEAKER
+                                if (!strcmp(driver_audio,"pcspeaker")) driveraook=1;
+#endif
+
 #ifdef COMPILE_SDL
                                 if (!strcmp(driver_audio,"sdl")) driveraook=1;
 #endif
@@ -5406,9 +5778,18 @@ int parse_cmdline_options(void) {
 				menu_limit_menu_open.v=1;
 			}
 
+			else if (!strcmp(argv[puntero_parametro],"--setmachinebyname")) {
+				setting_machine_selection_by_name.v=1;
+			}			
+
 			else if (!strcmp(argv[puntero_parametro],"--hide-dirs")) {
 				menu_filesel_hide_dirs.v=1;
 			}
+
+			else if (!strcmp(argv[puntero_parametro],"--no-file-previews")) {
+				menu_filesel_show_previews.v=0;
+			}
+
 
 			else if (!strcmp(argv[puntero_parametro],"--disablemenumouse")) {
 				mouse_menu_disabled.v=1;
@@ -5625,6 +6006,18 @@ int parse_cmdline_options(void) {
 				recreated_zx_keyboard_support.v=1;
 			}
 
+			else if (!strcmp(argv[puntero_parametro],"--keymap")) {
+				siguiente_parametro_argumento();
+                int valor=atoi(argv[puntero_parametro]);
+                if (valor<0 || valor>1) {
+               		printf ("Invalid Keymap value\n");
+                    exit(1);
+                }
+                z88_cpc_keymap_type=valor;
+			}
+
+			
+
 			else if (!strcmp(argv[puntero_parametro],"--enablekempstonmouse")) {
 				kempston_mouse_emulation.v=1;
 			}
@@ -5665,7 +6058,7 @@ int parse_cmdline_options(void) {
 				siguiente_parametro_argumento();
 
 				if (menu_define_key_function(valor,argv[puntero_parametro])) {
-					printf ("Invalid action\n");
+					printf ("Invalid f-function action: %s\n",argv[puntero_parametro]);
 					exit(1);
 				}
 
@@ -6419,7 +6812,7 @@ int parse_cmdline_options(void) {
 			}							
 
 			else if (!strcmp(argv[puntero_parametro],"--nowelcomemessage")) {
-                                opcion_no_splash.v=1;
+                                opcion_no_welcome_message.v=1;
 			}
 
 
@@ -6738,6 +7131,18 @@ int parse_cmdline_options(void) {
 			else if (!strcmp(argv[puntero_parametro],"--disable-silencedetector")) {
 				silence_detector_setting.v=0;
 			}
+
+			//Setting de pcspeaker siempre compilado, simplemente si no esta, no sale en la ayuda
+			else if (!strcmp(argv[puntero_parametro],"--pcspeaker-wait-time")) {
+				siguiente_parametro_argumento();
+				int valor=parse_string_to_number(argv[puntero_parametro]);
+				if (valor<0 || valor>64) {
+					printf ("Invalid wait time value. Must be between 0 and 64\n");
+					exit(1);
+				}
+				audiopcspeaker_tiempo_espera=valor;
+			}
+			
 
 
 #ifdef COMPILE_ALSA
@@ -7274,6 +7679,10 @@ int parse_cmdline_options(void) {
 			else if (!strcmp(argv[puntero_parametro],"--stats-disable-check-updates")) {
 				stats_check_updates_enabled.v=0;
 			}
+
+			else if (!strcmp(argv[puntero_parametro],"--stats-disable-check-yesterday-users")) {
+				stats_check_yesterday_users_enabled.v=0;
+			}			
 	
 			else if (!strcmp(argv[puntero_parametro],"--stats-last-avail-version")) {
 				siguiente_parametro_argumento();
@@ -7630,7 +8039,7 @@ Also, you should keep the following copyright message, beginning with "Begin Cop
 	//tape_save_inserted.v=0;
 
 	menu_splash_text_active.v=0;
-	opcion_no_splash.v=0;
+	opcion_no_welcome_message.v=0;
 	spec_smp_memory=NULL;
 
 	autoselect_snaptape_options.v=1;
@@ -7671,8 +8080,8 @@ inverse_video.v=0;
 kempston_mouse_emulation.v=0;
 
 
-scr_driver_name="";
-audio_driver_name="";
+scr_set_driver_name("");
+audio_set_driver_name("");
 
 transaction_log_filename[0]=0;
 
@@ -7717,10 +8126,13 @@ tooltip_enabled.v=1;
 	peek_byte=peek_byte_vacio;
 	peek_byte_no_time=peek_byte_vacio;	
 	lee_puerto=lee_puerto_vacio;
+	//lee_puerto_no_time=lee_puerto_vacio;
 	out_port=out_port_vacio;	
 	fetch_opcode=fetch_opcode_vacio;
 	realjoystick_init=realjoystick_null_init;
 	realjoystick_main=realjoystick_null_main;
+
+	ql_readbyte_no_ports_function=ql_readbyte_no_ports_vacio;
 	//realjoystick_hit=realjoystick_null_hit;
 
 	//Inicializo tambien la de push
@@ -7986,7 +8398,9 @@ init_randomize_noise_value();
 
 
 	init_chip_ay();
+	init_chip_sn();
 	ay_init_filters();
+	sn_init_filters();
 	
 	mid_reset_export_buffers();
 
@@ -8061,7 +8475,14 @@ init_randomize_noise_value();
 	framescreen_saltar=0;
 
 
-	if (opcion_no_splash.v==0) set_splash_text();
+	if (opcion_no_welcome_message.v==0) {
+		set_welcome_message();
+	}
+
+	else {
+		//Cuando hay splash, la propia funcion set_welcome_message llama a cls_menu_overlay y esta llama a menu_draw_ext_desktop
+		menu_draw_ext_desktop();
+	}
 
 
 
@@ -8244,9 +8665,16 @@ init_randomize_noise_value();
 	//Funciones de red en background
 	stats_check_updates();
 	send_stats_server();
+	stats_check_yesterday_users();
+
+
+	//printf("menu abierto: %d menu_overlay_activo: %d\n",menu_abierto,menu_overlay_activo);
+
 
 	//Restaurar ventanas, si conviene
 	//zxvision_restore_windows_on_startup();	
+
+	//printf("menu abierto: %d menu_overlay_activo: %d\n",menu_abierto,menu_overlay_activo);
 
 	//Inicio bucle de emulacion
 

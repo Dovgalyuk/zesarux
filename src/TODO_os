@@ -49,11 +49,38 @@ Quizá en OSX superiores lo han simplificado. Pero hace falta swift o funciona c
 -Fin Joystick en Mac
 
 
+----Mac SSL
+
+
+-como incluir libreria ssl en mac? hace falta /usr/local/opt/openssl/lib/libssl.1.0.0.dylib
+-quiza otro binario y que el usuario pueda copiarlo a mano, incluido la libssl?
+
+-el compilado final de mac hay que hacerlo sin ssl? O ver si enlaza con la ssl del sistema operativo. Si no, igual se puede incluir la de homebrew de manera estática
+Parece que depende del de brew:
+~iMac-de-Cesar:src cesarhernandez$ ./zesarux --noconfigfile --ao null
+dyld: Library not loaded: /usr/local/opt/openssl/lib/libssl.1.0.0.dylib
+  Referenced from: /Users/cesarhernandez/Documents/ZEsarUX/zesarux/src/./zesarux
+  Reason: image not found
+Abort trap: 6
+
+-quiza meter la libreria ssl y el binario compilado en carpeta extras
+
+
+otool -L zesarux|grep ssl
+
+Es mas complicado pues luego va a buscar librerias de /usr/local/Cellar/openssl
+
+
+----Fin Mac SSL
+
+
+
+
+
 ------------------
 
-
-
 --- windows - mingw - fallos ---
+
 
 -footer en fullscreen no lo ubica bien. En SDL de Linux va bien
 
@@ -108,5 +135,12 @@ Fifosdlbuffersize 4 y sdlsamplesize 2048
 *con driver audio intel hd (el que tenia antes): hay clicking normalmente . MAL
 
 
--------------
+-Windows no es capaz de usar imagen mmc de 2 GB. Quiza porque es un compilado para 32 bits?
 
+
+
+------------------
+
+--- Raspberry ---
+
+-compilar raspberry tambien con ssl?

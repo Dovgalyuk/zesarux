@@ -1,21 +1,14 @@
 --- ZX Desktop
 
---Redimensionar ventana redibuja el zxdesktop?
-
-
 --Posibles efectos para fondo ZX Desktop:
----Efecto de ZX Desktop barras colores animado?
 ---Imagen. BMP?
 ---Miniatura de pantalla spectrum
 ---Imagen. SCR
 ---Degradado vertical usando alguna tabla de colores concreta ya existente
----Botones o iconos pulsables 
 ---Anaglifo usando segunda pantalla o extensión Desktop 
 --Fbdev debe permitir ZX Desktop?
 --sdl2: si se pone width de ZX desktop que no cabe en pantalla, se queda reabriendo continuamente la ventana
 
--Cambio de tipo de máquina no borra ZX Desktop. Quizá falta un cls?
-Falla también sin ZX Desktop?
 
 --- FIN ZX Desktop
 
@@ -54,8 +47,6 @@ O esta considerando mal el mostrar barras desplazamiento: quizá deberían salir
 
 -Visualmem mmc read/write en Windows no muestra bien posicion (siempre a 0). Probablemente porque es 32 bits y no gestiona bien
 valores long int
-
--Mostrar info en menu network de descargas, commits etc
 
 -Tema gui configurable todos sus elementos: fuentes, colores etc 
 
@@ -114,9 +105,32 @@ Un tercer botón que diga “take me there” para cuando sugiere menús, que te
 
 -a veces al cambiar numero chips en settings-audio-ay chips se cuelga
 
+-Mientras hay splash de inicio, si se pulsa F5, aparece por un momento overlays de ventanas, cuando F5 esta asignada a "Nothing"
+
+-Smartload de un tap en +3 deja activado top speed (abadía del crimen)
+
 -------------
 
 --- menu - mejoras ---
+
+-poder extender texto de ventanas de simple message, están fijados siempre a 32
+
+-tecla para poder cerrar todos los menus y volver a emulacion (como F5+ESC). Desaparecen las ventanas en background pero no las cierra realmente
+
+-Poder ver ventanas en background con menú cerrado:
+esto se podria hacer poniendo menu_overlay_activo=1 y que en normal_overlay_texto_menu permita redibujado con el menu cerrado
+No se si serviria de mucho, al final es como abrir el menu, pulsar en ventana de maquina emulada: el menu sigue abierto,
+el foco en la maquina emulada, y se ven todas las ventanas de background
+
+-ayuda teclados  +2, +2a/+3 en spanish
+
+-alguna ventana que muestre volumenes de los dos canales estereo. o quiza wave shape con dos partes: izquierda y derecha
+
+-Ventana ayuda teclado:
+* que se pudiera hacer sin multiplicar por zoom_gui? asi en next, cpc, ql etc no se verian el doble de grande
+* al iniciar emulador, si la ventana se ha guardado en background, siempre arranca por defecto inicialmente como spectrum48, y al pulsar
+en la ventana del teclado ya se actualiza con la máquina actual
+
 
 -Mostrar info en menu network de descargas, commits etc. Solo si hay ssl (porque github solo esta con https)
 
@@ -162,6 +176,12 @@ en cuanto a maximo de la string en memoria, vale MAX_TEXTO_OPCION=60
 y no vuelve a abrir el menu, y parece que tampoco envia teclado a maquina emulada
 
 -filtro AY se sigue escuchando cosas aun desactivando los 3 canales->tienen que ver envolventes y speech
+
+-file browser no muestra dispositivos. importante para uart
+Por alguna razón, en /dev no llega a leerlos ni entrando antes del filtro. Quiza algun parametro especial del directorio
+o algo que no hago bien al leer directorio. La solución pasa por escribir el nombre directamente en el file selector (pulsando TAB o click de raton
+arriba)
+-no se ven enlaces simbólicos en navegador de archivos. Como mínimo de Mac no se ven. Y en Linux?
 
 -------------
 
@@ -225,6 +245,8 @@ Que uso se le da a tab? En file utils, si se tabula, cambia de sección. En men�
 -ventana debug cpu: si se estaba en vista 8, y luego cargamos un juego que no sea de paws/daad/quill,
 la vista 1 sera ventana grande pero con alto total reducido. Parecido a lo que sucedia al cambiar de vista
 
+-debug cpu vista 7 deberia redimensionar pantalla. Ver si pasa lo mismo con vista 8 paws etc
+
 -menus tabulados:
 TAB conmutar a zona de acciones? Quiza nueva funcion para seleccion acciones, que permita:
 
@@ -275,7 +297,6 @@ no-thread no funcionara tampoco
 
 -Browser cintas que permita alterar la posición de la cinta
 
--incluir pantallas de teclado spectrum, zx80,zx81, z88, etc
 
 -descomprimir rar,gz, etc con espacio en nombres a veces falla. el comando system le envia las "" pero el propio comando
 no gestiona bien nombres con espacios

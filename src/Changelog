@@ -1,76 +1,158 @@
-Version 8.2 - Turbo Esprit edition. 21 May 2020
+Version 9.1 - xxx edition. 21 August 2020
 
-Added support for compilation on FreeBSD
-Added F key to toggle top cpu speed
+Added compile setting to disable networking functions
+Added pc speaker audio driver (for Linux only)
+Added date & time field info to ZSF snapshots
+Added F-key function to show windows in background without having to open the menu
+Added configuration & command line setting to save keymap type
+Added SNA to SCR file converter
+
+Improved ZX Desktop: 
+-Added direct buttons, to access menu items
+-Added devices buttons/icons, to show device activity and device configuration
+-Reordered menu items
+-Windows are not closed when changing ZX Desktop size
+-Added new ZX Desktop fill types: RainbowAlive, Chess, Grid, Random
+-Improved input number windows: added buttons to increase/decrease values
+
+Improved loading .pok files: increased maximum pokes from 100 to 49152 pokes
+Improved 1 bit resample audio filter 
+Improved ZRCP: Added MMU information to cpu-history command
+
+Improved TBBlue emulation:
+-Added emulation of tbblue joystick type (register 5)
+-Added sprite zoom emulation
+-Added relative sprites emulation
+-Added sprite clipping emulation
+
+Improved File Browser: added previews for screens (on .scr, .tap, .tzx, .pzx, .trd, .dsk, .sna)
+
+Fixed reading keys on SDL and X11 drivers with default keymap and machines QL, MSX and Spectravideo
+Fixed restoring machine to msx, coleco, sg1000 and svi
+Fixed showing last core frame time in Core Statistics window
+
+Fixed QL bugs:
+-Fixed loading QL Superbasic programs when line lenght usually longer than 128 bytes
+-Fixed using QL system calls and A6 pointer offset used after previous Trap was not 4
+-Fixed system call FS.HEADR
+-Fixed system call IO.FSTRG
+-Fixed possible hang calling IO.SSTRG
+-Fixed cursor flashing
+
+
+Fixed segfaults when changing machines and having ZX Desktop windows opened
+Fixed easter egg and cyrillic characters
+Fixed segfaults when initializing audio and video drivers
+Fixed rendering ZX Desktop on startup
+Fixed arranging ZX Vision windows when changing machine or disabling border
+Fixed panic screen extracting tap when invalid block
+Fixed open error when extracting tap with Spectrum names with '/'
+
+
+
+Version 9.0 - Turbo Esprit edition. 17 August 2020
+
+Added new emulated machines: 
+-MSX1 
+-Spectravideo 318/328
+-Colecovision 
+-Sega SG-1000
+
+Added new compiled version: FreeBSD
+Added support for compilation on Haiku
 Added emulation of AY chip MIDI registers 14 & 15 and route them to an external MIDI device
-Added Visualmem for MMC Read/Write
-Added Visualmem "Defrag style"
 Added browser for quicksave snapshots
 Added save screen to bmp feature
-Added Solarized Dark & Light Gui Style
+Added menu to download ZEsarUX extras
 Added Windows icon
+Added F key to toggle top cpu speed
+Added F key to pause/unpause tape
+Added setting to rotate output tape when selecting tape that already exists
+Added setting to resample audio output to 1 bit
+Added showing yesterday ZEsarUX users 
 
-Added ZRCP commands:
--save-screen: to save machine screen to file
 
-
+Improved emulation: use a slightly less cpu on every scanline
+Improved compilation script: allow to set different C compiler
+Improved compiler versions: now all releases are compiled with optimizations, they use lot of less cpu than before
 
 Improved menu:
--Allow some windows to be put on the background. Also active windows are saved and restored on startup
+-Allow some windows to be running on the background, all at the same time. This makes the menu environment more powerful!
+-Active windows are saved and restored on startup
 -Pressing the menu key (F5 by default) when menu is open, it will send you back to the main menu. Also pressing over Z logo on ext desktop
+-Some window hotkeys can be pressed with mouse click (example: Debug CPU Window, File utilities, View Sprites, Hex Editor, Disassemble)
+-Improved some interface fonts in sizes smaller than 8 pixel width
+-Added GUI Styles: MSX, Solarized Dark & Light
+-Added setting to select machine by name instead by manufacturer
 -Added setting to disable showing cpu temperature, or FPS on footer
--Added keyboard help window
--Warn in red colour when FPS low
+-Added keyboard help window for all machines
+-Footer FPS warns in red colour when FPS low
 
-Improved Esxdos handler: 
--add f_mkdir function 
--add configuration setting to save local work directory
+Improved Visualmem:
+-added MMC Read/Write views
+-added "Defrag style" setting
+
+Improved debugging:
+-Added breakpoint action "reset-tstatp"
+-Added SEG0, SEG1, ... SEG7 variables to match TBBlue MMU pages
+-Added IN() function to read a port in the breakpoint parser
+-Added key to execute a RET 
 
 Improved ZRCP:
 -Allow to write commands in "". Not all commands support this
--Added save-binary command
+-Added save-binary command, to save binary data to a file
+-Added save-screen command, to save machine screen to a file
+
+Improved Esxdos handler: 
+-Added f_mkdir function 
+-Added configuration setting to save local work directory
 
 Improved TBBlue emulation:
 -Added Layer2 modes 320x256 and 640x256
 -Added 4bpp sprites
 -Enable Timex video by default
--Added altrom feature: now 48k and 128k mode works again
 -Legacy hi-res and border effects disabled by default. Reduces up to 13% cpu use or gain 17 FPS on my environment
 -Reduced a bit cpu usage (2% cpu less on my environment) when rendering scanlines 
+-Added altrom feature: now 48k and 128k mode works again
 -Emulate register 0x8E (142) => Spectrum 128K Memory Mapping
 -Allow to download a 512 MB TBBlue SD official card (allowed download sizes: 32MB, 128MB, 512MB, 2 GB)
 -Allow paths with backslashes on esxdos handler
 
-Improved debugging:
--Added breakpoint action "reset-tstatp"
--Added SEG0, SEG1, ... SEG7 variables to match TBBlue MMU pages
-
 Improved Chloe emulation: 
--Support CPU speed setting via the ZX-Uno SCANDBLCTRL register
+-Supports CPU speed setting via the ZX-Uno SCANDBLCTRL register
 -Load unodos3.rom as the default divmmc firmware
 -Added chloehd.mmc in the extras package
 
-Improved emulation: use a slightly less cpu on every scanline
-
-
-Fixed ZRCP bugs:
--Fix possible crash when disconnecting socket
--Using cpu-history ZRCP command no longer fires additional MRA conditions
-
-Fixed Esxdos handler: 
--Fixed segfaults when using a file handler that was a directory
 
 Fixed rom loading: no more cpu panic when the rom is not found
 Fixed SCF/CCF undocumented flags emulation. Not enabled by default on compilation because almost no one is using this
 Fixed saving "Show CPU usage" setting on footer
+Fixed using tab and backspace keys in curses driver
+Fixed segfaults when using some memory zones and changing machine
+Fixed segfaults when setting breakpoints from config file and machine is QL
+Fixed segfaults when changing machines and resizing windows
+Fixed segfaults on Esxdos handler when using a file handler that was a directory
+Fixed loading zsf snapshot and ay registers
+Fixed network bug when downloading file and redirecting to another url
+Fixed Visualmem window size when char size < 8
+Fixed Accessibility bug reading transparent windows
 
+Fixed ZRCP bugs:
+-Fixed possible crash when disconnecting socket
+-Using cpu-history ZRCP command no longer fires additional MRA conditions
 
 Fixed tbblue bugs:
 -Fixed 8 first lines of tiles on border not shown
 -Fixed text mode (1 bit tile)
--Fixed reading palette colours. Fixed returning from multiface nmi 
+-Fixed reading palette colours. That fixes returning from multiface nmi 
 -Fixed reading clipping values
 -Fixed screensaver
+-Fixed tbblue memory priorities
+-Fixed tbblue diviface - mmu priority
+-Fixed layer2 mode 2 scroll
+
+
+Some other minor bugfixes and improvements
 
 
 

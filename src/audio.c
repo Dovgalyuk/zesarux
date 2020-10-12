@@ -36,6 +36,8 @@
 #include "settings.h"
 #include "audio_sine_table.h"
 #include "ay38912.h"
+#include "msx.h"
+#include "svi.h"
 
 #include "audionull.h"
 
@@ -70,7 +72,8 @@ char *audio_buffer_two;
 char audio_buffer_one_assigned[AUDIO_BUFFER_SIZE*2];  //Doble porque es estereo
 char audio_buffer_two_assigned[AUDIO_BUFFER_SIZE*2];  //Doble porque es estereo
 
-char *audio_driver_name;
+//Renombro variable a _new_ para corregir un error de código
+char audio_new_driver_name[100];
 
 //Si el driver de audio soporta stereo. En teoria lo soportan todos, se pone de momento como transicion 
 //del sistema mono a stereo, hasta que no esten todos los drivers
@@ -146,6 +149,12 @@ char audio_tone_generator_get(void)
 
 	//no se deberia llegar aqui
 	return 0;
+}
+
+
+void audio_set_driver_name(char *nombre)
+{
+	strcpy(audio_new_driver_name,nombre);
 }
 
 
@@ -262,6 +271,10 @@ int silence_detection_counter=0;
 z80_bit beeper_enabled={1};
 
 
+//Si la salida a la tarjeta de sonido solo tiene dos valores: 0 o 1 (+127 o -128 realmente)
+z80_bit audio_resample_1bit={0};
+
+
 //Similar a silence_detection_counter pero solo para operaciones del beeper
 int beeper_silence_detection_counter=0;
 
@@ -282,6 +295,13 @@ z80_bit aofile_inserted;
 //este valor lo alteramos al simular sonido de carga del zx8081
 int amplitud_speaker_actual_zx8081=AMPLITUD_BEEPER;
 
+//msx 
+int amplitud_speaker_actual_msx=AMPLITUD_BEEPER;
+
+
+//svi
+int amplitud_speaker_actual_svi=AMPLITUD_BEEPER;
+
 char *aofile_buffer;
 
 int aofile_type;
@@ -291,6 +311,11 @@ int aofile_type;
 int buffer_beeper[MAX_BEEPER_ARRAY_LENGTH];
 int beeper_real_enabled=1;
 
+
+//Setting para pcspeaker. Lo pongo aquí asi es una variable siempre compilada, y se puede tener un setting
+//de linea de comandos, aunque no esté compilado
+//Tiempo de espera en microsegundos entre cada envio de byte de audio
+int audiopcspeaker_tiempo_espera=8;
 
 
 
@@ -665,6 +690,14 @@ char beeper_get_last_value_send(void)
                 else if (MACHINE_IS_ZX8081) {
                         return da_amplitud_speaker_zx8081();
                 }
+
+                else if (MACHINE_IS_MSX) {
+                        return da_amplitud_speaker_msx();
+                }				
+
+                else if (MACHINE_IS_SVI) {
+                        return da_amplitud_speaker_svi();
+                }						
 
 		else if (MACHINE_IS_ACE) {
 			return da_amplitud_speaker_ace();
@@ -1108,7 +1141,7 @@ int set_audiodriver_null(void) {
 //Ha fallado el init del driver de audio y hacemos fallback a null
 void fallback_audio_null(void)
 {
-	debug_printf (VERBOSE_ERR,"Error using audio output driver %s. Fallback to null",audio_driver_name);
+	debug_printf (VERBOSE_ERR,"Error using audio output driver %s. Fallback to null",audio_new_driver_name);
 	set_audiodriver_null();
 	audio_init();
 }
@@ -2083,59 +2116,111 @@ char old_audio_change_top_speed_sound(char sonido)
 	return sonido;
 }
 
+//Ultimos valores recibidos a los dos canales antes de pasar por el resample a 1 bit
+char left_channel_before_1bit_process=0;
+char right_channel_before_1bit_process=0;
 
-void audio_send_mono_sample(char valor_sonido)
+//Ultimos valores enviados a los dos canales despues de pasar por el resample de 1 bit
+char left_channel_after_1bit_process=0;
+char right_channel_after_1bit_process=0;
+
+void audio_function_resample_1bit(char *p_valor_sonido_izquierdo,char *p_valor_sonido_derecho)
 {
 
-	int limite_buffer_audio;
+	char valor_sonido_izquierdo,valor_sonido_derecho;
 
-	//if (audio_driver_accepts_stereo.v==0) {
-	//	limite_buffer_audio=AUDIO_BUFFER_SIZE;
-	//	audio_buffer[audio_buffer_indice]=valor_sonido;
-	//	if (audio_buffer_indice<limite_buffer_audio-1) audio_buffer_indice++;
-	//}
+	//printf ("comparar0 %d %d\n",*p_valor_sonido_izquierdo,left_channel_before_1bit_process);
+
+	valor_sonido_izquierdo=*p_valor_sonido_izquierdo;
+	valor_sonido_derecho=*p_valor_sonido_derecho;
+
+	
+
+	int volumen_resample=64;
 
 
-	//else {
-		limite_buffer_audio=AUDIO_BUFFER_SIZE*2;
 
-		
+	char inicial_valor_sonido_izquierdo,inicial_valor_sonido_derecho;
 
-		audio_buffer[audio_buffer_indice]=valor_sonido;
-		audio_buffer[audio_buffer_indice+1]=valor_sonido;
+	inicial_valor_sonido_izquierdo=valor_sonido_izquierdo;
+	inicial_valor_sonido_derecho=valor_sonido_derecho;
 
-		if (audio_buffer_indice<limite_buffer_audio-2) audio_buffer_indice+=2;
-	//}
+	//printf ("comparar %d %d\n",valor_sonido_izquierdo,left_channel_before_1bit_process);
 
+	
+
+	//Si la onda "sube", es +1
+	if (valor_sonido_izquierdo>left_channel_before_1bit_process) {
+		//printf ("superior\n");
+		valor_sonido_izquierdo=+volumen_resample;
+	}
+	//Si la onda "baja", es -1
+	else if (valor_sonido_izquierdo<left_channel_before_1bit_process) {
+		valor_sonido_izquierdo=-volumen_resample;
+		//printf("inferior\n");
+	}
+	//Si la onda esta igual, damos valor anterior
+	else {
+		//printf("igual\n");
+		valor_sonido_izquierdo=left_channel_after_1bit_process;
+	}
+
+
+	//Lo mismo para el canal derecho
+	if (valor_sonido_derecho>right_channel_before_1bit_process) valor_sonido_derecho=+volumen_resample;
+	else if (valor_sonido_derecho<right_channel_before_1bit_process) valor_sonido_derecho=-volumen_resample;
+	else valor_sonido_derecho=right_channel_after_1bit_process;
+
+
+	//Guardamos valores pre-procesado
+	left_channel_before_1bit_process=inicial_valor_sonido_izquierdo;
+	right_channel_before_1bit_process=inicial_valor_sonido_derecho;
+
+	//Guardamos valores post-procesado
+	left_channel_after_1bit_process=valor_sonido_izquierdo;
+	right_channel_after_1bit_process=valor_sonido_derecho;		
+
+
+	//Guardamos los resultados en los punteros
+	*p_valor_sonido_izquierdo=valor_sonido_izquierdo;
+	*p_valor_sonido_derecho=valor_sonido_derecho;		
+	
 }
-
 
 void audio_send_stereo_sample(char valor_sonido_izquierdo,char valor_sonido_derecho)
 {
 
 	int limite_buffer_audio;
 
-	//if (audio_driver_accepts_stereo.v==0) {
-	//	limite_buffer_audio=AUDIO_BUFFER_SIZE;
+	limite_buffer_audio=AUDIO_BUFFER_SIZE*2;
 
-	//	//Mezclar los dos canales en uno
-	//	int suma=valor_sonido_izquierdo+valor_sonido_derecho;
-	//	suma /=2;
+	//printf ("inicial %d\n",valor_sonido_izquierdo);
 
-	//	audio_buffer[audio_buffer_indice]=suma;
-	//	if (audio_buffer_indice<limite_buffer_audio-1) audio_buffer_indice++;
-	//}
+	if (audio_resample_1bit.v) {
 
+		audio_function_resample_1bit(&valor_sonido_izquierdo,&valor_sonido_derecho);
 
+		//printf ("final %d\n",valor_sonido_izquierdo);
+		
+	}
+
+	audio_buffer[audio_buffer_indice]=valor_sonido_izquierdo;
+	audio_buffer[audio_buffer_indice+1]=valor_sonido_derecho;
+
+	if (audio_buffer_indice<limite_buffer_audio-2) {
+		audio_buffer_indice+=2;
+	}
 	//else {
-		limite_buffer_audio=AUDIO_BUFFER_SIZE*2;
-
-		audio_buffer[audio_buffer_indice]=valor_sonido_izquierdo;
-		audio_buffer[audio_buffer_indice+1]=valor_sonido_derecho;
-
-		if (audio_buffer_indice<limite_buffer_audio-2) audio_buffer_indice+=2;
+	//	printf ("NO. %d %d\n",audio_buffer_indice,limite_buffer_audio-2);
+	//	printf("ultimos: %d %d\n",audio_buffer[audio_buffer_indice],audio_buffer[audio_buffer_indice+1]);
+	//	printf("anteriores: %d %d\n",audio_buffer[audio_buffer_indice-2],audio_buffer[audio_buffer_indice-1]);
 	//}
 
+}
+
+void audio_send_mono_sample(char valor_sonido)
+{
+	audio_send_stereo_sample(valor_sonido,valor_sonido);
 }
 
 

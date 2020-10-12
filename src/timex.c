@@ -84,6 +84,7 @@ z80_byte timex_type_memory_paged[8];
 //Paginas mapeadas en cada zona de RAM. Se solamente usa en menu debug y breakpoints, no para el core de emulacion
 z80_byte debug_timex_paginas_memoria_mapeadas[8];
 
+z80_bit timex_cartridge_inserted={0};
 
 void timex_set_memory_pages(void)
 {
@@ -248,6 +249,8 @@ void timex_empty_dock_space(void)
 		*puntero=255;
 		puntero++;
 	}
+
+	timex_cartridge_inserted.v=0;
 }
 
 
@@ -308,6 +311,7 @@ void timex_insert_dck_cartridge(char *filename)
                 reset_cpu();
         }
 
+	timex_cartridge_inserted.v=1;
 
 }
 

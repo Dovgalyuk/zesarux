@@ -192,6 +192,18 @@ void betadisk_reset(void)
 	}
 }
 
+void betadisk_show_activity(void)
+{
+
+	generic_footertext_print_operating("TRD");
+
+	//Y poner icono en inverso
+	if (!zxdesktop_icon_betadisk_inverse) {
+			zxdesktop_icon_betadisk_inverse=1;
+			menu_draw_ext_desktop();
+	}	
+}
+
 z80_byte cpu_core_loop_betadisk(z80_int dir GCC_UNUSED, z80_byte value GCC_UNUSED)
 {
 	//Llamar a anterior
@@ -309,7 +321,7 @@ l1e67h:
 					//print_registers(buffer_registros);
 					//printf ("\n\nHandler for transfer_sectors\n");
 					//printf ("%s\n",buffer_registros);
-					generic_footertext_print_operating("TRD");
+					betadisk_show_activity();
 					betadisk_trdoshandler_read_write_sectors();
 				}
 			}
@@ -318,7 +330,7 @@ l1e67h:
 			if (reg_pc==0x1ee8) {
 				//format
 				debug_printf(VERBOSE_DEBUG,"Formating trd disk");
-				generic_footertext_print_operating("TRD");
+				betadisk_show_activity();
 				betadisk_format_disk();
 			}
 

@@ -35,6 +35,9 @@
 #include "cpu.h"
 #include "debug.h"
 #include "operaciones.h"
+
+#include "snap_zsf.h"
+
 #include "zx8081.h"
 #include "mem128.h"
 #include "ay38912.h"
@@ -68,6 +71,12 @@
 #include "tsconf.h"
 #include "baseconf.h"
 #include "tbblue.h"
+#include "msx.h"
+#include "vdp_9918a.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "sn76489an.h"
+#include "svi.h"
 
 
 #include "autoselectoptions.h"
@@ -76,32 +85,7 @@
         #include <sys/syslimits.h>
 #endif
 
-#define ZSF_NOOP_ID 0
-#define ZSF_MACHINEID 1
-#define ZSF_Z80_REGS_ID 2
-#define ZSF_MOTO_REGS_ID 3
-#define ZSF_RAMBLOCK 4
-#define ZSF_SPEC128_MEMCONF 5
-#define ZSF_SPEC128_RAMBLOCK 6
-#define ZSF_AYCHIP 7
-#define ZSF_ULA 8
-#define ZSF_ULAPLUS 9
-#define ZSF_ZXUNO_RAMBLOCK 10
-#define ZSF_ZXUNO_CONF 11
-#define ZSF_ZX8081_CONF 12
-#define ZSF_ZXEVO_NVRAM 13
-#define ZSF_TSCONF_RAMBLOCK 14
-#define ZSF_TSCONF_CONF 15
-#define ZSF_DIVIFACE_CONF 16
-#define ZSF_DIVIFACE_MEM 17
-#define ZSF_CPC_RAMBLOCK 18
-#define ZSF_CPC_CONF 19
-#define ZSF_PENTAGON_CONF 20
-#define ZSF_TBBLUE_RAMBLOCK 21
-#define ZSF_TBBLUE_CONF 22
-#define ZSF_TBBLUE_PALETTES 23
-#define ZSF_TBBLUE_SPRITES 24
-#define ZSF_TIMEX 25
+
 
 
 int zsf_force_uncompressed=0; //Si forzar bloques no comprimidos
@@ -359,7 +343,76 @@ Byte fields:
 
 
 
+-Block ID 26: ZSF_MSX_MEMBLOCK
+A ram binary block for a msx
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: slot (0,1,2 or 3)
+6: memory segment(0=0000-3fff, 1=4000-7fff, 2=8000-bfff, 3=c000-ffff)
+7: type: 0 rom, 1 ram
+8 and next bytes: data bytes
 
+
+-Block ID 27: ZSF_MSX_CONF
+Ports and internal registers of MSX machine
+Byte fields:
+0: msx_ppi_register_a
+1: msx_ppi_register_b
+2: msx_ppi_register_c
+
+
+
+
+-Block ID 28: ZSF_MSX_VRAM
+VRAM contents for msx
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+
+
+
+
+-Block ID 29: ZSF_GENERIC_LINEAR_MEM
+A ram/rom binary block for a coleco, sg1000, spectravideo,or any machine to save memory linear
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: memory segment(0=0000-3fff, 1=4000-7fff, 2=8000-bfff, 3=c000-ffff, ...)
+
+
+
+-Block ID 30: ZSF_VDP_9918A_CONF
+Ports and internal registers of VDP 9918A registers
+Byte fields:
+0: vdp_9918a_registers[8];
+
+
+-Block ID 31: ZSF_SNCHIP
+Byte fields:
+0-15: SN Chip contents
+
+
+-Block ID 32: ZSF_SVI_CONF
+Ports and internal registers of SVI machine
+Byte fields:
+0: svi_ppi_register_a
+1: svi_ppi_register_b
+2: svi_ppi_register_c
+
+-Block ID 33: ZSF_DATETIME
+Date and time of ZSF file
+0: day
+1: month
+2,3: year
+4: hour
+5: minute
 
 -Como codificar bloques de memoria para Spectrum 128k, zxuno, tbblue, tsconf, etc?
 Con un numero de bloque (0...255) pero... que tamaño de bloque? tbblue usa paginas de 8kb, tsconf usa paginas de 16kb
@@ -373,7 +426,7 @@ Por otra parte, tener bloques diferentes ayuda a saber mejor qué tipos de bloqu
 #define MAX_ZSF_BLOCK_ID_NAMELENGTH 30
 
 //Total de nombres sin contar el unknown final
-#define MAX_ZSF_BLOCK_ID_NAMES 26
+#define MAX_ZSF_BLOCK_ID_NAMES 34
 char *zsf_block_id_names[]={
  //123456789012345678901234567890
   "ZSF_NOOP",
@@ -402,6 +455,14 @@ char *zsf_block_id_names[]={
   "ZSF_TBBLUE_PALETTES",
   "ZSF_TBBLUE_SPRITES",
   "ZSF_TIMEX",
+  "ZSF_MSX_MEMBLOCK",
+  "ZSF_MSX_CONF",
+  "ZSF_MSX_VRAM",
+  "ZSF_GENERIC_LINEAR_MEM",
+  "ZSF_VDP_9918A_CONF",
+  "ZSF_SNCHIP",
+  "ZSF_SVI_CONF",
+  "ZSF_DATETIME",
 
   "Unknown"  //Este siempre al final
 };
@@ -671,6 +732,154 @@ void load_zsf_zxuno_snapshot_block_data(z80_byte *block_data,int longitud_origin
 }
 
 
+void load_zsf_msx_snapshot_block_data(z80_byte *block_data,int longitud_original)
+{
+/*
+-Block ID 26: ZSF_MSX_MEMBLOCK
+A ram binary block for a msx
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: slot (0,1,2 or 3)
+6: memory segment(0=0000-3fff, 1=4000-7fff, 2=8000-bfff, 3=c000-ffff)
+7: type: 0 rom, 1 ram
+8 and next bytes: data bytes
+*/
+
+
+  int i=0;
+  z80_byte block_flags=block_data[i];
+
+  //longitud_original : tamanyo que ocupa todo el bloque con la cabecera de 8 bytes
+
+  i++;
+  z80_int block_start=value_8_to_16(block_data[i+1],block_data[i]);
+  i +=2;
+  z80_int block_lenght=value_8_to_16(block_data[i+1],block_data[i]);
+  i+=2;
+
+  z80_byte slot=block_data[i];
+  i++;
+
+  z80_byte segment=block_data[i];
+  i++;
+
+  z80_byte mem_type=block_data[i];
+  i++;
+
+  debug_printf (VERBOSE_DEBUG,"Block slot: %d segment: %d start: %d Length: %d Compressed: %s Length_source: %d",slot,segment,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+
+
+  longitud_original -=8;
+
+  //if (ram_page>1) cpu_panic("Loading more than 32kb ram not implemented yet");
+
+
+  msx_memory_slots[slot][segment]=mem_type;
+
+  int offset=(slot*4+segment)*16384;
+
+
+  load_zsf_snapshot_block_data_addr(&block_data[i],&memoria_spectrum[offset],block_lenght,longitud_original,block_flags&1);
+
+}
+
+
+
+void load_ZSF_GENERIC_LINEAR_MEM_snapshot_block_data(z80_byte *block_data,int longitud_original)
+{
+/*
+-Block ID 29: ZSF_GENERIC_LINEAR_MEM
+A ram/rom binary block for a coleco, sg1000, spectravideo,or any machine to save memory linear
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: memory segment(0=0000-3fff, 1=4000-7fff, 2=8000-bfff, 3=c000-ffff, ....)
+*/
+
+
+  int i=0;
+  z80_byte block_flags=block_data[i];
+
+  //longitud_original : tamanyo que ocupa todo el bloque con la cabecera de 8 bytes
+
+  i++;
+  z80_int block_start=value_8_to_16(block_data[i+1],block_data[i]);
+  i +=2;
+  z80_int block_lenght=value_8_to_16(block_data[i+1],block_data[i]);
+  i+=2;
+
+
+  z80_byte segment=block_data[i];
+  i++;
+
+
+  debug_printf (VERBOSE_DEBUG,"Block segment: %d start: %d Length: %d Compressed: %s Length_source: %d",segment,block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+
+
+  longitud_original -=6;
+
+  //if (ram_page>1) cpu_panic("Loading more than 32kb ram not implemented yet");
+
+
+
+  int offset=segment*16384;
+
+
+  load_zsf_snapshot_block_data_addr(&block_data[i],&memoria_spectrum[offset],block_lenght,longitud_original,block_flags&1);
+
+}
+
+
+void load_zsf_msx_snapshot_vram_data(z80_byte *block_data,int longitud_original)
+{
+/*
+VRAM contents for msx
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+*/
+
+
+  int i=0;
+  z80_byte block_flags=block_data[i];
+
+  //longitud_original : tamanyo que ocupa todo el bloque con la cabecera de 8 bytes
+
+  i++;
+  z80_int block_start=value_8_to_16(block_data[i+1],block_data[i]);
+  i +=2;
+  z80_int block_lenght=value_8_to_16(block_data[i+1],block_data[i]);
+  i+=2;
+
+
+  debug_printf (VERBOSE_DEBUG,"VRAM start: %d Length: %d Compressed: %s Length_source: %d",block_start,block_lenght,(block_flags&1 ? "Yes" : "No"),longitud_original);
+
+
+  longitud_original -=5;
+
+  //if (ram_page>1) cpu_panic("Loading more than 32kb ram not implemented yet");
+
+  z80_byte *vram_destination;
+
+  if (MACHINE_IS_COLECO) vram_destination=coleco_vram_memory;
+  else if (MACHINE_IS_SG1000) vram_destination=sg1000_vram_memory;
+  else if (MACHINE_IS_SVI) vram_destination=svi_vram_memory;
+  else vram_destination=msx_vram_memory;
+
+
+
+  load_zsf_snapshot_block_data_addr(&block_data[i],vram_destination,block_lenght,longitud_original,block_flags&1);
+
+}
+
+
 void load_zsf_tbblue_snapshot_block_data(z80_byte *block_data,int longitud_original)
 {
 
@@ -828,6 +1037,9 @@ void load_zsf_aychip(z80_byte *header)
 
       int j;
       for (j=0;j<16;j++) ay_3_8912_registros[header_aychip_number][j]=header[3+j];
+
+
+  ay_establece_frecuencias_todos_canales();
   
 
 /*
@@ -842,6 +1054,33 @@ Byte fields:
   /*
 
 */
+
+}
+
+
+void load_zsf_snchip(z80_byte *header)
+{
+
+  
+  sn_chip_present.v=1;
+
+
+      int j;
+      for (j=0;j<16;j++) sn_chip_registers[j]=header[j];
+  
+
+/*
+      
+-Block ID 31: ZSF_SNCHIP
+Byte fields:
+0-15: AY Chip contents
+      */
+  /*
+
+*/
+
+
+  sn_establece_frecuencias_todos_canales();
 
 }
 
@@ -1054,6 +1293,85 @@ Byte fields:
   ulaplus_set_extended_mode(zxuno_ports[0x40]);
 }
 
+
+void load_zsf_msx_conf(z80_byte *header)
+{
+
+  /*
+-Block ID 27: ZSF_MSX_CONF
+Ports and internal registers of MSX machine
+Byte fields:
+0: msx_ppi_register_a
+1: msx_ppi_register_b
+2: msx_ppi_register_c
+*/
+
+  msx_ppi_register_a=header[0];
+  msx_ppi_register_b=header[1];
+  msx_ppi_register_c=header[2];
+
+
+
+
+ 
+}
+
+
+void load_zsf_svi_conf(z80_byte *header)
+{
+
+  /*
+-Block ID 27: ZSF_SVI_CONF
+Ports and internal registers of SVI machine
+Byte fields:
+0: svi_ppi_register_a
+1: svi_ppi_register_b
+2: svi_ppi_register_c
+*/
+
+  svi_ppi_register_a=header[0];
+  svi_ppi_register_b=header[1];
+  svi_ppi_register_c=header[2];
+
+
+
+
+ 
+}
+
+void load_zsf_datetime(z80_byte *header)
+{
+
+
+			//Fecha. Solo para informacion. No se usa para nada mas
+			char buffer_fecha[64];
+			sprintf(buffer_fecha,"Snapshot saved on: %d/%02d/%02d %02d:%02d ",
+          value_8_to_16(header[3],header[2]),header[1],header[0],header[4],header[5]);
+			debug_printf(VERBOSE_INFO,buffer_fecha);
+
+      //printf("%s\n",buffer_fecha);
+
+ 
+}
+
+
+void load_zsf_vdp_9918a_conf(z80_byte *header)
+{
+
+  /*
+-Block ID 30: ZSF_VDP_9918A_CONF
+Ports and internal registers of VDP 9918A
+Byte fields:
+0: vdp_9918a_registers[8];
+*/
+
+
+  int i;
+  for (i=0;i<8;i++) vdp_9918a_registers[i]=header[i];
+
+
+ 
+}
 
 
 void load_zsf_tbblue_conf(z80_byte *header)
@@ -1516,7 +1834,39 @@ void load_zsf_snapshot_file_mem(char *filename,z80_byte *origin_memory,int longi
       
       case ZSF_TIMEX:
         load_zsf_timex(block_data);
-      break;            
+      break;      
+
+      case ZSF_MSX_MEMBLOCK:
+        load_zsf_msx_snapshot_block_data(block_data,block_lenght);
+      break;
+
+      case ZSF_MSX_CONF:
+        load_zsf_msx_conf(block_data);
+      break;   
+
+      case ZSF_MSX_VRAM:
+        load_zsf_msx_snapshot_vram_data(block_data,block_lenght);
+      break;  
+
+      case ZSF_GENERIC_LINEAR_MEM:
+        load_ZSF_GENERIC_LINEAR_MEM_snapshot_block_data(block_data,block_lenght);
+      break;  
+
+      case ZSF_VDP_9918A_CONF:
+        load_zsf_vdp_9918a_conf(block_data);
+      break;    
+
+      case ZSF_SNCHIP:
+        load_zsf_snchip(block_data);
+      break;     
+
+      case ZSF_SVI_CONF:
+        load_zsf_svi_conf(block_data);
+      break;      
+
+      case ZSF_DATETIME:
+        load_zsf_datetime(block_data);
+      break;                             
 
       default:
         debug_printf(VERBOSE_ERR,"Unknown ZSF Block ID: %u. Continue anyway",block_id);
@@ -1657,6 +2007,28 @@ void save_zsf_snapshot_file_mem(char *filename,z80_byte *destination_memory,int 
   //First save machine ID
   z80_byte save_machine_id=current_machine_type;
   zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, &save_machine_id,ZSF_MACHINEID, 1); 
+
+  //Save date time
+  z80_byte datetime_buffer[6];
+  		//fecha grabacion
+		time_t tiempo = time(NULL);
+		struct tm tm = *localtime(&tiempo);
+
+		//printf("now: %d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+		datetime_buffer[0]=tm.tm_mday;
+		datetime_buffer[1]=tm.tm_mon+1;
+
+		z80_int year;
+		year=tm.tm_year + 1900;
+
+		datetime_buffer[2]=value_16_to_8l(year);
+		datetime_buffer[3]=value_16_to_8h(year);
+
+		datetime_buffer[4]=tm.tm_hour;
+		datetime_buffer[5]=tm.tm_min;
+
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, datetime_buffer,ZSF_DATETIME, 6); 
 
 
 
@@ -2015,6 +2387,417 @@ Byte Fields:
 
 
   }
+
+
+if (MACHINE_IS_MSX) {
+
+    z80_byte msxconfblock[11];
+
+/*
+-Block ID 27: ZSF_MSX_CONF
+Ports and internal registers of MSX machine
+Byte fields:
+0: msx_ppi_register_a
+1: msx_ppi_register_b
+2: msx_ppi_register_c
+*/    
+
+    msxconfblock[0]=msx_ppi_register_a;
+    msxconfblock[1]=msx_ppi_register_b;
+    msxconfblock[2]=msx_ppi_register_c;
+
+
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, msxconfblock,ZSF_MSX_CONF, 3);
+
+
+
+
+    z80_byte vdpconfblock[8];
+
+/*
+-Block ID 30: ZSF_VDP_9918A_CONF
+Ports and internal registers of VDP 9918A
+Byte fields:
+0: vdp_9918a_registers[8];
+*/    
+
+
+    int i;
+    for (i=0;i<8;i++) vdpconfblock[i]=vdp_9918a_registers[i];
+
+
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, vdpconfblock,ZSF_VDP_9918A_CONF, 8);  
+    
+
+
+
+   
+int longitud_ram=16384;
+  
+   //Para el bloque comprimido
+   z80_byte *compressed_ramblock=malloc(longitud_ram*2);
+  if (compressed_ramblock==NULL) {
+    debug_printf (VERBOSE_ERR,"Error allocating memory");
+    return;
+  }
+
+/*
+-Block ID 28: ZSF_MSX_VRAM
+VRAM contents for msx
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+*/
+
+        compressed_ramblock[0]=0;
+        compressed_ramblock[1]=value_16_to_8l(16384);
+        compressed_ramblock[2]=value_16_to_8h(16384);
+        compressed_ramblock[3]=value_16_to_8l(longitud_ram); //"Casualidad" que la vram tambien ocupa 16kb
+        compressed_ramblock[4]=value_16_to_8h(longitud_ram);
+
+
+        int si_comprimido;
+        int longitud_bloque=save_zsf_copyblock_compress_uncompres(msx_vram_memory,&compressed_ramblock[5],longitud_ram,&si_comprimido);
+        if (si_comprimido) compressed_ramblock[0]|=1;
+
+        debug_printf(VERBOSE_DEBUG,"Saving ZSF_MSX_VRAM length: %d",longitud_bloque);
+
+        
+        zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_MSX_VRAM, longitud_bloque+5);
+
+
+
+  /*
+
+
+
+-Block ID 26: ZSF_MSX_MEMBLOCK
+A ram binary block for a msx
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: slot (0,1,2 or 3)
+6: memory segment(0=0000-3fff, 1=4000-7fff, 2=8000-bfff, 3=c000-ffff)
+7: type: 0 rom, 1 ram
+8 and next bytes: data bytes
+  */
+
+
+  int slot,segment;
+
+  for (slot=0;slot<4;slot++) {
+
+    for (segment=0;segment<4;segment++) {
+
+      //Store block to file, if block present
+
+      //Y no grabar la rom interna (slot 0, segmento 0 y 1)
+      //Aunque luego realmente la rutina de carga si que permite cargar esto, pero dado que será siempre la misma rom de msx,
+      //no tiene sentido grabarla y ocupar espacio
+      if (msx_memory_slots[slot][segment]!=MSX_SLOT_MEMORY_TYPE_EMPTY) {
+
+        int grabar=1;
+
+        if (slot==0 && (segment==0 || segment==1)) grabar=0;
+
+        if (grabar) {
+          compressed_ramblock[0]=0;
+          compressed_ramblock[1]=value_16_to_8l(16384);
+          compressed_ramblock[2]=value_16_to_8h(16384);
+          compressed_ramblock[3]=value_16_to_8l(longitud_ram);
+          compressed_ramblock[4]=value_16_to_8h(longitud_ram);
+          compressed_ramblock[5]=slot;
+          compressed_ramblock[6]=segment;
+          compressed_ramblock[7]=msx_memory_slots[slot][segment];
+
+          int offset=(slot*4+segment)*16384;
+
+          int si_comprimido;
+          int longitud_bloque=save_zsf_copyblock_compress_uncompres(&memoria_spectrum[offset],&compressed_ramblock[8],longitud_ram,&si_comprimido);
+          if (si_comprimido) compressed_ramblock[0]|=1;
+
+          debug_printf(VERBOSE_DEBUG,"Saving ZSF_MSX_MEMBLOCK slot: %d segment: %d length: %d",slot,segment,longitud_bloque);
+
+          
+          zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_MSX_MEMBLOCK, longitud_bloque+8);
+        }
+      } 
+
+    }
+  }
+
+  free(compressed_ramblock);
+
+
+  }
+
+
+if (MACHINE_IS_SVI) {
+
+
+    z80_byte sviconfblock[11];
+
+/*
+-Block ID 27: ZSF_SVI_CONF
+Ports and internal registers of SVI machine
+Byte fields:
+0: svi_ppi_register_a
+1: svi_ppi_register_b
+2: msx_ppi_register_c
+*/    
+
+    sviconfblock[0]=svi_ppi_register_a;
+    sviconfblock[1]=svi_ppi_register_b;
+    sviconfblock[2]=svi_ppi_register_c;
+
+
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, sviconfblock,ZSF_SVI_CONF, 3);
+
+
+    z80_byte vdpconfblock[8];
+
+/*
+-Block ID 30: ZSF_VDP_9918A_CONF
+Ports and internal registers of VDP 9918A
+Byte fields:
+0: vdp_9918a_registers[8];
+*/    
+
+
+    int i;
+    for (i=0;i<8;i++) vdpconfblock[i]=vdp_9918a_registers[i];
+
+
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, vdpconfblock,ZSF_VDP_9918A_CONF, 8);  
+
+
+
+
+
+   
+int longitud_ram=16384;
+  
+   //Para el bloque comprimido
+   z80_byte *compressed_ramblock=malloc(longitud_ram*2);
+  if (compressed_ramblock==NULL) {
+    debug_printf (VERBOSE_ERR,"Error allocating memory");
+    return;
+  }
+
+
+/*
+-Block ID 28: ZSF_MSX_VRAM
+VRAM contents for msx
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+*/
+
+        compressed_ramblock[0]=0;
+        compressed_ramblock[1]=value_16_to_8l(16384);
+        compressed_ramblock[2]=value_16_to_8h(16384);
+        compressed_ramblock[3]=value_16_to_8l(longitud_ram); //"Casualidad" que la vram tambien ocupa 16kb
+        compressed_ramblock[4]=value_16_to_8h(longitud_ram);
+
+  z80_byte *vram;
+
+  vram=svi_vram_memory;
+
+
+        int si_comprimido;
+        int longitud_bloque=save_zsf_copyblock_compress_uncompres(vram,&compressed_ramblock[5],longitud_ram,&si_comprimido);
+        if (si_comprimido) compressed_ramblock[0]|=1;
+
+        debug_printf(VERBOSE_DEBUG,"Saving ZSF_MSX_VRAM length: %d",longitud_bloque);
+
+
+
+
+        
+        zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_MSX_VRAM, longitud_bloque+5);
+
+
+
+  
+/*
+
+-Block ID 29: ZSF_GENERIC_LINEAR_MEM
+A ram/rom binary block for a coleco, sg1000, spectravideo,or any machine to save memory linear
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: memory segment(0=0000-3fff, 1=4000-7fff, 2=8000-bfff, 3=c000-ffff, ...)
+  */
+
+
+  int segment;
+
+  
+  //No me complico mucho la vida. Guardo toda la memoria asignada de spectravideo en bloques de 16kb
+    for (segment=0;segment<16;segment++) {
+
+      //Store block to file
+
+        compressed_ramblock[0]=0;
+        compressed_ramblock[1]=value_16_to_8l(16384);
+        compressed_ramblock[2]=value_16_to_8h(16384);
+        compressed_ramblock[3]=value_16_to_8l(longitud_ram);
+        compressed_ramblock[4]=value_16_to_8h(longitud_ram);
+        compressed_ramblock[5]=segment;
+
+
+        int offset=segment*16384;
+
+        int si_comprimido;
+        int longitud_bloque=save_zsf_copyblock_compress_uncompres(&memoria_spectrum[offset],&compressed_ramblock[6],longitud_ram,&si_comprimido);
+        if (si_comprimido) compressed_ramblock[0]|=1;
+
+        debug_printf(VERBOSE_DEBUG,"Saving ZSF_GENERIC_LINEAR_MEM segment: %d length: %d offset: %d",segment,longitud_bloque,offset);
+
+        //printf("Saving ZSF_GENERIC_LINEAR_MEM segment: %d length: %d offset: %d\n",segment,longitud_bloque,offset);
+        
+        zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_GENERIC_LINEAR_MEM, longitud_bloque+6);
+        
+    }
+
+
+
+ 
+  
+  free(compressed_ramblock);
+
+
+  }    
+
+
+if (MACHINE_IS_SG1000 || MACHINE_IS_COLECO) {
+
+
+    z80_byte vdpconfblock[8];
+
+/*
+-Block ID 30: ZSF_VDP_9918A_CONF
+Ports and internal registers of VDP 9918A
+Byte fields:
+0: vdp_9918a_registers[8];
+*/    
+
+
+    int i;
+    for (i=0;i<8;i++) vdpconfblock[i]=vdp_9918a_registers[i];
+
+
+    zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, vdpconfblock,ZSF_VDP_9918A_CONF, 8);  
+
+
+
+
+
+   
+int longitud_ram=16384;
+  
+   //Para el bloque comprimido
+   z80_byte *compressed_ramblock=malloc(longitud_ram*2);
+  if (compressed_ramblock==NULL) {
+    debug_printf (VERBOSE_ERR,"Error allocating memory");
+    return;
+  }
+
+
+/*
+-Block ID 28: ZSF_MSX_VRAM
+VRAM contents for msx
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+*/
+
+        compressed_ramblock[0]=0;
+        compressed_ramblock[1]=value_16_to_8l(16384);
+        compressed_ramblock[2]=value_16_to_8h(16384);
+        compressed_ramblock[3]=value_16_to_8l(longitud_ram); //"Casualidad" que la vram tambien ocupa 16kb
+        compressed_ramblock[4]=value_16_to_8h(longitud_ram);
+
+  z80_byte *vram;
+
+  if (MACHINE_IS_COLECO) vram=coleco_vram_memory;
+  else vram=sg1000_vram_memory;
+
+
+        int si_comprimido;
+        int longitud_bloque=save_zsf_copyblock_compress_uncompres(vram,&compressed_ramblock[5],longitud_ram,&si_comprimido);
+        if (si_comprimido) compressed_ramblock[0]|=1;
+
+        debug_printf(VERBOSE_DEBUG,"Saving ZSF_MSX_VRAM length: %d",longitud_bloque);
+
+
+
+
+        
+        zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_MSX_VRAM, longitud_bloque+5);
+
+
+
+  /*
+
+
+
+-Block ID 29: ZSF_GENERIC_LINEAR_MEM
+A ram/rom binary block for a coleco, sg1000,spectravideo,or anything that has only 64kb
+Byte Fields:
+0: Flags. Currently: bit 0: if compressed with repetition block DD DD YY ZZ, where
+    YY is the byte to repeat and ZZ the number of repetitions (0 means 256)
+1,2: Block start address (currently unused)
+3,4: Block lenght
+5: memory segment(0=0000-3fff, 1=4000-7fff, 2=8000-bfff, 3=c000-ffff, ...)
+  */
+
+
+  int segment;
+
+  
+
+    for (segment=0;segment<4;segment++) {
+
+      //Store block to file
+
+        compressed_ramblock[0]=0;
+        compressed_ramblock[1]=value_16_to_8l(16384);
+        compressed_ramblock[2]=value_16_to_8h(16384);
+        compressed_ramblock[3]=value_16_to_8l(longitud_ram);
+        compressed_ramblock[4]=value_16_to_8h(longitud_ram);
+        compressed_ramblock[5]=segment;
+
+
+        int offset=segment*16384;
+
+        int si_comprimido;
+        int longitud_bloque=save_zsf_copyblock_compress_uncompres(&memoria_spectrum[offset],&compressed_ramblock[6],longitud_ram,&si_comprimido);
+        if (si_comprimido) compressed_ramblock[0]|=1;
+
+        debug_printf(VERBOSE_DEBUG,"Saving ZSF_GENERIC_LINEAR_MEM segment: %d length: %d",segment,longitud_bloque);
+
+        
+        zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, compressed_ramblock,ZSF_GENERIC_LINEAR_MEM, longitud_bloque+6);
+        
+      
+
+    }
+  
+  free(compressed_ramblock);
+
+
+  }  
 
 
 if (MACHINE_IS_TBBLUE) {
@@ -2436,6 +3219,26 @@ Byte fields:
       zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, aycontents,ZSF_AYCHIP, 19);
     }
   }
+
+  //Registros chip SN
+  if (sn_chip_present.v) {
+
+
+      z80_byte sncontents[16];
+
+      /*
+
+-Block ID 31: ZSF_SNCHIP
+Byte fields:
+0-15: SN Chip contents
+      */
+
+      int j;
+      for (j=0;j<16;j++) sncontents[j]=sn_chip_registers[j];
+
+      zsf_write_block(ptr_zsf_file,&destination_memory,longitud_total, sncontents,ZSF_SNCHIP, 16);
+    }
+  
 
  //DIVMMC/DIVIDE config
  //Solo si diviface esta habilitado 

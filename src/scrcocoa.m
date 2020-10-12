@@ -69,6 +69,10 @@
 #include "prism.h"
 #include "sam.h"
 #include "ql.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "svi.h"
 
 
 int gArgc;
@@ -1293,7 +1297,7 @@ int scrcocoa_keymap_z88_cpc_leftz; //Tecla a la izquierda de la Z. Solo usada en
 
 
 	int tecla_gestionada_sam_ql=0;
-	if (MACHINE_IS_SAM || MACHINE_IS_QL) {
+	if (MACHINE_IS_SAM || MACHINE_IS_QL || MACHINE_IS_MSX || MACHINE_IS_SVI) {
 		tecla_gestionada_sam_ql=1;
 
                 if (teclareal==scrcocoa_keymap_z88_cpc_minus) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_MINUS,pressrelease);
@@ -1648,6 +1652,8 @@ int scrcocoa_keymap_z88_cpc_leftz; //Tecla a la izquierda de la Z. Solo usada en
 
 
 	}
+
+   
 
 
         //Teclas que necesitan conversion de teclado para Z88
@@ -2486,6 +2492,23 @@ void scrcocoa_refresca_pantalla(void)
 		scr_refresca_pantalla_y_border_mk14();
 	}
 
+	else if (MACHINE_IS_MSX) {
+		scr_refresca_pantalla_y_border_msx();
+	}   
+
+	else if (MACHINE_IS_SVI) {
+		scr_refresca_pantalla_y_border_svi();
+	}                
+
+	else if (MACHINE_IS_COLECO) {
+		scr_refresca_pantalla_y_border_coleco();
+	}      
+
+
+	else if (MACHINE_IS_SG1000) {
+		scr_refresca_pantalla_y_border_sg1000();
+	}            
+
         //printf ("%d\n",spectrum_colortable[1]);
 
 	if (menu_overlay_activo) {
@@ -2529,7 +2552,7 @@ void scrcocoa_z88_cpc_load_keymap(void)
         //y los codigos raw de retorno siempre son los mismos.
         //por tanto, devolvemos lo mismo que con keymap english siempre:
 
-	if (MACHINE_IS_Z88 || MACHINE_IS_SAM || MACHINE_IS_QL) {
+	if (MACHINE_IS_Z88 || MACHINE_IS_SAM || MACHINE_IS_QL || MACHINE_IS_MSX || MACHINE_IS_SVI) {
 	                scrcocoa_keymap_z88_cpc_minus='-';
                         scrcocoa_keymap_z88_cpc_equal='=';
 			scrcocoa_keymap_z88_cpc_backslash=COCOA_SECOND_BACKSLASH;
@@ -2690,7 +2713,7 @@ int scrcocoa_init (void) {
 
         //Otra inicializacion necesaria
         //Esto debe estar al final, para que funcione correctamente desde menu, cuando se selecciona un driver, y no va, que pueda volver al anterior
-        scr_driver_name="cocoa";
+        scr_set_driver_name("cocoa");
 
 	scr_z88_cpc_load_keymap();
 

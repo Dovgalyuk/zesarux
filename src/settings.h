@@ -79,5 +79,21 @@ extern z80_bit tbblue_store_scanlines_border;
 
 extern z80_bit menu_reopen_background_windows_on_start;
 
+extern z80_bit vdp_9918a_unlimited_sprites_line;
+
+extern z80_bit msx_loading_stripes;
+
+extern z80_bit msx_loading_noise_reduction;
+
+extern z80_bit setting_machine_selection_by_name;
+
+extern z80_bit ql_replace_underscore_dot;
+
+extern z80_bit ql_replace_underscore_dot_only_one;
+
+extern z80_bit ql_simular_parpadeo_cursor;
+
+extern z80_bit ql_flp1_follow_mdv1;
+
 #endif
 

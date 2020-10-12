@@ -151,6 +151,12 @@ void mmc_footer_mmc_operating(void)
 {
 
 	generic_footertext_print_operating("MMC");
+
+	//Y poner icono de mmc en inverso
+	if (!zxdesktop_icon_mmc_inverse) {
+		zxdesktop_icon_mmc_inverse=1;
+		menu_draw_ext_desktop();	
+	}
 }
 
 

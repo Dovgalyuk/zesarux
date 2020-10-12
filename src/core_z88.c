@@ -438,6 +438,8 @@ void cpu_core_loop_z88(void)
 
 		                 t_scanline=0;
 
+                                 timer_get_elapsed_core_frame_post();
+
 					set_t_scanline_draw_zero();
 
 
@@ -539,6 +541,9 @@ void cpu_core_loop_z88(void)
 			if (interrupcion_maskable_generada.v || interrupcion_non_maskable_generada.v) {
 				z88_gestionar_interrupcion();
 			}
+
+                        //Para calcular lo que se tarda en ejecutar todo un frame
+                        timer_get_elapsed_core_frame_pre();		                        
 
 
                 }

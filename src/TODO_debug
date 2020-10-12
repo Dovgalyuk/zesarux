@@ -1,8 +1,3 @@
-Otros TODO menos prioritarios, de aqui hasta el final del archivo:
-
-
-
-*** Debug ***
 
 -Assembler para Motorola y MK14
 -Assembler para opcodes del Next
@@ -82,4 +77,4 @@ void debug_dump_nested_functions(char *result)
 aunque no es necesario, pues cuando se crea un elemento y el handler no apunta a nested, se crea lista nueva,
 y ademas, la funcion de debug_dump_nested_functions ya controla esos casos y no retorna nada de la lista
 
-*************
+

@@ -86,6 +86,15 @@
 #include "settings.h"
 #include "expression_parser.h"
 #include "atomic.h"
+#include "core_msx.h"
+#include "core_coleco.h"
+#include "msx.h"
+#include "coleco.h"
+#include "core_sg1000.h"
+#include "sn76489an.h"
+#include "core_svi.h"
+#include "svi.h"
+#include "vdp_9918a.h"
 
 
 struct timeval debug_timer_antes, debug_timer_ahora;
@@ -737,7 +746,7 @@ void cpu_panic(char *mensaje)
 		if (si_complete_video_driver() ) {
 			//quitar splash text por si acaso
 			menu_splash_segundos=1;
-			reset_splash_text();
+			reset_welcome_message();
 
 
 			//cls_menu_overlay();
@@ -901,9 +910,9 @@ void debug_printf (int debuglevel, const char * format , ...)
 			//en el caso de simpletext y null, no aparecera ventana igualmente, pero el error ya se vera por consola
 			//en stdout si que "dibuja" la ventana por consola, para que se envie a speech
         	if (
-				//!strcmp(scr_driver_name,"stdout") ||
-        		!strcmp(scr_driver_name,"simpletext") ||
-        		!strcmp(scr_driver_name,"null") 
+				//!strcmp(scr_new_driver_name,"stdout") ||
+        		!strcmp(scr_new_driver_name,"simpletext") ||
+        		!strcmp(scr_new_driver_name,"null") 
 			)
 			{
 				//nada
@@ -1580,6 +1589,30 @@ void set_cpu_core_loop(void)
       cpu_core_loop_name="MK14";
     break;
 
+    case CPU_CORE_MSX:
+      debug_printf(VERBOSE_INFO,"Setting MSX CPU core");
+      cpu_core_loop=cpu_core_loop_msx;
+      cpu_core_loop_name="MSX";
+    break;	
+
+    case CPU_CORE_COLECO:
+      debug_printf(VERBOSE_INFO,"Setting COLECO CPU core");
+      cpu_core_loop=cpu_core_loop_coleco;
+      cpu_core_loop_name="COLECO";
+    break;		
+
+    case CPU_CORE_SG1000:
+      debug_printf(VERBOSE_INFO,"Setting SG1000 CPU core");
+      cpu_core_loop=cpu_core_loop_sg1000;
+      cpu_core_loop_name="SG1000";
+    break;	
+
+    case CPU_CORE_SVI:
+      debug_printf(VERBOSE_INFO,"Setting SVI CPU core");
+      cpu_core_loop=cpu_core_loop_svi;
+      cpu_core_loop_name="SVI";
+    break;			
+
 
                 default:
                         cpu_panic("Unknown cpu core");
@@ -1722,7 +1755,7 @@ z80_bit cpu_trans_log_ignore_repeated_ldxr={0};
 
 
 
-
+//TODO: esto podria usar funcion util_rotate_files
 void transaction_log_rotate_files(int archivos)
 {
 	//Primero cerrar archivo
@@ -2289,7 +2322,7 @@ void reset_extended_stack(void)
 //IMPORTANTE: Aqui se define el tamaño del los registros en binario en la estructura
 //Si se modifica dicho tamaño, actualizar este valor
 
-#define CPU_HISTORY_REGISTERS_SIZE 34
+#define CPU_HISTORY_REGISTERS_SIZE 50
 
 //Dado un puntero z80_byte, con contenido de registros en binario, retorna valores registros
 //Registros 16 bits guardados en little endian
@@ -2299,7 +2332,8 @@ void cpu_history_regs_bin_to_string(z80_byte *p,char *destino)
 	//Nota: funcion print_registers escribe antes BC que AF. Aqui ponemos AF antes, que es mas lógico
   sprintf (destino,"PC=%02x%02x SP=%02x%02x AF=%02x%02x BC=%02x%02x HL=%02x%02x DE=%02x%02x IX=%02x%02x IY=%02x%02x "
   				   "AF'=%02x%02x BC'=%02x%02x HL'=%02x%02x DE'=%02x%02x "
-				   "I=%02x R=%02x IM%d IFF%c%c (PC)=%02x%02x%02x%02x (SP)=%02x%02x",
+				   "I=%02x R=%02x IM%d IFF%c%c (PC)=%02x%02x%02x%02x (SP)=%02x%02x "
+				   "MMU=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
   p[1],p[0], 	//pc
   p[3],p[2], 	//sp
   p[5],p[4], 	//af
@@ -2319,7 +2353,10 @@ void cpu_history_regs_bin_to_string(z80_byte *p,char *destino)
   //contenido (pc) 4 bytes
   p[28],p[29],p[30],p[31],
   //contenido (sp) 2 bytes
-  p[33],p[32]
+  p[33],p[32],
+  //MMU. Las paginas de debug_paginas_memoria_mapeadas, son valores de 16 bits escritas en Little Endian
+  p[35],p[34], p[37],p[36], p[39],p[38], p[41],p[40],
+  p[43],p[42], p[45],p[44], p[47],p[46], p[49],p[48]
   );
 }
 
@@ -2399,7 +2436,17 @@ void cpu_history_regs_to_bin(z80_byte *p)
     p[31]=peek_byte_no_time_no_change_mra(reg_pc+3);
 
     p[32]=peek_byte_no_time_no_change_mra(reg_sp);
-    p[33]=peek_byte_no_time_no_change_mra(reg_sp+1);	
+    p[33]=peek_byte_no_time_no_change_mra(reg_sp+1);
+
+	//MMU. Desde p34
+	int i;
+
+	for (i=0;i<8;i++) {
+		//Low byte
+		p[34+i*2]=value_16_to_8l(debug_paginas_memoria_mapeadas[i]);		
+		//High byte
+		p[34+i*2+1]=value_16_to_8h(debug_paginas_memoria_mapeadas[i]);		
+	}	
 
  
 }
@@ -4541,9 +4588,22 @@ void debug_get_ioports(char *stats_buffer)
   	                }
 
   		}
-
-
   	}
+
+  	if (sn_chip_present.v) {
+
+  			sprintf (buf_linea,"\nSN76489AN chip:\n");
+  			sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);
+
+
+			int i;
+			for (i=0;i<10;i++) {
+					sprintf (buf_linea,"%02X:  %02X\n",i,sn_chip_registers[i]);
+					sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);
+			}
+
+  		
+  	}	  
 
   	if (MACHINE_IS_Z88) {
   		sprintf (buf_linea,"Z88 Blink:\n\n");
@@ -4629,6 +4689,40 @@ void debug_get_ioports(char *stats_buffer)
   		sprintf (buf_linea,"ZX80/81 last out port value: %02X\n",zx8081_last_port_write_value);
   		sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);
   	}
+
+  	if (MACHINE_IS_MSX) {
+  		sprintf (buf_linea,"PPI Port A: %02X\n",msx_ppi_register_a);
+  		sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);
+
+  		sprintf (buf_linea,"PPI Port B: %02X\n",msx_ppi_register_b);
+  		sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);
+
+  		sprintf (buf_linea,"PPI Port C: %02X\n",msx_ppi_register_c);
+  		sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);		  		  
+  	}	  
+
+  	if (MACHINE_IS_SVI) {
+  		sprintf (buf_linea,"PPI Port A: %02X\n",svi_ppi_register_a);
+  		sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);
+
+  		sprintf (buf_linea,"PPI Port B: %02X\n",svi_ppi_register_b);
+  		sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);
+
+  		sprintf (buf_linea,"PPI Port C: %02X\n",svi_ppi_register_c);
+  		sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);		  		  
+  	}
+
+	if (MACHINE_HAS_VDP_9918A) {
+  			sprintf (buf_linea,"\nVDP 9918A chip:\n");
+  			sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);
+
+
+			int i;
+			for (i=0;i<8;i++) {
+					sprintf (buf_linea,"%02X:  %02X\n",i,vdp_9918a_registers[i]);
+					sprintf (&stats_buffer[index_buffer],"%s",buf_linea); index_buffer +=strlen(buf_linea);
+			}		
+	}	  	  
 
           stats_buffer[index_buffer]=0;
 
@@ -5176,6 +5270,167 @@ typedef struct s_debug_memory_segment debug_memory_segment;
 				}
   			}
 
+
+  			//MSX
+  			if (MACHINE_IS_MSX) {
+				int pagina;
+				segmentos_totales=4;
+				z80_byte mapping_register=msx_ppi_register_a;
+
+				for (pagina=0;pagina<4;pagina++) {
+	  				sprintf (segmentos[pagina].shortname,"SL%d",mapping_register & 3);
+	  				sprintf (segmentos[pagina].longname,"Slot %02X",mapping_register & 3);
+					segmentos[pagina].length=16384;
+					segmentos[pagina].start=16384*pagina;
+
+					mapping_register=mapping_register >> 2;
+				}
+  			}
+
+  			//SVI
+  			if (MACHINE_IS_SVI) {
+
+				segmentos_totales=2;
+
+				//Por defecto: bank01 rom basic, bank02 ram
+				char low_type='O';
+				z80_byte low_number=1;
+
+				char high_type='A';
+				z80_byte high_number=2;
+
+    z80_byte page_config=ay_3_8912_registros[ay_chip_selected][15];
+
+/*
+PSG Port B Output
+
+Bit Name    Description
+1   /CART   Memory bank 11, ROM 0000-7FFF (Cartridge /CCS1, /CCS2)  
+2   /BK21   Memory bank 21, RAM 0000-7FFF                           
+3   /BK22   Memory bank 22, RAM 8000-FFFF                           
+4   /BK31   Memory bank 31, RAM 0000-7FFF                           
+
+5   /BK32   Memory bank 32, RAM 8000-FFFF                           
+6   CAPS    Caps-Lock diod
+7   /ROMEN0 Memory bank 12, ROM 8000-BFFF* (Cartridge /CCS3)        
+8   /ROMEN1 Memory bank 12, ROM C000-FFFF* (Cartridge /CCS4)        
+*/	
+
+
+				if (page_config!=0xFF) {
+
+					//Ver bits activos
+					//Memory bank 11, ROM 0000-7FFF (Cartridge /CCS1, /CCS2)  
+					if ((page_config & 1)==0) {
+						low_number=11;
+					}
+
+					//Memory bank 21, RAM 0000-7FFF 
+					if ((page_config & 2)==0) {
+						low_number=21;
+						low_type='A';
+					}    
+
+					//Memory bank 22, RAM 8000-FFFF 
+					if ((page_config & 4)==0) {
+						high_number=22;
+					}    
+
+					//Memory bank 31, RAM 0000-7FFF
+					if ((page_config & 8)==0) {
+						low_number=31;
+						low_type='A';
+					}    
+
+					//Memory bank 32, RAM 8000-FFFF
+					if ((page_config & 16)==0) {
+						high_number=32;
+					}    
+
+					//TODO bits 6,7
+				}				
+
+				
+				
+				sprintf (segmentos[0].shortname,"R%c%02d",low_type,low_number);
+				sprintf (segmentos[0].longname,"R%cM %02d",low_type,low_number);
+
+				sprintf (segmentos[1].shortname,"R%c%02d",high_type,high_number);
+				sprintf (segmentos[1].longname,"R%cM %02d",high_type,high_number);					
+
+
+				segmentos[0].length=32768;
+				segmentos[0].start=0;
+
+				segmentos[1].length=32768;
+				segmentos[1].start=32768;
+
+
+	
+  			}			  
+
+			if (MACHINE_IS_COLECO) {
+				segmentos_totales=8;
+
+  				int pagina;
+  				for (pagina=0;pagina<segmentos_totales;pagina++) {
+
+					segmentos[pagina].length=8192;
+					segmentos[pagina].start=8192*pagina;
+				}
+
+				//0-3
+
+				strcpy (segmentos[0].shortname,"BIO");
+				strcpy (segmentos[0].longname,"BIOS ROM");	
+
+				strcpy (segmentos[1].shortname,"EXP");
+				strcpy (segmentos[1].longname,"Expansion port");	
+
+				strcpy (segmentos[2].shortname,"EXP");
+				strcpy (segmentos[2].longname,"Expansion port");	
+
+				strcpy (segmentos[3].shortname,"RAM");
+				strcpy (segmentos[3].longname,"RAM (1 KB)");													
+
+				//4-7
+				for (pagina=4;pagina<8;pagina++) {		
+						strcpy (segmentos[pagina].shortname,"CR");
+						strcpy (segmentos[pagina].longname,"Cartridge ROM");						
+				}
+
+				/*
+0000-1FFF = BIOS ROM
+2000-3FFF = Expansion port
+4000-5FFF = Expansion port
+6000-7FFF = RAM (1K mapped into an 8K spot)
+8000-9FFF = Cart ROM 
+A000-BFFF = Cart ROM 
+C000-DFFF = Cart ROM      
+E000-FFFF = Cart ROM 
+				*/
+			}
+
+			if (MACHINE_IS_SG1000) {
+				/*
+$0000-$bfff	Cartridge (ROM/RAM/etc)
+$c000-$c3ff	System RAM
+$c400-$ffff	System RAM (mirrored every 1KB)				
+				*/
+				segmentos_totales=2;
+
+				//0
+				segmentos[0].length=0xc000;
+				segmentos[0].start=0;	
+				strcpy (segmentos[0].shortname,"ROM");
+				strcpy (segmentos[0].longname,"Cartridge ROM");				
+
+				//1
+				segmentos[1].length=16384;
+				segmentos[1].start=0xc000;	
+				strcpy (segmentos[1].shortname,"RAM");
+				strcpy (segmentos[1].longname,"RAM (1 KB)");								
+			}
 
 
   			//Paginas RAM en CHLOE

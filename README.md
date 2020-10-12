@@ -28,6 +28,10 @@ And also:
 * TBBlue/ZX Spectrum Next
 * Jupiter Ace
 * Amstrad CPC 464, CPC 4128
+* MSX1 
+* Spectravideo 318/328
+* Colecovision
+* Sega SG1000
 
 ZEsarUX source code and binaries are distributed under GNU GPL license. 
 ZEsarUX also includes a folder, "my_soft", which has some programs and data made by me. The entire folder is also covered by the GNU GPL license.
@@ -85,7 +89,7 @@ Thanks!
 
 __FEATURES__
 
-* Runs on any Unix system and Windows: tested on GNU/Linux x86, GNU/Linux x86_64, GNU/Linux Raspbian, GNU/Linux RetroPie, FreeBSD x86_64, Mac OS X, Windows native, Windows + Cygwin
+* Runs on any Unix system and Windows: tested on GNU/Linux x86, GNU/Linux x86_64, GNU/Linux Raspbian, GNU/Linux RetroPie, FreeBSD x86_64, Haiku, Mac OS X, Windows native, Windows + Cygwin
 
 * Emulates:
 * Science of Cambridge MK14
@@ -106,6 +110,10 @@ __FEATURES__
 * TBBlue/ZX Spectrum Next
 * Jupiter Ace
 * Amstrad CPC 464, CPC 4128
+* MSX1 
+* Spectravideo 318/328
+* Colecovision
+* Sega SG1000
 
 * Is the only emulator for machines: Chloe 140/280, Prism and Chrome
 
@@ -143,7 +151,7 @@ __FEATURES__
 
 * Supports reducing the screen to 192x144 (0.75 scale)
 
-* Uses its own powerful window environment (ZX Vision) inside the program application window, having the same GUI style on all plattforms
+* Uses its own powerful window environment (ZX Vision) inside the program application window, having the same GUI style on all plattforms. Allows to have an extended display to hold menus and multitask windows in the GUI (ZX Desktop)
 
 * Can be used with joystick and environments without keyboard, like Raspiboy / Retropie
 
@@ -151,27 +159,27 @@ __FEATURES__
 
 * Uses Video drivers: X-Windows, SDL, Cocoa (Mac OS X), Framebuffer, ncurses, aalib, cacalib, stdout(console), simpletext(console)
 
-* Uses Audio Drivers: PulseAudio, Alsa, SDL, DSP(OSS), CoreAudio (Mac OS X). 
+* Uses Audio Drivers: PulseAudio, Alsa, SDL, DSP(OSS), PC Speaker, CoreAudio (Mac OS X). 
 
 * Supports dumping audio & video to file
 
 * Supports real tape loading of file formats: RWA, SMP, WAV, TZX, PZX, CDT, TAP, P, O. It handles loading of turbo load tapes or any type of tape loading for standard/non standard loading routines
 
-* Handles binary tape format files (TAP, TZX, O, P, CDT) on standard BASIC ROM routines for ZX Spectrum, ZX80, ZX81, Jupiter Ace
+* Handles binary tape format files (TAP, TZX, O, P, CDT, CAS) on standard BASIC ROM routines for ZX Spectrum, ZX80, ZX81, Amstrad CPC, Jupiter Ace, MSX, Spectravideo
 
 * Handles real audio loading (RWA, SMP, WAV) on standard BASIC ROM routines for ZX Spectrum, ZX80, ZX81, Amstrad CPC, Jupiter Ace
 
 * Simulates real tape loading on standard BASIC ROM routines for ZX Spectrum, ZX80, ZX81
 
-* Handles snapshot format: ZSF, ZX, Z80, SP, SPG, NEX, SNA, P, O, Z81, ACE
+* Handles snapshot formats: ZSF, ZX, Z80, SP, SPG, NEX, SNA, P, O, Z81, ACE
+
+* Handles cartridge formats: DCK, ROM, COL, SG
 
 * Handles RZX playback 
 
 * Emulates Multiface One, 128 and Three
 
-* Emulates Datagear/MB02 DMA
-
-* Handles DCK Timex dock cartridges
+* Emulates Datagear/MB02 DMA, ZX-Uno DMA
 
 * Emulates +3 Disk
 
@@ -197,7 +205,9 @@ __FEATURES__
 
 * Handles compressed formats zip (with internal decompressor), and tar, rar, gz through external utilities
 
-* Supports AY Chip, Turbosound (2 AY Channels), 3 AY Channels, MIDI channels, different DAC: Specdrum, Covox, ACB/ABC/BAC Stereo 
+* Supports AY Audio Chip, Turbosound (2 AY Channels), 3 AY Channels, MIDI channels, different DAC: Specdrum, Covox, ACB/ABC/BAC Stereo 
+
+* Supports SN76489AN Audio Chip
 
 * Real time playback from AY Chip sound to external MIDI device 
 
@@ -265,6 +275,11 @@ __FEATURES__
 
 __Some screenshots__
 
+ZX Desktop, running multitask windows, on Solarized Dark GUI Style, running ZX Spectrum OverScan demo
+
+![alt text](https://github.com/chernandezba/zesarux/raw/master/screenshots/screenshot_zxdesktop_multitask.png "ZX Desktop")
+
+
 ZX Spectrum Overscan demo
 
 ![alt text](https://github.com/chernandezba/zesarux/raw/master/screenshots/screenshot_overscan.jpg "Overscan demo")
@@ -301,7 +316,28 @@ ZX-Evolution TSConf
 
 
 TBBlue/ZX Spectrum Next
+
 ![alt text](https://github.com/chernandezba/zesarux/raw/master/screenshots/screenshot_tbblue.png "TBBlue/ZX Spectrum Next")
+
+
+CPC 464
+
+![alt text](https://github.com/chernandezba/zesarux/raw/master/screenshots/screenshot_cpc.png "CPC 464")
+
+
+MSX
+
+![alt text](https://github.com/chernandezba/zesarux/raw/master/screenshots/screenshot_msx.png "MSX")
+
+
+Colecovision
+
+![alt text](https://github.com/chernandezba/zesarux/raw/master/screenshots/screenshot_coleco.png "Colecovision")
+
+
+Sega SG-1000
+
+![alt text](https://github.com/chernandezba/zesarux/raw/master/screenshots/screenshot_sg1000.png "Sega SG-1000")
 
 
 You can find some ZEsarUX videos on my [Youtube channel](https://www.youtube.com/user/chernandezba)

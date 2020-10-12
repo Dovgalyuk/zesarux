@@ -38,6 +38,10 @@
 #include "chrome.h"
 #include "tsconf.h"
 #include "baseconf.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "svi.h"
 
 //Direcciones donde estan cada pagina de ram
 //Antes habian 8 solo (8 paginas de 16kb cada una)
@@ -304,6 +308,22 @@ z80_byte *get_base_mem_pantalla_continue(void)
 	if (MACHINE_IS_QL) {
 		return memoria_spectrum;
 	}
+
+	if (MACHINE_IS_MSX) {
+		return msx_vram_memory;
+	}	
+
+	if (MACHINE_IS_SVI) {
+		return svi_vram_memory;
+	}		
+
+	if (MACHINE_IS_COLECO) {
+		return coleco_vram_memory;
+	}		
+
+	if (MACHINE_IS_SG1000) {
+		return sg1000_vram_memory;
+	}		
 
 	cpu_panic("get_base_mem_pantalla on this machine has no sense");
 

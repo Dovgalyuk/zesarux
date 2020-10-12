@@ -173,6 +173,8 @@ Q: Audio does not sound well on Raspberry pi.
 A: Try using sdl audio driver.
 
 
+Q: I've tried to use the pcspeaker driver but returns error on initialization
+A: The PC Speaker driver on ZEsarUX is only available for Linux, and needs pthreads enabled on compilation. Also, you must run ZEsarUX as root in order to use it, as it needs privileged access to the PC Speaker i/o port
 
 ----------------------------------------------------------------------------
 
@@ -413,6 +415,14 @@ A: Chloe needs divmmc paging to boot. Enable it on Storage->MMC menu
 Q: Is there any MMC card with sample programs?
 A: Look on the extras package. On folder zesarux-extras/extras/media/spectrum/chloe/, there's a file called chloehd.mmc, you can use that.
 
+Q: How can I run Chloe from commandline and no configuration file?
+A: Run a sentence like this:
+
+./zesarux --noconfigfile --machine chloe280 --mmc-file /zesarux-extras/extras/media/spectrum/chloe/chloehd.mmc --enable-mmc --enable-divmmc --nowelcomemessage
+
+The /zesarux-extras/extras/media/spectrum/chloe/chloehd.mmc is the location to where you have downloaded the chloehd.mmc from the zesarux-extras package.
+The --nowelcomemessage is only needed to disable the ZEsarUX splash logo which hides the Chloe "boot logo" (the wolf)
+
 
 Q: How can I run programs from the MMC card?
 A: There are some commands to do that:
@@ -427,6 +437,19 @@ will list the programs folder from the MMC card. Then:
 run "kayahara"
 will run the kayahara demo from the MMC
 
+
+
+----------------------------------------------------------------------------
+
+
+SpectraVideo
+------------
+
+Q: How do I load .cas games?
+A: Usually, just:
+
+CLOAD
+RUN
 
 
 ----------------------------------------------------------------------------

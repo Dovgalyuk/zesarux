@@ -52,6 +52,7 @@
 #include "multiface.h"
 #include "tbblue.h"
 #include "settings.h"
+#include "msx.h"
 
 #include "autoselectoptions.h"
 
@@ -134,6 +135,14 @@ void draw_tape_text_top_speed(void)
         generic_footertext_print_operating("TSPEED");
 }
 
+void draw_tape_icon_activity(void)
+{
+        if (!zxdesktop_icon_tape_inverse) {
+                zxdesktop_icon_tape_inverse=1;
+                menu_draw_ext_desktop();
+        }      
+}
+
 void draw_tape_text(void)
 {
 
@@ -146,6 +155,9 @@ void draw_tape_text(void)
 		else {
                         //menu_footer_activity("TAPE");
                         generic_footertext_print_operating("TAPE");
+
+                        //Y poner icono de cinta en inverso
+                        draw_tape_icon_activity();
 		}
 
 }
@@ -172,6 +184,9 @@ void eject_tape_load(void)
 {
 	tape_loadsave_inserted = tape_loadsave_inserted & (255 - TAPE_LOAD_INSERTED);
         //tape_load_inserted.v=0;
+
+        //Actualizar zxdesktop. Para refrescar iconos de cinta y que aparezca como expulsado
+        menu_draw_ext_desktop();
 }
 
 void eject_tape_save(void)
@@ -195,7 +210,6 @@ int tape_block_z81_open(void)
 return 0;
 
 }
-
 
 
 int tape_out_block_p_open(void)
@@ -259,7 +273,13 @@ void tape_init(void)
                         else if (!util_compare_file_extension(tapefile,"z81") ) {
                                         debug_printf (VERBOSE_INFO,"ZX80/ZX81 (.Z81) Tape file detected");
                                         tape_block_open=tape_block_z81_open;
+                        }
+
+                        else if (!util_compare_file_extension(tapefile,"cas") ) {
+                                        debug_printf (VERBOSE_INFO,"MSX (.CAS) Tape file detected");
+                                        tape_block_open=tape_block_cas_open;
                                 }
+
 
 
 			//else if (!util_compare_file_extension(tapefile,"smp") ) {
@@ -403,7 +423,7 @@ int tap_open(void)
 		reset_cpu();
 
 		//Activamos top speed si conviene
-		if (fast_autoload.v) {
+		if (fast_autoload.v && !MACHINE_IS_MSX) {
                         debug_printf (VERBOSE_INFO,"Set top speed");
                         top_speed_timer.v=1;
                 }
@@ -1859,6 +1879,9 @@ void realtape_print_footer(void)
 
 	//color inverso
 	menu_putstring_footer(0,2,buffer_texto,WINDOW_FOOTER_PAPER,WINDOW_FOOTER_INK);
+
+        //Y poner icono de cinta en inverso
+        draw_tape_icon_activity();        
 }
 
 void realtape_delete_footer(void)
@@ -1866,6 +1889,10 @@ void realtape_delete_footer(void)
                            //01234567890123456789012345678901
   menu_putstring_footer(0,2,"                                ",WINDOW_FOOTER_INK,WINDOW_FOOTER_PAPER);
   menu_footer_bottom_line();
+
+
+        //Quitar footer y icono en inverso
+        delete_generic_footertext();  
 }
 
 void realtape_get_byte(void)
@@ -2112,6 +2139,12 @@ void realtape_stop_playing(void)
 	}
 }
 
+
+void realtape_pause_unpause(void)
+{
+        if (realtape_playing.v) realtape_stop_playing();
+        else realtape_start_playing();
+}
 
 //Rutinas de autodeteccion de rutinas de carga
 

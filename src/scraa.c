@@ -40,6 +40,10 @@
 #include "z88.h"
 #include "textspeech.h"
 #include "settings.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "svi.h"
 
 
 aa_context *context;
@@ -306,7 +310,21 @@ void scraa_refresca_pantalla(void)
 	}
 
 
+	else if (MACHINE_IS_MSX) {
+		scr_refresca_pantalla_y_border_msx();
+	}    
 
+	else if (MACHINE_IS_SVI) {
+		scr_refresca_pantalla_y_border_svi();
+	}    	
+
+	else if (MACHINE_IS_COLECO) {
+		scr_refresca_pantalla_y_border_coleco();
+	}            
+
+	else if (MACHINE_IS_SG1000) {
+		scr_refresca_pantalla_y_border_sg1000();
+	}     
 
 
 	//Espacio para footer
@@ -777,7 +795,7 @@ scr_detectedchar_print=scraa_detectedchar_print;
 
 
 //Esto debe estar al final, para que funcione correctamente desde menu, cuando se selecciona un driver, y no va, que pueda volver al anterior
-scr_driver_name="aa";
+scr_set_driver_name("aa");
 return 0;
 
 }

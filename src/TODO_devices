@@ -150,6 +150,27 @@ carpeta aux_zesarux/zx81/sound_demo  tambien
 
 -Zxpand+ nuevo firmware?
 https://github.com/charlierobson/ZXpand-Vitamins/wiki/ZXpand---Online-Manual
+
+
+
+
 ------------------
 
+--- Texas Instruments SN76489AN ---
+
+-emulacion ruido chip SN mejorar
+
+
+------------------
+
+--- vdp 9918 ---
+
+-corregir info de bits que puede estar al reves: en el datasheet original numeran los bits al reves: el bit 7 es el 1, el 6 el 2, etc
+
+------------------
+
+
 -emulación impresion seikosha gp-100a
+
+
+-Dandanator nueva versión

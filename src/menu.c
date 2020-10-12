@@ -37,6 +37,7 @@
 
 #include "menu.h"
 #include "menu_items.h"
+#include "menu_bitmaps.h"
 #include "screen.h"
 #include "cpu.h"
 #include "debug.h"
@@ -101,6 +102,11 @@
 #include "stats.h"
 #include "network.h"
 #include "hilow.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sn76489an.h"
+#include "sg1000.h"
+#include "svi.h"
 
 
 
@@ -188,11 +194,15 @@ defined_f_function defined_f_functions_array[MAX_F_FUNCTIONS]={
 	{"SwitchFullScr",F_FUNCION_SWITCHFULLSCREEN},
 	{"ReloadMMC",F_FUNCION_RELOADMMC},
 	{"ReinsertTape",F_FUNCION_REINSERTTAPE},
+	{"PauseUnpauseTape",F_FUNCION_PAUSEUNPAUSETAPE},
 	{"DebugCPU",F_FUNCION_DEBUGCPU},
 	{"Pause",F_FUNCION_PAUSE},
 	{"TopSpeed",F_FUNCION_TOPSPEED},
 	{"ExitEmulator",F_FUNCION_EXITEMULATOR},
-	{"BackgroundWindow",F_FUNCION_BACKGROUND_WINDOW}
+	{"BackgroundWindow",F_FUNCION_BACKGROUND_WINDOW},
+
+	//Para el usuario, mejor esta descripcion
+	{"ShowBackgroundWindows",F_FUNCION_OVERLAY_WINDOWS}
 };
 
 //Funciones de teclas F mapeadas. Desde F1 hasta F15
@@ -323,8 +333,18 @@ z80_bit menu_invert_mouse_scroll={0};
 //y tambien, la lectura de puertos de teclado (254) no devuelve nada
 int menu_abierto=0;
 
+//Si se tiene overlay menu aunque este con menu cerrado. De momento solo accesible mediante tecla F
+//de F_FUNCION_OVERLAY_WINDOWS
+//Nota: logicamente cualquier mensaje de splash (por ejemplo cambio de modo ulaplus)
+//ara saltar el mensaje splash y al cabo de unos segundos, desactivara overlay y se ocultara todo el overlay
+//Esto NO abre el menu, solo deja el overlay de menu activo
+int overlay_visible_when_menu_closed=0;
+
 //Si realmente aparecera el menu
 z80_bit menu_event_open_menu={0};
+
+//Si el menu se ha abierto con boton izquierdo
+z80_bit menu_was_open_by_left_mouse_button={0};
 
 //indica si hay pendiente un mensaje de error por mostrar
 int if_pending_error_message=0;
@@ -390,6 +410,17 @@ z80_bit mouse_menu_disabled={0};
 
 //Se ha pulsado tecla de menu cuando menu esta abierto
 z80_bit menu_pressed_open_menu_while_in_menu={0};
+
+//En que boton se ha pulsado del menu
+int menu_pressed_zxdesktop_button_which=-1;
+//En que lower icon se ha pulsado del menu
+int menu_pressed_zxdesktop_lower_icon_which=-1;
+
+//Que el siguiente menu se ha abierto desde boton y por tanto hay que ajustar coordenada y
+z80_bit direct_menus_button_pressed={0};
+int direct_menus_button_pressed_which=0;
+
+z80_bit menu_zxdesktop_buttons_enabled={1};
 
 
 z80_bit no_close_menu_after_smartload={0};
@@ -503,7 +534,7 @@ estilos_gui definiciones_estilos_gui[ESTILOS_GUI]={
 		},
 
         {0,"ZX80/81",7+8,0,
-                1,1,0,1,          //Mostrar cursor >, mostrar recuadro, no mostrar rainbow
+                1,1,0,1,          //Mostrar cursor >, mostrar recuadro, no mostrar rainbow, solo mayusculas
                 0,7+8,          //Colores para opcion seleccionada
                 7+8,0,0,7+8,      //Colores para opcion no disponible
                 0,7+8,          //Colores para el titulo y linea recuadro ventana
@@ -547,6 +578,22 @@ estilos_gui definiciones_estilos_gui[ESTILOS_GUI]={
 		2, //color de aviso
 		colores_franja_cpc_brillo,colores_franja_cpc_oscuro
                 },
+
+		//Solo vale en video driver completo por los colores usados (primer valor de la estructura)
+        {1,"MSX",VDP_9918_INDEX_FIRST_COLOR+4,VDP_9918_INDEX_FIRST_COLOR+15,
+                0,1,0,0,          //No mostrar cursor,mostrar recuadro,no mostrar rainbow
+                VDP_9918_INDEX_FIRST_COLOR+15,VDP_9918_INDEX_FIRST_COLOR+4,            //Colores para opcion seleccionada
+                VDP_9918_INDEX_FIRST_COLOR+4,VDP_9918_INDEX_FIRST_COLOR+6,VDP_9918_INDEX_FIRST_COLOR+15,VDP_9918_INDEX_FIRST_COLOR+6,        //Colores para opcion no disponible
+                VDP_9918_INDEX_FIRST_COLOR+15,VDP_9918_INDEX_FIRST_COLOR+4,            //Colores para el titulo y linea recuadro ventana
+				VDP_9918_INDEX_FIRST_COLOR+4,VDP_9918_INDEX_FIRST_COLOR+15,            //Colores para el titulo y linea recuadro ventana inactiva
+                VDP_9918_INDEX_FIRST_COLOR+15,              //Color waveform
+                0,               //Color para zona no usada en visualmem
+                VDP_9918_INDEX_FIRST_COLOR+6,VDP_9918_INDEX_FIRST_COLOR+15,		//Color para opcion marcada
+				'.',
+				2, //color de aviso. Seria VDP_9918_INDEX_FIRST_COLOR+8 pero las franjas de volumen usan un formato $$ que solo permite color de 1 digito
+				colores_franja_speccy_brillo,colores_franja_speccy_oscuro
+        },
+
 
         {0,"Sam",7+8,0,
                 0,1,1,0,                //No mostrar cursor,mostrar recuadro,mostrar rainbow
@@ -619,7 +666,7 @@ estilos_gui definiciones_estilos_gui[ESTILOS_GUI]={
 		colores_franja_speccy_brillo,colores_franja_speccy_oscuro
 		},
 
-	// https://ethanschoonover.com/solarized/. Solo vale en video driver completo por los colores usados
+	// https://ethanschoonover.com/solarized/. Solo vale en video driver completo por los colores usados (primer valor de la estructura)
 	{1,"Solarized Dark",SOLARIZED_COLOUR_base03,SOLARIZED_COLOUR_base0,
 
 		0,1,1,0, 		//No mostrar cursor,mostrar recuadro,mostrar rainbow
@@ -638,7 +685,7 @@ estilos_gui definiciones_estilos_gui[ESTILOS_GUI]={
 		colores_franja_speccy_brillo,colores_franja_speccy_oscuro
 		},
 
-	//Solo vale en video driver completo por los colores usados
+	//Solo vale en video driver completo por los colores usados (primer valor de la estructura)
 	{1,"Solarized Light",SOLARIZED_COLOUR_base3,SOLARIZED_COLOUR_base00,
 		0,1,1,0, 		//No mostrar cursor,mostrar recuadro,mostrar rainbow
 
@@ -732,6 +779,9 @@ char filesel_nombre_archivo_seleccionado[PATH_MAX];
 //Si mostrar en filesel utilidades de archivos
 z80_bit menu_filesel_show_utils={0};
 
+//Si mostrar en filesel previews de archivos
+z80_bit menu_filesel_show_previews={1};
+
 //Si no caben todos los archivos en pantalla y por tanto se muestra "*" a la derecha
 int filesel_no_cabe_todo;
 
@@ -792,6 +842,15 @@ void menu_zxuno_spi_flash(MENU_ITEM_PARAMETERS);
 
 void menu_tsconf_layer_settings(MENU_ITEM_PARAMETERS);
 
+void menu_msxcart(MENU_ITEM_PARAMETERS);
+
+void menu_z88_slot_insert(MENU_ITEM_PARAMETERS);
+
+void menu_plusthreedisk(MENU_ITEM_PARAMETERS);
+
+void menu_betadisk(MENU_ITEM_PARAMETERS);
+
+void menu_timexcart(MENU_ITEM_PARAMETERS);
 
 
 int menu_inicio_opcion_seleccionada=0;
@@ -814,6 +873,8 @@ int hardware_advanced_opcion_seleccionada=0;
 int custom_machine_opcion_seleccionada;
 int hardware_printers_opcion_seleccionada=0;
 
+int menu_machine_selection_by_name_opcion_seleccionada=0;
+
 int input_file_keyboard_opcion_seleccionada=0;
 int change_video_driver_opcion_seleccionada=0;
 
@@ -835,6 +896,7 @@ int external_tools_config_opcion_seleccionada=0;
 
 
 int timexcart_opcion_seleccionada=0;
+int msxcart_opcion_seleccionada=0;
 
 
 int hardware_redefine_keys_opcion_seleccionada=0;
@@ -952,6 +1014,9 @@ char zxprinter_ocr_filename_buffer[PATH_MAX];
 char last_timex_cart[PATH_MAX]="";
 
 
+char last_msx_cart[PATH_MAX]="";
+
+
 void menu_debug_hexdump_with_ascii(char *dumpmemoria,menu_z80_moto_int dir_leida,int bytes_por_linea,z80_byte valor_xor);
 
 
@@ -985,8 +1050,10 @@ void menu_debug_set_memory_zone_attr(void)
 	//Primero ver si zona actual no esta disponible, fallback a 0 que siempre esta
 	 menu_debug_memory_zone_size=machine_get_memory_zone_attrib(menu_debug_memory_zone,&readwrite);
 	if (!menu_debug_memory_zone_size) {
-		menu_debug_memory_zone=0;
-		menu_debug_memory_zone_size=machine_get_memory_zone_attrib(menu_debug_memory_zone,&readwrite);
+		//printf ("Zona no disponible. Fallback a memory mapped\n");
+		menu_debug_set_memory_zone_mapped();
+		//menu_debug_memory_zone=0;
+		//menu_debug_memory_zone_size=machine_get_memory_zone_attrib(menu_debug_memory_zone,&readwrite);
 	}
 }
 
@@ -1002,23 +1069,30 @@ z80_byte menu_debug_get_mapped_byte(int direccion)
 
 
 	//Mostrar zonas mapeadas
+	//printf ("menu_debug_get_mapped_byte 1\n");
 	menu_debug_set_memory_zone_attr();
 
+	//Aqui si se ha hecho fallback a mapped zone, recomprobar de nuevo
+	if (menu_debug_show_memory_zones==0) {
+		//printf ("menu_debug_get_mapped_byte dir %04XH result %02XH\n",direccion,peek_byte_z80_moto(direccion));
+		//printf ("menu_debug_get_mapped_byte 1.5\n");
+		return peek_byte_z80_moto(direccion);
+	}	
+
+	//printf ("menu_debug_get_mapped_byte 2\n");
+
+	//printf ("menu_debug_get_mapped_byte menu_debug_memory_zone_size: %d\n",menu_debug_memory_zone_size);
+
 	direccion=direccion % menu_debug_memory_zone_size;
+	//printf ("menu_debug_get_mapped_byte 3\n");
 	return *(machine_get_memory_zone_pointer(menu_debug_memory_zone,direccion));
-
+	
 
 
 }
 
 
-//Interrumpe el core y le dice que hay que abrir el menu
-void menu_fire_event_open_menu(void)
-{
-	//printf ("Ejecutar menu_fire_event_open_menu\n");
-	menu_abierto=1;
-	menu_event_open_menu.v=1;
-}
+
 
 //Escribe byte mapeado de ram normal o de zona de menu mapeada
 void menu_debug_write_mapped_byte(int direccion,z80_byte valor)
@@ -1035,11 +1109,26 @@ void menu_debug_write_mapped_byte(int direccion,z80_byte valor)
 	//Mostrar zonas mapeadas
 	menu_debug_set_memory_zone_attr();
 
+
+	//Aqui si se ha hecho fallback a mapped zone, recomprobar de nuevo
+	if (menu_debug_show_memory_zones==0) {
+		return poke_byte_z80_moto(direccion,valor);
+	}	
+
 	direccion=direccion % menu_debug_memory_zone_size;
 	*(machine_get_memory_zone_pointer(menu_debug_memory_zone,direccion))=valor;
 
 
 
+}
+
+
+//Interrumpe el core y le dice que hay que abrir el menu
+void menu_fire_event_open_menu(void)
+{
+	//printf ("Ejecutar menu_fire_event_open_menu\n");
+	menu_abierto=1;
+	menu_event_open_menu.v=1;
 }
 
 
@@ -1066,6 +1155,7 @@ void menu_debug_set_memory_zone_mapped(void)
 {
 		menu_debug_memory_zone=-1;
 		menu_debug_show_memory_zones=0;	
+		menu_debug_memory_zone_size=65536;
 }
 
 
@@ -1439,7 +1529,7 @@ int menu_if_pressed_background_button(void)
 	//Si se pulsa tecla F que no es default
 	if (menu_button_f_function.v && menu_button_f_function_index>=0) {
 
-		printf ("Pulsada alguna tecla de funcion\n");
+		//printf ("Pulsada alguna tecla de funcion\n");
 
 		//Estas variables solo se activan cuando   //Abrir menu si funcion no es defecto y no es background window
   		//if (accion!=F_FUNCION_DEFAULT && accion!=F_FUNCION_BACKGROUND_WINDOW) {
@@ -1451,7 +1541,7 @@ int menu_if_pressed_background_button(void)
 		if (accion==F_FUNCION_BACKGROUND_WINDOW) {
 			//liberamos indicador de tecla de funcion
 			menu_button_f_function.v=0;
-			printf ("Pulsada tecla F background\n");
+			//printf ("Pulsada tecla F background\n");
 			//sleep(1);
 			return 1;
 		}
@@ -1463,7 +1553,7 @@ int menu_if_pressed_background_button(void)
 			if (indice==6-1 && accion==F_FUNCION_DEFAULT) {
 				//liberamos indicador de tecla de funcion
 				menu_button_f_function.v=0;
-				printf ("Es F6 por defecto\n");
+				//printf ("Es F6 por defecto\n");
 				return 1;
 			}
 
@@ -1477,7 +1567,7 @@ int menu_if_pressed_background_button(void)
 
 	//Si es F6 por default
 	if ((puerto_especial3&1)==0) {
-		printf ("Pulsada F6\n");
+		//printf ("Pulsada F6\n");
 		//sleep(1);
 
 		//Ver si funcion F6 no esta asignada 
@@ -1487,7 +1577,7 @@ int menu_if_pressed_background_button(void)
 		if (accion==F_FUNCION_DEFAULT) {
 				//liberamos indicador de tecla de funcion
 				menu_button_f_function.v=0;
-				printf ("Es F6 por defecto\n");
+				//printf ("Es F6 por defecto\n");
 				return 1;
 		}
 
@@ -1528,7 +1618,7 @@ int menu_if_pressed_menu_button(void)
 
 	//Sera tecla F5 por defecto, ya que no se ha pulsado tecla con no default
 	if ((puerto_especial2&16)==0) {
-		printf ("Pulsada F5 por defecto\n");
+		//printf ("Pulsada F5 por defecto\n");
 		//sleep(1);
 		return 1;
 	}
@@ -1556,7 +1646,7 @@ z80_byte menu_get_pressed_key_no_modifier(void)
 	//No acabo de tener claro que este sea el mejor sitio para comprobar esto... o si?
 	if (menu_if_pressed_menu_button()) {
 	//if ((puerto_especial2&16)==0) {
-		printf ("Pulsada tecla abrir menu\n");
+		//printf ("Pulsada tecla abrir menu\n");
 		//sleep(1);
 		menu_pressed_open_menu_while_in_menu.v=1;
 		/*
@@ -1654,6 +1744,12 @@ z80_byte menu_get_pressed_key(void)
 		//sleep(5);		
 		return 3; //Como F6 background
 	}	
+
+	if (mouse_pressed_hotkey_window) {
+		mouse_pressed_hotkey_window=0;
+		//printf ("Retornamos hoykey %c desde menu_get_pressed_key\n",mouse_pressed_hotkey_window_key);
+		return mouse_pressed_hotkey_window_key;
+	}
 
 	z80_byte tecla;
 
@@ -2297,7 +2393,7 @@ void menu_scr_putpixel(int x,int y,int color)
 }
 
 
-//sin el zoom de ventana, solo el posiblle de menu
+//sin el zoom de ventana, solo el posible de menu. usado en keyboard help
 void menu_scr_putpixel_no_zoom(int x,int y,int color)
 {
 
@@ -2711,18 +2807,1061 @@ void menu_set_menu_abierto(int valor)
         menu_abierto=valor;
 }
 
-
-//Para meter el logo en zona de extended desktop
-void menu_draw_ext_desktop_logo(z80_int *destino GCC_UNUSED,int x,int y,int ancho GCC_UNUSED,int color)
+//Para meter el logo u otros botones en zona de extended desktop
+void menu_draw_ext_desktop_putpixel_bitmap(z80_int *destino GCC_UNUSED,int x,int y,int ancho GCC_UNUSED,int color)
 {
 	scr_putpixel(x,y,color);
 }
+
+
+
+
+
+//Retorna geometria de los botones, si punteros no son null
+//ancho, alto boton
+//xfinal_botones: posicion X mas a la derecha del ultimo boton
+void menu_ext_desktop_buttons_get_geometry(int *p_ancho_boton,int *p_alto_boton,int *p_total_botones,int *p_inicio_botones,int *p_xfinal_botones)
+{
+	int total_botones=EXT_DESKTOP_TOTAL_BUTTONS;
+
+	int ancho_zx_desktop=screen_get_ext_desktop_width_zoom();	
+	int xinicio=screen_get_ext_desktop_start_x();
+
+
+	int ancho_boton=ancho_zx_desktop/total_botones;
+
+	//Minimo 32 pixeles
+	if (ancho_boton<EXT_DESKTOP_BUTTONS_TOTAL_SIZE) ancho_boton=EXT_DESKTOP_BUTTONS_TOTAL_SIZE;
+
+	//Maximo 64 pixeles
+	if (ancho_boton>EXT_DESKTOP_BUTTONS_TOTAL_SIZE*2) ancho_boton=EXT_DESKTOP_BUTTONS_TOTAL_SIZE*2;	
+
+
+	int alto_boton=ancho_boton;	
+
+	int xfinal_ventana=xinicio+ancho_zx_desktop;
+
+	int xfinal_botones=xinicio+total_botones*ancho_boton;
+
+	//no caben todos los botones
+	if (xfinal_botones>xfinal_ventana) {
+		total_botones=ancho_zx_desktop/ancho_boton;
+		xfinal_botones=xinicio+total_botones*ancho_boton;
+	}
+
+	if (p_ancho_boton!=NULL) *p_ancho_boton=ancho_boton;
+	if (p_alto_boton!=NULL) *p_alto_boton=alto_boton;
+	if (p_total_botones!=NULL) *p_total_botones=total_botones;
+	if (p_inicio_botones!=NULL) *p_inicio_botones=xinicio;
+	if (p_xfinal_botones!=NULL) *p_xfinal_botones=xfinal_botones;
+
+}
+
+
+//Retorna geometria de los lower icons, si punteros no son null
+//ancho, alto boton
+//xfinal_botones: posicion X mas a la derecha del ultimo boton
+void menu_ext_desktop_lower_icons_get_geometry(int *p_ancho_boton,int *p_alto_boton,int *p_total_botones,int *p_xinicio_botones,int *p_xfinal_botones,int *p_yinicio_botones)
+{
+
+	//int total_botones=TOTAL_ZXDESKTOP_MAX_LOWER_ICONS;
+
+	//Considerar los botones que estan visibles solamente para la geometria, no todos los posibles
+
+
+	int total_botones=0;
+
+
+	int i;
+
+
+	for (i=0;i<TOTAL_ZXDESKTOP_MAX_LOWER_ICONS;i++) {
+		int (*funcion_is_visible)(void);
+		funcion_is_visible=zdesktop_lowericons_array[i].is_visible;
+
+		int visible=funcion_is_visible();
+
+//Para poder forzar visibilidad de iconos para debug		
+#ifdef FORCE_VISIBLE_ALL_LOWER_ICONS
+	visible=1;
+#endif	
+		if (visible) {		
+
+			total_botones++;
+		}
+	}
+
+	//printf ("total iconos visibles: %d\n",total_botones);
+
+	int ancho_zx_desktop=screen_get_ext_desktop_width_zoom();	
+	int xinicio=screen_get_ext_desktop_start_x();
+
+
+	int ancho_boton;
+
+	if (total_botones==0) {
+		//evitar división por cero
+		ancho_boton=32;
+	}
+	else {
+		ancho_boton=ancho_zx_desktop/total_botones;
+	}
+
+	//Minimo 32 pixeles
+	if (ancho_boton<EXT_DESKTOP_BUTTONS_TOTAL_SIZE) ancho_boton=EXT_DESKTOP_BUTTONS_TOTAL_SIZE;
+
+	//Maximo 64 pixeles
+	if (ancho_boton>EXT_DESKTOP_BUTTONS_TOTAL_SIZE*2) ancho_boton=EXT_DESKTOP_BUTTONS_TOTAL_SIZE*2;
+
+
+	int alto_boton=ancho_boton;	
+
+	int xfinal_ventana=xinicio+ancho_zx_desktop;
+
+	int xfinal_botones=xinicio+total_botones*ancho_boton;
+
+	//no caben todos los botones
+	if (xfinal_botones>xfinal_ventana) {
+		total_botones=ancho_zx_desktop/ancho_boton;
+		xfinal_botones=xinicio+total_botones*ancho_boton;
+	}
+
+
+/*
+
+	int xinicio=screen_get_ext_desktop_start_x();
+	
+
+	int ancho=screen_get_ext_desktop_width_zoom();
+		
+
+	int xfinal;
+
+	
+
+	int nivel_zoom=1;
+
+	//Si hay espacio para meter iconos con zoom 2
+	//6 pixeles de margen
+	if (ancho_boton>=(6+EXT_DESKTOP_BUTTONS_ANCHO*2)) nivel_zoom=2;
+
+
+
+	
+*/
+	int alto_zx_desktop=screen_get_emulated_display_height_zoom_border_en();	
+	int yinicio=alto_zx_desktop-alto_boton;
+
+	//printf ("alto_boton: %d alto_zx_desktop: %d yinicio: %d\n",alto_boton,alto_zx_desktop,yinicio);
+
+	if (p_ancho_boton!=NULL) *p_ancho_boton=ancho_boton;
+	if (p_alto_boton!=NULL) *p_alto_boton=alto_boton;
+	if (p_total_botones!=NULL) *p_total_botones=total_botones;
+	if (p_xinicio_botones!=NULL) *p_xinicio_botones=xinicio;
+	if (p_xfinal_botones!=NULL) *p_xfinal_botones=xfinal_botones;
+	if (p_yinicio_botones!=NULL) *p_yinicio_botones=yinicio;
+
+}
+
+
+
+
+void menu_draw_ext_desktop_one_button_background(int contador_boton,int pulsado)
+{
+
+	int ancho_boton;
+	int alto_boton;
+
+
+	
+
+
+	menu_ext_desktop_buttons_get_geometry(&ancho_boton,&alto_boton,NULL,NULL,NULL);
+
+
+	//printf ("upper icons background. ancho boton: %d alto boton: %d\n",ancho_boton,alto_boton);
+
+
+	int nivel_zoom=1;
+
+	//Si hay espacio para meter iconos con zoom 2
+	//6 pixeles de margen
+	if (ancho_boton>=(6+EXT_DESKTOP_BUTTONS_ANCHO*2)) nivel_zoom=2;
+
+
+		int xinicio=screen_get_ext_desktop_start_x();
+
+		xinicio +=contador_boton*ancho_boton;
+		int yinicio=0;	
+
+	int x,y;
+
+	//Rectangulo alrededor. Dejando margen de 1 pixel alrededor sin tocar
+	//Horizontal
+
+	int color_recuadro=0;
+	int color_relleno=7;
+
+	if (pulsado) color_recuadro=7;
+
+	for (x=xinicio+1;x<xinicio+ancho_boton-1;x++) {
+		scr_putpixel(x,yinicio+1,color_recuadro);	
+		scr_putpixel(x,yinicio+alto_boton-2,color_recuadro);	
+	}
+
+	//Vertical
+	for (y=yinicio+1;y<yinicio+alto_boton-1;y++) {
+		scr_putpixel(xinicio+1,y,color_recuadro);	
+		scr_putpixel(xinicio+ancho_boton-2,y,color_recuadro);	
+	}
+
+	//Se rellena solo cuando se pulsa el botón o cuando no hay transparencia
+	if (pulsado || menu_ext_desktop_transparent_upper_icons.v==0) {
+		for (y=yinicio+2;y<yinicio+alto_boton-2;y++) {	
+			for (x=xinicio+2;x<xinicio+ancho_boton-2;x++) {
+				scr_putpixel(x,y,color_relleno);	
+			}
+		}
+	}
+
+	
+
+}
+
+
+void menu_draw_ext_desktop_one_lower_icon_background(int contador_boton,int pulsado)
+{
+
+	int ancho_boton;
+	int alto_boton;
+
+
+	//int xfinal;
+
+	int yinicio; //=0;	
+
+
+	menu_ext_desktop_lower_icons_get_geometry(&ancho_boton,&alto_boton,NULL,NULL,NULL,&yinicio);
+
+
+	//printf ("lower icons background. ancho boton: %d alto boton: %d\n",ancho_boton,alto_boton);
+
+
+	int nivel_zoom=1;
+
+	//Si hay espacio para meter iconos con zoom 2
+	//6 pixeles de margen
+	if (ancho_boton>=(6+EXT_DESKTOP_BUTTONS_ANCHO*2)) nivel_zoom=2;
+
+	//printf ("zoom lower icons background: %d\n",nivel_zoom);
+
+		int xinicio=screen_get_ext_desktop_start_x();
+
+		xinicio +=contador_boton*ancho_boton;
+		
+
+	int x,y;
+
+	//Rectangulo alrededor. Dejando margen de 1 pixel alrededor sin tocar
+	//Horizontal
+
+	int color_recuadro=0;
+	int color_relleno=7;
+
+	if (pulsado) color_recuadro=7;
+
+	for (x=xinicio+1;x<xinicio+ancho_boton-1;x++) {
+		scr_putpixel(x,yinicio+1,color_recuadro);	
+		scr_putpixel(x,yinicio+alto_boton-2,color_recuadro);	
+	}
+
+	//Vertical
+	for (y=yinicio+1;y<yinicio+alto_boton-1;y++) {
+		scr_putpixel(xinicio+1,y,color_recuadro);	
+		scr_putpixel(xinicio+ancho_boton-2,y,color_recuadro);	
+	}
+
+	//Se rellena solo cuando se pulsa el botón o cuando no hay transparencia
+	if (pulsado || menu_ext_desktop_transparent_lower_icons.v==0) {
+		for (y=yinicio+2;y<yinicio+alto_boton-2;y++) {	
+			for (x=xinicio+2;x<xinicio+ancho_boton-2;x++) {
+				scr_putpixel(x,y,color_relleno);	
+			}
+		}
+	}
+	
+
+	
+
+}
+
+		
+
+
+//Dibujar un boton con su bitmap, con efecto pulsado si/no
+void menu_draw_ext_desktop_one_button_bitmap(int numero_boton,int pulsado)
+{
+
+	int total_botones;
+
+	
+	//Tamanyo fijo
+
+
+	//Tamanyo variable segun tamanyo ZX Desktop. Iconos con contenido 26x26. 
+	//Hay que dejar margen de 6 por cada lado (3 izquierdo, 3 derecho, 3 alto, 3 alto)
+	//Cada 3 pixeles de margen son: fondo-negro(rectangulo)-gris(de dentro boton)
+	//total maximo 32x32 
+	//Ejemplo:
+	/*
+
+char *zesarux_ascii_logo[ZESARUX_ASCII_LOGO_ALTO]={ 
+  ................................
+  ################################
+  --------------------------------
+    "WWWWWWWWWWWWWWWWWWWWWWWWWW",     //0
+  	"WXXXXXXXXXXXXXXXXXXXXXXXXW",      
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",	
+	"WWWWWWWWWWWWWWWWWXXXXWWWWW",			
+	"                WXXXXW   W",			
+	"                WXXXXW  RW", 		
+	"             WWWWXXXXW RRW",		
+	"            WXXXXWWWW RRRW",		
+	"            WXXXXW   RRRRW",	//10	
+	"            WXXXXW  RRRRYW",		
+	"         WWWWXXXXW RRRRYYW",		
+	"        WXXXXWWWW RRRRYYYW",		
+	"        WXXXXW   RRRRYYYYW",		
+	"        WXXXXW  RRRRYYYYGW",		
+	"     WWWWXXXXW RRRRYYYYGGW",		
+	"    WXXXXWWWW RRRRYYYYGGGW",		
+	"    WXXXXW   RRRRYYYYGGGGW",		
+	"    WXXXXW  RRRRYYYYGGGGCW",		
+	"WWWWWXXXXW RRRRYYYYGGGGCCW",    //20
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",
+	"WWWWWWWWWWWWWWWWWWWWWWWWWW" 		//25
+};
+	*/
+
+	int ancho_boton;
+	int alto_boton;
+
+		int xinicio=screen_get_ext_desktop_start_x();
+		int yinicio=0;
+
+		//int ancho=screen_get_ext_desktop_width_zoom();
+		//int alto=screen_get_emulated_display_height_zoom_border_en();		
+
+	int xfinal;
+
+	menu_ext_desktop_buttons_get_geometry(&ancho_boton,&alto_boton,&total_botones,NULL,&xfinal);
+
+	//printf("draw bitmap ancho_boton %d alto_boton %d total_botones %d xfinal %d\n",
+	//ancho_boton,alto_boton,total_botones,xfinal);
+
+
+	int nivel_zoom=1;
+
+	//Si hay espacio para meter iconos con zoom 2
+	//6 pixeles de margen
+	if (ancho_boton>=(6+EXT_DESKTOP_BUTTONS_ANCHO*2)) nivel_zoom=2;
+
+
+	//int x;
+	//int contador_boton=0;
+
+
+
+
+
+	//Dibujar un boton
+
+
+	if (numero_boton<total_botones) {
+	//for (numero_boton=0;numero_boton<total_botones;numero_boton++) {
+		
+
+		int medio_boton_x=ancho_boton/2;
+		int medio_boton_y=alto_boton/2;
+
+		int destino_x=xinicio+ancho_boton*numero_boton;
+		destino_x +=medio_boton_x-(EXT_DESKTOP_BUTTONS_ANCHO*nivel_zoom)/2;
+
+		int destino_y=yinicio;
+		destino_y +=medio_boton_y-(EXT_DESKTOP_BUTTONS_ALTO*nivel_zoom)/2;
+
+		
+
+		char **puntero_bitmap;
+
+		puntero_bitmap=zxdesktop_buttons_bitmaps[numero_boton];
+
+
+		if (pulsado) {
+			destino_x+=2;
+			destino_y+=2;
+		}
+		screen_put_asciibitmap_generic(puntero_bitmap,NULL,destino_x,destino_y,ZESARUX_ASCII_LOGO_ANCHO,ZESARUX_ASCII_LOGO_ALTO, 0,menu_draw_ext_desktop_putpixel_bitmap,nivel_zoom,0);
+	}
+}
+
+
+
+
+
+//Funciones para cinta de cassette
+
+int zxdesktop_lowericon_cassete_is_visible(void)
+{
+	if (!MACHINE_IS_Z88 && !MACHINE_IS_QL && !MACHINE_IS_CHLOE && !MACHINE_IS_COLECO && !MACHINE_IS_SG1000) return 1;
+	else return 0;
+}
+
+int zxdesktop_lowericon_cassete_is_active(void)
+{
+	if ((tape_loadsave_inserted & TAPE_LOAD_INSERTED)!=0) return 1;
+	else if (realtape_inserted.v) return 1;
+	else return 0;
+}
+
+void zxdesktop_lowericon_cassete_accion(void)
+{
+	menu_tape_settings(0);
+}
+
+//Funciones para floppy +3
+
+
+int zxdesktop_lowericon_plus3_flp_is_visible(void)
+{
+	if (MACHINE_IS_SPECTRUM_P2A_P3) return 1;
+	else return 0;
+}
+
+int zxdesktop_lowericon_plus3_flp_is_active(void)
+{
+	if (dskplusthree_emulation.v) return 1;
+	else return 0;
+}
+
+void zxdesktop_lowericon_plus3_flp_accion(void)
+{
+	menu_plusthreedisk(0);
+}
+
+//Funciones para Betadisk
+
+
+int zxdesktop_lowericon_betadisk_is_visible(void)
+{
+	if (MACHINE_IS_SPECTRUM) return 1;
+	else return 0;
+}
+
+int zxdesktop_lowericon_betadisk_is_active(void)
+{
+	if (trd_enabled.v) return 1;
+	else return 0;
+}
+
+void zxdesktop_lowericon_betadisk_accion(void)
+{
+	menu_betadisk(0);
+}
+
+
+//Funciones para MMC
+
+int zxdesktop_lowericon_mmc_is_visible(void)
+{
+	if (MACHINE_IS_SPECTRUM) return 1;
+	else return 0;
+}
+
+int zxdesktop_lowericon_mmc_is_active(void)
+{
+	if (mmc_enabled.v) return 1;
+	else return 0;
+}
+
+void zxdesktop_lowericon_mmc_accion(void)
+{
+	menu_mmc_divmmc(0);
+}
+
+//Funciones para IDE
+
+int zxdesktop_lowericon_ide_is_visible(void)
+{
+	if (MACHINE_IS_SPECTRUM || MACHINE_IS_SAM) return 1;
+	else return 0;
+}
+
+int zxdesktop_lowericon_ide_is_active(void)
+{
+	if (ide_enabled.v) return 1;
+	else return 0;
+}
+
+void zxdesktop_lowericon_ide_accion(void)
+{
+	menu_ide_divide(0);
+}
+
+//Funciones para zxpand
+
+int zxdesktop_lowericon_zxpand_is_visible(void)
+{
+	if (MACHINE_IS_ZX8081) return 1;
+	else return 0;
+}
+
+int zxdesktop_lowericon_zxpand_is_active(void)
+{
+	if (zxpand_enabled.v) return 1;
+	else return 0;
+}
+
+void zxdesktop_lowericon_zxpand_accion(void)
+{
+	menu_zxpand(0);
+}
+
+//Funciones para Cartuchos TS 2068
+
+int zxdesktop_lowericon_cart_timex_is_visible(void)
+{
+	if (MACHINE_IS_TIMEX_TS2068) return 1;
+
+	else return 0;
+}
+
+int zxdesktop_lowericon_cart_timex_is_active(void)
+{
+	if (timex_cartridge_inserted.v) return 1;
+	else return 0;
+}
+
+void zxdesktop_lowericon_cart_timex_accion(void)
+{
+	menu_timexcart(0);
+}
+
+
+//Funciones para Cartuchos MSX, Coleco, SVI, SG1000
+
+void zxdesktop_lowericon_cartridge_accion(void)
+{
+	menu_msxcart(0);
+}
+
+
+
+int zxdesktop_lowericon_cartridge_msx_is_visible(void)
+{
+	if (MACHINE_IS_MSX) return 1;
+
+	else return 0;
+}
+
+int zxdesktop_lowericon_cartridge_msx_is_active(void)
+{
+	if (msx_cartridge_inserted.v) return 1;
+	else return 0;
+}
+
+
+int zxdesktop_lowericon_cartridge_svi_is_visible(void)
+{
+	if (MACHINE_IS_SVI) return 1;
+
+	else return 0;
+}
+
+int zxdesktop_lowericon_cartridge_svi_is_active(void)
+{
+	if (svi_cartridge_inserted.v) return 1;
+	else return 0;
+}
+
+int zxdesktop_lowericon_cartridge_coleco_is_visible(void)
+{
+	if (MACHINE_IS_COLECO) return 1;
+
+	else return 0;
+}
+
+int zxdesktop_lowericon_cartridge_coleco_is_active(void)
+{
+	if (coleco_cartridge_inserted.v) return 1;
+	else return 0;
+}
+
+
+int zxdesktop_lowericon_cartridge_sg1000_is_visible(void)
+{
+	if (MACHINE_IS_SG1000) return 1;
+
+	else return 0;
+}
+
+int zxdesktop_lowericon_cartridge_sg1000_is_active(void)
+{
+	if (sg1000_cartridge_inserted.v) return 1;
+	else return 0;
+}
+
+
+//Funciones para MDV/Floppy QL
+
+int zxdesktop_lowericon_mdv_flp_is_visible(void)
+{
+	if (MACHINE_IS_QL) return 1;
+
+	else return 0;
+}
+
+int zxdesktop_lowericon_mdv_flp_is_active(void)
+{
+	if (ql_microdrive_floppy_emulation) return 1;
+	else return 0;
+}
+
+void zxdesktop_lowericon_mdv_flp_accion(void)
+{
+	menu_ql_mdv_flp(0);
+}
+
+
+// Funciones para cartuchos Z88
+
+int zxdesktop_lowericon_z88_cart_is_visible(void)
+{
+	if (MACHINE_IS_Z88) return 1;
+
+	else return 0;
+}
+
+int zxdesktop_lowericon_z88_cart_N_is_active(int slot)
+{
+	if (z88_memory_slots[slot].size!=0) return 1;
+	else return 0;
+}
+
+int zxdesktop_lowericon_z88_cart_1_is_active(void)
+{
+	return zxdesktop_lowericon_z88_cart_N_is_active(1);
+}
+
+int zxdesktop_lowericon_z88_cart_2_is_active(void)
+{
+	return zxdesktop_lowericon_z88_cart_N_is_active(2);
+}
+
+int zxdesktop_lowericon_z88_cart_3_is_active(void)
+{
+	return zxdesktop_lowericon_z88_cart_N_is_active(3);
+}
+
+void zxdesktop_lowericon_z88_cart_1_accion(void)
+{
+	menu_z88_slot_insert(1);
+}
+
+void zxdesktop_lowericon_z88_cart_2_accion(void)
+{
+	menu_z88_slot_insert(2);
+}
+
+
+void zxdesktop_lowericon_z88_cart_3_accion(void)
+{
+	menu_z88_slot_insert(3);
+}
+
+//Para iconos que no alteran su inverso, apuntar a aqui
+int zxdesktop_common_icon_no_inverse=0;
+
+//Variables que indican actividad de ese icono (se dibujan en color inverso)
+int zxdesktop_icon_tape_inverse=0;
+int zxdesktop_icon_mmc_inverse=0;
+int zxdesktop_icon_plus3_inverse=0;
+int zxdesktop_icon_betadisk_inverse=0;
+int zxdesktop_icon_ide_inverse=0;
+int zxdesktop_icon_zxpand_inverse=0;
+int zxdesktop_icon_mdv_flp_inverse=0;
+
+struct s_zxdesktop_lowericons_info zdesktop_lowericons_array[TOTAL_ZXDESKTOP_MAX_LOWER_ICONS]={
+	//cinta
+	{ zxdesktop_lowericon_cassete_is_visible, zxdesktop_lowericon_cassete_is_active,zxdesktop_lowericon_cassete_accion,
+		bitmap_lowericon_ext_desktop_cassette_active,bitmap_lowericon_ext_desktop_cassette_inactive,&zxdesktop_icon_tape_inverse},
+
+	//floppy +3
+	{ zxdesktop_lowericon_plus3_flp_is_visible, zxdesktop_lowericon_plus3_flp_is_active,zxdesktop_lowericon_plus3_flp_accion,
+		bitmap_lowericon_ext_desktop_plus3_flp_active,bitmap_lowericon_ext_desktop_plus3_flp_inactive,&zxdesktop_icon_plus3_inverse},		
+
+	//betadisk
+	{ zxdesktop_lowericon_betadisk_is_visible, zxdesktop_lowericon_betadisk_is_active,zxdesktop_lowericon_betadisk_accion,
+		bitmap_lowericon_ext_desktop_betadisk_active,bitmap_lowericon_ext_desktop_betadisk_inactive,&zxdesktop_icon_betadisk_inverse},			
+
+	//MMC
+	{ zxdesktop_lowericon_mmc_is_visible, zxdesktop_lowericon_mmc_is_active, zxdesktop_lowericon_mmc_accion,
+		bitmap_lowericon_ext_desktop_mmc_active,bitmap_lowericon_ext_desktop_mmc_inactive,&zxdesktop_icon_mmc_inverse},		
+
+	//IDE
+	{ zxdesktop_lowericon_ide_is_visible, zxdesktop_lowericon_ide_is_active, zxdesktop_lowericon_ide_accion,
+		bitmap_lowericon_ext_desktop_ide_active,bitmap_lowericon_ext_desktop_ide_inactive,&zxdesktop_icon_ide_inverse},				
+
+	//ZXPand
+	{ zxdesktop_lowericon_zxpand_is_visible, zxdesktop_lowericon_zxpand_is_active, zxdesktop_lowericon_zxpand_accion,
+		bitmap_lowericon_ext_desktop_mmc_active,bitmap_lowericon_ext_desktop_mmc_inactive,&zxdesktop_icon_zxpand_inverse},			
+
+	//Cartuchos msx, coleco, svi, sg1000
+	{ zxdesktop_lowericon_cartridge_msx_is_visible, zxdesktop_lowericon_cartridge_msx_is_active, zxdesktop_lowericon_cartridge_accion,
+		bitmap_lowericon_ext_desktop_msx_cart_active,bitmap_lowericon_ext_desktop_msx_cart_inactive,&zxdesktop_common_icon_no_inverse},	
+
+	{ zxdesktop_lowericon_cartridge_svi_is_visible, zxdesktop_lowericon_cartridge_svi_is_active, zxdesktop_lowericon_cartridge_accion,
+		bitmap_lowericon_ext_desktop_svi_active,bitmap_lowericon_ext_desktop_svi_inactive,&zxdesktop_common_icon_no_inverse},				
+
+	{ zxdesktop_lowericon_cartridge_coleco_is_visible, zxdesktop_lowericon_cartridge_coleco_is_active, zxdesktop_lowericon_cartridge_accion,
+		bitmap_lowericon_ext_desktop_coleco_active,bitmap_lowericon_ext_desktop_coleco_inactive,&zxdesktop_common_icon_no_inverse},	
+
+	{ zxdesktop_lowericon_cartridge_sg1000_is_visible, zxdesktop_lowericon_cartridge_sg1000_is_active, zxdesktop_lowericon_cartridge_accion,
+		bitmap_lowericon_ext_desktop_sg1000_active,bitmap_lowericon_ext_desktop_sg1000_inactive,&zxdesktop_common_icon_no_inverse},	
+
+	//Cartuchos Timex TS2068	
+	{ zxdesktop_lowericon_cart_timex_is_visible, zxdesktop_lowericon_cart_timex_is_active, zxdesktop_lowericon_cart_timex_accion,
+		bitmap_lowericon_ext_desktop_cart_timex_active,bitmap_lowericon_ext_desktop_cart_timex_inactive,&zxdesktop_common_icon_no_inverse},										
+
+	//MDV/Floppy QL.
+	{ zxdesktop_lowericon_mdv_flp_is_visible, zxdesktop_lowericon_mdv_flp_is_active, zxdesktop_lowericon_mdv_flp_accion,
+		bitmap_lowericon_ext_desktop_mdv_active,bitmap_lowericon_ext_desktop_mdv_inactive,&zxdesktop_icon_mdv_flp_inverse},	
+
+	//3 Cartuchos de Z88. 
+	{ zxdesktop_lowericon_z88_cart_is_visible, zxdesktop_lowericon_z88_cart_1_is_active, zxdesktop_lowericon_z88_cart_1_accion,
+		bitmap_lowericon_ext_desktop_z88_active,bitmap_lowericon_ext_desktop_z88_inactive,&zxdesktop_common_icon_no_inverse},	
+
+	{ zxdesktop_lowericon_z88_cart_is_visible, zxdesktop_lowericon_z88_cart_2_is_active, zxdesktop_lowericon_z88_cart_2_accion,
+		bitmap_lowericon_ext_desktop_z88_active,bitmap_lowericon_ext_desktop_z88_inactive,&zxdesktop_common_icon_no_inverse},	
+
+	{ zxdesktop_lowericon_z88_cart_is_visible, zxdesktop_lowericon_z88_cart_3_is_active, zxdesktop_lowericon_z88_cart_3_accion,
+		bitmap_lowericon_ext_desktop_z88_active,bitmap_lowericon_ext_desktop_z88_inactive,&zxdesktop_common_icon_no_inverse},			
+
+
+
+
+};
+
+
+//Busca el N elemento dentro del array y que este visible
+//Por ejemplo si los primeros 3 elementos están visibles/no:
+//visible-novisible-visible
+//Al ir a buscar el segundo elemento (parametro=1) se saltara el novisible y retornara el tercero visible
+//esto es para evitar huecos al dibujarlos en pantalla
+//Retorna <0 si no lo encuentra
+int zxdesktop_lowericon_find_index(int icono)
+{
+	//int total_botones;
+	int total_botones=TOTAL_ZXDESKTOP_MAX_LOWER_ICONS;
+
+	if (icono>=total_botones || icono<0) return -1;
+
+	int i;
+
+	int i_enabled=0;
+
+	for (i=0;i<total_botones;i++) {
+		int (*funcion_is_visible)(void);
+		funcion_is_visible=zdesktop_lowericons_array[i].is_visible;
+
+		int visible=funcion_is_visible();
+
+//Para poder forzar visibilidad de iconos para debug	
+#ifdef FORCE_VISIBLE_ALL_LOWER_ICONS
+	visible=1;
+#endif	
+
+		if (visible) {
+			if (i_enabled==icono) {
+				//printf("buscando %d encontrado indice %d\n",icono,i);
+				return i;
+			}
+
+			i_enabled++;
+		}
+	}
+
+	return -1;
+
+}
+
+
+void menu_ext_desktop_draw_lower_icon(int numero_boton,int pulsado)
+{
+
+
+	
+	int total_botones;
+
+	int ancho_boton;
+	int alto_boton;	
+
+	int yinicio;
+
+	menu_ext_desktop_lower_icons_get_geometry(&ancho_boton,&alto_boton,&total_botones,NULL,NULL,&yinicio);
+
+	//printf("yinicio: %d\n",)
+
+	//printf ("menu_ext_desktop_draw_lower_icon. numero_boton %d total_botones %d\n",numero_boton,total_botones);
+	if (numero_boton>=total_botones) {
+		//printf ("no dibujar\n");
+		return;
+	}
+
+
+	//Buscar el indice dentro del array de botones
+	int indice_array;
+
+	indice_array=zxdesktop_lowericon_find_index(numero_boton);
+
+	if (indice_array<0) return;
+
+
+
+	//Nota: en los botones superiores el background se dibuja al principio para todos
+	//mientras que en estos lower icons se dibuja cada background con su icono asociado
+	//Quiza habria que estandarizar esto
+	menu_draw_ext_desktop_one_lower_icon_background(numero_boton,pulsado);
+
+	int xinicio=screen_get_ext_desktop_start_x();
+	
+
+	
+
+	int nivel_zoom=1;
+
+	//Si hay espacio para meter iconos con zoom 2
+	//6 pixeles de margen
+	if (ancho_boton>=(6+EXT_DESKTOP_BUTTONS_ANCHO*2)) nivel_zoom=2;
+
+	//printf ("zoom lower icons: %d\n",nivel_zoom);
+
+
+
+	//Dibujar un boton
+
+	
+
+	int medio_boton_x=ancho_boton/2;
+	int medio_boton_y=alto_boton/2;
+
+	int destino_x=xinicio+ancho_boton*numero_boton;
+	destino_x +=medio_boton_x-(EXT_DESKTOP_BUTTONS_ANCHO*nivel_zoom)/2;
+
+	int destino_y=yinicio; //+3*nivel_zoom; //3 de margen
+	destino_y +=medio_boton_y-(EXT_DESKTOP_BUTTONS_ALTO*nivel_zoom)/2;
+
+
+	char **puntero_bitmap;
+
+
+
+	//Funcion is visible
+	int (*funcion_is_enabled)(void);
+
+
+	funcion_is_enabled=zdesktop_lowericons_array[indice_array].is_active;
+
+	int is_enabled=funcion_is_enabled();
+
+#ifdef FORCE_DISABLED_ALL_LOWER_ICONS
+	is_enabled=0;
+#endif
+
+#ifdef FORCE_ENABLED_ALL_LOWER_ICONS
+	is_enabled=1;
+#endif
+
+	//Ver si icono se dibuja en color inverso solo cuando esta el icono activo
+	int inverso=0;
+
+
+	if (is_enabled) {
+		puntero_bitmap=zdesktop_lowericons_array[indice_array].bitmap_active;
+
+		int *puntero_a_inverso;
+
+		puntero_a_inverso=zdesktop_lowericons_array[indice_array].icon_is_inverse;
+		if (*puntero_a_inverso) {
+			inverso=1;		
+		}
+	}
+
+	else  {
+		puntero_bitmap=zdesktop_lowericons_array[indice_array].bitmap_inactive;
+	}		
+
+
+
+
+
+	if (pulsado) {
+		//desplazado 2 pixel cuando se pulsa
+		destino_x+=2;
+		destino_y+=2;
+	}
+
+	
+	screen_put_asciibitmap_generic(puntero_bitmap,NULL,destino_x,destino_y,ZESARUX_ASCII_LOGO_ANCHO,ZESARUX_ASCII_LOGO_ALTO, 0,menu_draw_ext_desktop_putpixel_bitmap,nivel_zoom,inverso);
+
+	
+	
+}
+
+
+void menu_draw_ext_desktop_lower_icons(void)
+{
+
+	int total_iconos=TOTAL_ZXDESKTOP_MAX_LOWER_ICONS;
+
+
+	int i;
+
+	for (i=0;i<total_iconos;i++) {
+		menu_ext_desktop_draw_lower_icon(i,0);
+
+	}
+}
+
+void menu_draw_ext_desktop_dibujar_boton_pulsado(int boton)
+{
+	menu_draw_ext_desktop_one_button_background(boton,1);
+	menu_draw_ext_desktop_one_button_bitmap(boton,1);
+}
+
+void menu_draw_ext_desktop_dibujar_boton_or_lower_icon_pulsado(void)
+{
+	if (menu_pressed_zxdesktop_button_which>=0) menu_draw_ext_desktop_dibujar_boton_pulsado(menu_pressed_zxdesktop_button_which);
+	if (menu_pressed_zxdesktop_lower_icon_which>=0) menu_ext_desktop_draw_lower_icon(menu_pressed_zxdesktop_lower_icon_which,1);
+}
+
+void menu_draw_ext_desktop_buttons(int xinicio)
+{
+
+	//TODO
+	/*
+	0           1          2         3        4           5        6         7       8         9         10        11     12
+	ZEsarUX | Smartload | Machine | Storage | Snapshot | Audio | Network | Debug | Display | Windows | Settings | Help | Exit
+	*/
+	int total_botones;
+
+	//total_botones=EXT_DESKTOP_TOTAL_BUTTONS;
+
+	//Tamanyo fijo
+
+
+	//Tamanyo variable segun tamanyo ZX Desktop. Iconos con contenido 26x26. 
+	//Hay que dejar margen de 6 por cada lado (3 izquierdo, 3 derecho, 3 alto, 3 alto)
+	//Cada 3 pixeles de margen son: fondo-negro(rectangulo)-gris(de dentro boton)
+	//total maximo 32x32 
+	//Ejemplo:
+	/*
+
+char *zesarux_ascii_logo[ZESARUX_ASCII_LOGO_ALTO]={ 
+  ................................
+  ################################
+  --------------------------------
+    "WWWWWWWWWWWWWWWWWWWWWWWWWW",     //0
+  	"WXXXXXXXXXXXXXXXXXXXXXXXXW",      
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",	
+	"WWWWWWWWWWWWWWWWWXXXXWWWWW",			
+	"                WXXXXW   W",			
+	"                WXXXXW  RW", 		
+	"             WWWWXXXXW RRW",		
+	"            WXXXXWWWW RRRW",		
+	"            WXXXXW   RRRRW",	//10	
+	"            WXXXXW  RRRRYW",		
+	"         WWWWXXXXW RRRRYYW",		
+	"        WXXXXWWWW RRRRYYYW",		
+	"        WXXXXW   RRRRYYYYW",		
+	"        WXXXXW  RRRRYYYYGW",		
+	"     WWWWXXXXW RRRRYYYYGGW",		
+	"    WXXXXWWWW RRRRYYYYGGGW",		
+	"    WXXXXW   RRRRYYYYGGGGW",		
+	"    WXXXXW  RRRRYYYYGGGGCW",		
+	"WWWWWXXXXW RRRRYYYYGGGGCCW",    //20
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
+	"WXXXXXXXXXXXXXXXXXXXXXXXXW",
+	"WWWWWWWWWWWWWWWWWWWWWWWWWW" 		//25
+};
+	*/
+
+	int ancho_boton;
+	int alto_boton;
+
+
+	int xfinal;
+
+
+	menu_ext_desktop_buttons_get_geometry(&ancho_boton,&alto_boton,&total_botones,NULL,&xfinal);
+
+	//printf("draw buttons ancho_boton %d alto_boton %d total_botones %d xfinal %d\n",
+	//ancho_boton,alto_boton,total_botones,xfinal);
+
+
+	int nivel_zoom=1;
+
+	//Si hay espacio para meter iconos con zoom 2
+	//6 pixeles de margen
+	if (ancho_boton>=(6+EXT_DESKTOP_BUTTONS_ANCHO*2)) nivel_zoom=2;
+
+
+	int x;
+	int contador_boton=0;
+
+	for (x=xinicio;contador_boton<total_botones;x+=ancho_boton,contador_boton++) {
+		menu_draw_ext_desktop_one_button_background(contador_boton,0);
+	}
+
+
+	//Boton ZEsarUX en primer botón. Centrado
+	/*
+	screen_put_watermark_generic(NULL,xinicio+ancho_boton/2-ZESARUX_ASCII_LOGO_ANCHO/2,yinicio+alto_boton/2-ZESARUX_ASCII_LOGO_ALTO/2
+		,0, menu_draw_ext_desktop_putpixel_bitmap);
+
+*/
+
+
+	//Dibujar botones
+	int numero_boton;
+	for (numero_boton=0;numero_boton<total_botones;numero_boton++) {
+
+		menu_draw_ext_desktop_one_button_bitmap(numero_boton,0); 
+		
+
+	}
+
+	//Dibujar iconos activos de la parte inferior
+	menu_draw_ext_desktop_lower_icons();
+}
+
+
+
 
 //Retorna posicion del logo de ZEsarUX en el extended desktop
 void menu_ext_desktop_get_logo_coords(int *x,int *y)
 {
 
-	int xinicio=screen_get_emulated_display_width_zoom_border_en();
+	int xinicio=screen_get_ext_desktop_start_x();
 	int ancho=screen_get_ext_desktop_width_zoom();
 	int alto=screen_get_emulated_display_height_zoom_border_en();
 
@@ -2739,9 +3878,66 @@ void menu_ext_desktop_get_logo_coords(int *x,int *y)
 //Tipo de rellenado de extended desktop:
 //0=color solido
 //1=barras diagonales de colores
-//2=punteado blanco/negro
+//2=barras diagonales de colores que se mueven
+//3=punteado blanco/negro
+//4=ajedrez
+//5=Grid
+//6=Random
 int menu_ext_desktop_fill=1;
-int menu_ext_desktop_fill_solid_color=0;
+int menu_ext_desktop_fill_first_color=5;
+int menu_ext_desktop_fill_second_color=13;
+
+
+z80_bit menu_ext_desktop_transparent_upper_icons={0};
+z80_bit menu_ext_desktop_transparent_lower_icons={0};
+
+int menu_ext_desktop_fill_rainbow_counter;
+
+
+void menu_draw_ext_desktop_footer(void)
+{
+	if (!menu_footer) return;
+
+
+	debug_printf(VERBOSE_DEBUG,"Drawing zxdesktop footer");
+
+	// De momento solo dibujarlo en color de fondo y ya 
+	int x,y;
+	int xinicio=screen_get_ext_desktop_start_x();
+	int yinicio=screen_get_emulated_display_height_zoom_border_en();
+
+	int ancho=screen_get_ext_desktop_width_zoom();
+	int alto=WINDOW_FOOTER_SIZE*zoom_y;
+
+		int color=WINDOW_FOOTER_PAPER;
+
+		for (y=yinicio;y<yinicio+alto;y++) {
+			for (x=xinicio;x<xinicio+ancho;x++) {
+				scr_putpixel(x,y,color);
+
+			}
+		}		
+
+	//Meter logo en parte derecha. Siempre que quepa en alto
+	/*
+	if (alto>=ZESARUX_ASCII_LOGO_ALTO) {
+		int xlogo;
+		int ylogo;
+		xlogo=xinicio+ancho-ZESARUX_ASCII_LOGO_ANCHO-ZESARUX_WATERMARK_LOGO_MARGIN;
+		ylogo=yinicio+alto-ZESARUX_ASCII_LOGO_ALTO-ZESARUX_WATERMARK_LOGO_MARGIN;
+
+		//menu_ext_desktop_get_logo_coords(&xfinal,&yfinal);
+
+		//El ancho y el puntero dan igual, no los vamos a usar
+		screen_put_watermark_generic(NULL,xlogo,ylogo,0, menu_draw_ext_desktop_putpixel_bitmap);
+	}
+	*/
+	
+	
+
+
+}
+
 
 void menu_draw_ext_desktop(void)
 {
@@ -2764,7 +3960,7 @@ void menu_draw_ext_desktop(void)
 			Y considerando el espacio de coordenadas x e y con zoom
 		*/
 
-		int xinicio=screen_get_emulated_display_width_zoom_border_en();
+		int xinicio=screen_get_ext_desktop_start_x();
 		int yinicio=0;
 
 		int ancho=screen_get_ext_desktop_width_zoom();
@@ -2777,7 +3973,7 @@ void menu_draw_ext_desktop(void)
 		//Color solido
 		if (menu_ext_desktop_fill==0) {
 
-			int color=menu_ext_desktop_fill_solid_color;
+			int color=menu_ext_desktop_fill_first_color;
 
 			for (y=yinicio;y<yinicio+alto;y++) {
 				for (x=xinicio;x<xinicio+ancho;x++) {
@@ -2787,19 +3983,22 @@ void menu_draw_ext_desktop(void)
 
 		}			
 		
-		//Rayas diagonales de colores
-		if (menu_ext_desktop_fill==1) {
+		//Rayas diagonales de colores, fijas o movibles		
+		if (menu_ext_desktop_fill==1 || menu_ext_desktop_fill==2) {
 
 			int grueso_lineas=8*zoom_x*menu_gui_zoom; //Para que coincida el color con rainbow de titulo de ventanas
  			int total_colores=5;
 
 			int contador_color;
 
+			//En el caso de barras fijas, offset es 0
+			if (menu_ext_desktop_fill==1) menu_ext_desktop_fill_rainbow_counter=0;
+
 			for (y=yinicio;y<yinicio+alto;y++) {
 				contador_color=y; //Para dar un aspecto de rayado
 
 				for (x=xinicio;x<xinicio+ancho;x++) {
-					int indice_color=(contador_color/grueso_lineas) % total_colores;
+					int indice_color=((contador_color/grueso_lineas)+menu_ext_desktop_fill_rainbow_counter) % total_colores;
 					int color=screen_colores_rainbow_nobrillo[indice_color]; 
 					scr_putpixel(x,y,color);
 
@@ -2807,10 +4006,12 @@ void menu_draw_ext_desktop(void)
 				}
 			}
 
+			menu_ext_desktop_fill_rainbow_counter++;
+
 		}
 
 		//punteado
-		if (menu_ext_desktop_fill==2) {
+		if (menu_ext_desktop_fill==3) {
 
 			int color;
 
@@ -2818,7 +4019,7 @@ void menu_draw_ext_desktop(void)
 				for (x=xinicio;x<xinicio+ancho;x++) {
 
 					int suma=x+y;
-					color=(suma & 1 ? 0 : 15);
+					color=(suma & 1 ? menu_ext_desktop_fill_first_color : menu_ext_desktop_fill_second_color);
 
 					scr_putpixel(x,y,color);
 				}
@@ -2826,8 +4027,69 @@ void menu_draw_ext_desktop(void)
 
 		}	
 
+		//ajedrez
+		if (menu_ext_desktop_fill==4) {
+
+			int color;
+
+			for (y=yinicio;y<yinicio+alto;y++) {
+				for (x=xinicio;x<xinicio+ancho;x++) {
+
+					//Tamaño de 32x32 cada cuadrado
+					int suma=(x/32)+(y/32);
+
+					//Blanco 7 para que no sea tan brillante
+					color=(suma & 1 ? menu_ext_desktop_fill_first_color : menu_ext_desktop_fill_second_color);
+
+					scr_putpixel(x,y,color);
+				}
+			}
+
+		}		
+
+		//grid
+		if (menu_ext_desktop_fill==5) {
+
+			int color;
+
+			for (y=yinicio;y<yinicio+alto;y++) {
+				for (x=xinicio;x<xinicio+ancho;x++) {
+
+					//Tamaño de 32x32 cada cuadrado
+					int suma=(x/32)*(y/32);
+
+					//Blanco 7 para que no sea tan brillante
+					color=(suma & 1 ? menu_ext_desktop_fill_first_color : menu_ext_desktop_fill_second_color);
+
+					scr_putpixel(x,y,color);
+				}
+			}
+
+		}	
+
+		//Random	
+		if (menu_ext_desktop_fill==6) {
+
+			for (y=yinicio;y<yinicio+alto;y++) {
+
+
+				for (x=xinicio;x<xinicio+ancho;x++) {
+
+					ay_randomize(0);
+
+					//randomize_noise es valor de 16 bits. sacar uno de 8 bits
+					int color=value_16_to_8h(randomize_noise[0]) % EMULATOR_TOTAL_PALETTE_COLOURS;
+
+					scr_putpixel(x,y,color);
+
+				}
+			}
+
+		}					
+
 
 	//Agregamos logo ZEsarUX en esquina inferior derecha, con margen, solo si menu esta abierto
+	/*
 	if (menu_abierto) {
 		int xfinal;
 		int yfinal;
@@ -2837,8 +4099,17 @@ void menu_draw_ext_desktop(void)
 		menu_ext_desktop_get_logo_coords(&xfinal,&yfinal);
 
 		//El ancho y el puntero dan igual, no los vamos a usar
-		screen_put_watermark_generic(NULL,xfinal,yfinal,0, menu_draw_ext_desktop_logo);
+		screen_put_watermark_generic(NULL,xfinal,yfinal,0, menu_draw_ext_desktop_putpixel_bitmap);
 	}
+	*/
+
+	//Dibujar botones si están activados (por defecto)
+	if (menu_zxdesktop_buttons_enabled.v) {
+		menu_draw_ext_desktop_buttons(xinicio);
+	}
+
+	//Dibujar footer del zxdesktop
+	menu_draw_ext_desktop_footer();
 	
 }
 
@@ -3457,8 +4728,14 @@ void normal_overlay_texto_menu(void)
 
 	//Dibujar ventanas en background pero solo si menu está abierto, esto evita que aparezcan las ventanas cuando hay un 
 	//mensaje de splash y el menú está cerrado
-	if (menu_allow_background_windows && menu_abierto) {
+	if (menu_allow_background_windows && 
+	  (menu_abierto || overlay_visible_when_menu_closed)
+	) {
+		//printf("redrawing windows on normal_overlay\n");
+		//Conservar estado de tecla pulsada o no para el speech
+		int antes_menu_speech_tecla_pulsada=menu_speech_tecla_pulsada;
 		menu_draw_background_windows_overlay_after_normal();
+		menu_speech_tecla_pulsada=antes_menu_speech_tecla_pulsada;
 	}
  
 
@@ -3595,6 +4872,7 @@ unsigned char menu_escribe_texto_convert_utf(unsigned char prefijo_utf,unsigned 
 
 	if (prefijo_utf==0xD0) {
 		if (caracter==0x90) return 'A';
+		if (caracter==0x92) return 'B';
 		if (caracter==0x9C) return 'M'; //cyrillic capital letter em (U+041C)
 		if (caracter==0xA1) return 'C';
 		if (caracter==0xA8) { //Ш
@@ -4082,7 +5360,7 @@ void menu_escribe_linea_opcion_zxvision(zxvision_window *ventana,int indice,int 
 	char texto[MAX_ESCR_LINEA_OPCION_ZXVISION_LENGTH+1]; 
 	//Le doy 1 byte mas. Por si acaso alguien llama aqui sin contar el byte 0 del final y la lia...
 
-        if (!strcmp(scr_driver_name,"stdout")) {
+        if (!strcmp(scr_new_driver_name,"stdout")) {
 		printf ("%s\n",texto_entrada);
 		scrstdout_menu_print_speech_macro (texto_entrada);
 		return;
@@ -4169,7 +5447,7 @@ void menu_escribe_linea_opcion(int indice,int opcion_actual,int opcion_activada,
 
 	char texto[64];
 
-        if (!strcmp(scr_driver_name,"stdout")) {
+        if (!strcmp(scr_new_driver_name,"stdout")) {
 		printf ("%s\n",texto_entrada);
 		scrstdout_menu_print_speech_macro (texto_entrada);
 		return;
@@ -4238,7 +5516,7 @@ void menu_escribe_linea_opcion(int indice,int opcion_actual,int opcion_activada,
 void menu_escribe_linea_opcion_tabulado_zxvision(zxvision_window *ventana,int indice,int opcion_actual,int opcion_activada,char *texto,int x,int y)
 {
 
-        if (!strcmp(scr_driver_name,"stdout")) {
+        if (!strcmp(scr_new_driver_name,"stdout")) {
                 printf ("%s\n",texto);
                 scrstdout_menu_print_speech_macro (texto);
                 return;
@@ -4514,7 +5792,7 @@ void menu_dibuja_ventana_franja_arcoiris_oscuro(int x, int y, int ancho,int indi
 		}
 
              //en caso de curses o caca, hacerlo con lineas de colores
-                if (!strcmp(scr_driver_name,"curses") || !strcmp(scr_driver_name,"caca") ) {
+                if (!strcmp(scr_new_driver_name,"curses") || !strcmp(scr_new_driver_name,"caca") ) {
 
 
                                 putchar_menu_overlay(x+ancho-5,y,'/',cr[0],ESTILO_GUI_PAPEL_TITULO);
@@ -4579,7 +5857,7 @@ void menu_dibuja_ventana_franja_arcoiris_trozo(int x, int y, int ancho,int franj
 	        }
 
 		//en caso de curses o caca, hacerlo con lineas de colores
-	        if (!strcmp(scr_driver_name,"curses") || !strcmp(scr_driver_name,"caca") ) {
+	        if (!strcmp(scr_new_driver_name,"curses") || !strcmp(scr_new_driver_name,"caca") ) {
         	        //putchar_menu_overlay(x+ancho-6,y,'/',cr[0],ESTILO_GUI_PAPEL_TITULO);
                 	//putchar_menu_overlay(x+ancho-5,y,'/',cr[1],ESTILO_GUI_PAPEL_TITULO);
 	                //putchar_menu_overlay(x+ancho-4,y,'/',cr[2],ESTILO_GUI_PAPEL_TITULO);
@@ -4762,7 +6040,7 @@ void menu_dibuja_ventana(int x,int y,int ancho,int alto,char *titulo)
 	if (!no_dibuja_ventana_muestra_pending_error_message) menu_muestra_pending_error_message();
 	
 	//En el caso de stdout, solo escribimos el texto
-        if (!strcmp(scr_driver_name,"stdout")) {
+        if (!strcmp(scr_new_driver_name,"stdout")) {
                 printf ("%s\n",titulo);
 		scrstdout_menu_print_speech_macro(titulo);
 		printf ("------------------------\n\n");
@@ -4910,9 +6188,9 @@ zxvision_known_window_names zxvision_known_window_names_array[]={
 	{"sprites",menu_debug_view_sprites},
 	{"watches",menu_watches},
 	{"displaypalettes",menu_display_total_palette},
-	{"videoinfo",menu_debug_tsconf_tbblue_videoregisters},
-	{"tsconftbbluespritenav",menu_debug_tsconf_tbblue_spritenav},
-	{"tsconftbbluetilenav",menu_debug_tsconf_tbblue_tilenav},
+	{"videoinfo",menu_debug_tsconf_tbblue_msx_videoregisters},
+	{"tsconftbbluespritenav",menu_debug_tsconf_tbblue_msx_spritenav},
+	{"tsconftbbluetilenav",menu_debug_tsconf_tbblue_msx_tilenav},
 	{"debugcpu",menu_debug_registers},
 	{"helpshowkeyboard",menu_help_show_keyboard},
 
@@ -4958,13 +6236,29 @@ void zxvision_restore_windows_on_startup(void)
 	//Iterar sobre todas
 	int i;
 
+	menu_speech_tecla_pulsada=1; //Si no, envia continuamente los textos de las ventanas a speech
+
+	//Si ha habido un error y mostramos al final
+	int error_restoring_window=0;
+	int error_restoring_window_index;
+
+	//Guardar valores funciones anteriores
+	int antes_menu_overlay_activo=menu_overlay_activo;
+
+	//printf("zxvision_restore_windows_on_startup: menu_overlay_activo: %d\n",menu_overlay_activo);
+
+
 	for (i=0;i<total_restore_window_array_elements;i++) {
 		//printf ("Restoring window %s\n",restore_window_array[i]);
 
 		int indice=zxvision_find_known_window(restore_window_array[i]);
 
 		if (indice<0) {
-			debug_printf (VERBOSE_ERR,"Unknown window to restore: %s",restore_window_array[i]);
+			//Si hay error con alguna ventana desconocida, nos guardamos el error para el final
+			//si no, en medio de la restauracion salta esta ventana y ademas no se redimensiona a zxdesktop
+			error_restoring_window=1;
+			error_restoring_window_index=i;
+			//debug_printf (VERBOSE_ERR,"Unknown window to restore: %s",restore_window_array[i]);
 		}
 
 		else {
@@ -4990,6 +6284,20 @@ void zxvision_restore_windows_on_startup(void)
 
 	zxvision_currently_restoring_windows_on_start=0;
 
+	if (error_restoring_window) {
+		debug_printf (VERBOSE_ERR,"Unknown window to restore: %s",restore_window_array[error_restoring_window_index]);
+	}
+
+	//printf ("End restoring windows\n");
+
+	//Si antes no estaba activo, ponerlo a 0. El cambio a normal_overlay_texto_menu que se hace en el bucle
+	//no lo desactiva
+	//Si no hicieramos esto, al restaurar ventanas y, no siempre, se quedan las ventanas abiertas,
+	//sin dibujar el contenido, pero con los marcos y titulo visible, aunque el menu está cerrado
+	//quiza sucede cuando la maquina al arrancar es tsconf o cualquier otra que no tiene el tamaño de ventana standard de spectrum
+	if (!antes_menu_overlay_activo) {
+		menu_overlay_activo=0;
+	}
 
 }
 
@@ -5138,6 +6446,7 @@ int zxvision_if_window_already_exists(zxvision_window *w)
 }
 
 //Borrar ventana si ya existe
+//Esto se suele hacer cuando se conmuta entre ventanas en background
 void zxvision_delete_window_if_exists(zxvision_window *ventana)
 {
     //IMPORTANTE! no crear ventana si ya existe. Esto hay que hacerlo en todas las ventanas que permiten background.
@@ -5150,8 +6459,14 @@ void zxvision_delete_window_if_exists(zxvision_window *ventana)
 
 		debug_printf (VERBOSE_DEBUG,"Window removed from background");
 
+		menu_speech_tecla_pulsada=1; //Para que no envie a speech la ventana que esta por debajo de la que borramos
+
+		//Al borrar la ventana se leeria la ventana que hay justo debajo
         zxvision_window_delete_this_window(ventana);	
-		
+
+		//Forzar a leer la siguiente ventana que se abra (o sea a la que conmutamos)
+		menu_speech_tecla_pulsada=0;
+	
     }   
 }
 
@@ -5261,6 +6576,8 @@ void zxvision_new_window_no_check_range(zxvision_window *w,int x,int y,int visib
 	w->can_use_all_width=0;
 	//w->applied_can_use_all_width=0;
 
+	w->can_mouse_send_hotkeys=0;
+
 	w->visible_cursor=0;
 	w->cursor_line=0;
 
@@ -5366,6 +6683,18 @@ void zxvision_window_delete_all_windows(void)
 
 
 	} while (ventana!=NULL);
+
+}
+
+
+//Elimina todas las ventanas y borra geometria ventanas
+void zxvision_window_delete_all_windows_and_clear_geometry(void) 
+{
+
+	if (menu_allow_background_windows) zxvision_window_delete_all_windows();
+
+	//Olvidar geometria ventanas
+	util_clear_all_windows_geometry();		
 
 }
 
@@ -5490,6 +6819,10 @@ void zxvision_destroy_window(zxvision_window *w)
 	ventana_tipo_activa=1;
 	zxvision_keys_event_not_send_to_machine=1;
 
+	int antes_menu_speech_tecla_pulsada=menu_speech_tecla_pulsada;
+
+	menu_speech_tecla_pulsada=1; //Para no leer las ventanas de detrás al cerrar la actual
+
 	if (zxvision_current_window!=NULL) {
 		//Dibujar las de detras
 		//printf ("Dibujando ventanas por detras\n");
@@ -5505,6 +6838,8 @@ void zxvision_destroy_window(zxvision_window *w)
 		zxvision_draw_window_contents(zxvision_current_window);
 		//printf ("Dibujando ventana de debajo que ahora es de frente\n");
 	}
+
+	menu_speech_tecla_pulsada=antes_menu_speech_tecla_pulsada;
 
 	//Liberar memoria cuando ya no se use para nada
 	free(w->memory);
@@ -5561,7 +6896,7 @@ z80_byte zxvision_read_keyboard(void)
 	//printf ("antes menu_get_pressed_key\n");
     z80_byte tecla;
 	
-	if (!mouse_pressed_close_window && !mouse_pressed_background_window) {
+	if (!mouse_pressed_close_window && !mouse_pressed_background_window && !mouse_pressed_hotkey_window) {
 		tecla=menu_get_pressed_key();
 
 
@@ -5583,6 +6918,12 @@ z80_byte zxvision_read_keyboard(void)
 		//sleep(5);
 		return 3;
 	}	
+
+	if (mouse_pressed_hotkey_window) {
+		mouse_pressed_hotkey_window=0;
+		//printf ("Retornamos hoykey %c desde zxvision_read_keyboard\n",mouse_pressed_hotkey_window_key);
+		return mouse_pressed_hotkey_window_key;
+	}
 
 	//Si se ha pulsado F4, leer ventana
 	//z80_byte puerto_especial2=255; //   F5 F4 F3 F2 F1
@@ -5699,7 +7040,8 @@ void menu_scanf_cursor_derecha(char *texto,int *pos_cursor_x,int *offset_string,
 //devuelve cadena de texto desde teclado
 //max_length contando caracter 0 del final, es decir, para un texto de 4 caracteres, debemos especificar max_length=5
 //ejemplo, si el array es de 50, se le debe pasar max_length a 50
-int zxvision_scanf(zxvision_window *ventana,char *string,unsigned int max_length,int max_length_shown,int x,int y)
+//volver_si_fuera_foco dice si vuelve al pulsar en linea de edicion pero mas a la izquierda o derecha de esa zona
+int zxvision_scanf(zxvision_window *ventana,char *string,unsigned int max_length,int max_length_shown,int x,int y,int volver_si_fuera_foco)
 {
 
 
@@ -5749,6 +7091,7 @@ int zxvision_scanf(zxvision_window *ventana,char *string,unsigned int max_length
 		//printf ("Despues de espera tecla\n");
 		tecla=zxvision_common_getkey_refresh();	
 		//printf ("tecla leida=%d\n",tecla);
+		int mouse_left_estaba_pulsado=mouse_left;
 		menu_espera_no_tecla();
 
 
@@ -5839,6 +7182,38 @@ int zxvision_scanf(zxvision_window *ventana,char *string,unsigned int max_length
 			offset_string=0;
 			pos_cursor_x=0;
 	
+		}
+
+		//Si pulsado boton
+		//printf ("mouse_left: %d\n",mouse_left_estaba_pulsado);
+		if (volver_si_fuera_foco && tecla==0 && mouse_left_estaba_pulsado) {			
+			//printf ("Pulsado boton izquierdo en zxvision_scanf\n");
+
+			//Si se pulsa mas alla de la zona de edicion
+			//printf("mouse_x %d mouse_y %d x %d y %d\n",menu_mouse_x,menu_mouse_y,x,y);
+
+			
+
+			int mouse_y_ventana=menu_mouse_y-1;
+
+			//printf("mouse_x %d mouse_y_ventana %d x %d y %d max_length_shown %d\n",menu_mouse_x,mouse_y_ventana,x,y,max_length_shown);
+
+			if (mouse_y_ventana==y && 
+			
+				(menu_mouse_x>=x+max_length_shown || menu_mouse_x<x)
+			 
+			){
+				//printf("Pulsado mas a la derecha de la zona de edicion\n");
+
+				//Como si fuera enter , para volver
+				tecla=13;
+			}
+
+			//O si se pulsa en coordenada y por debajo de input pero dentro de ventana
+			if (mouse_y_ventana>y && mouse_y_ventana<y+ventana->visible_height-1) {
+				//printf("pulsado por debajo coordenada Y\n");
+				tecla=13;
+			}
 		}
 
 
@@ -6063,7 +7438,7 @@ void zxvision_generic_message_tooltip(char *titulo, int return_after_print_text,
 	//int linea_cursor=0;
 
 	//En caso de stdout, es mas simple, mostrar texto y esperar tecla
-    if (!strcmp(scr_driver_name,"stdout")) {
+    if (!strcmp(scr_new_driver_name,"stdout")) {
 		//printf ("%d\n",strlen(texto));
 
 
@@ -6081,7 +7456,7 @@ void zxvision_generic_message_tooltip(char *titulo, int return_after_print_text,
     }
 
 	//En caso de simpletext, solo mostrar texto sin esperar tecla
-	if (!strcmp(scr_driver_name,"simpletext")) {
+	if (!strcmp(scr_new_driver_name,"simpletext")) {
                 printf ("-%s-\n",titulo);
                 printf ("\n");
                 printf ("%s\n",texto);
@@ -7351,7 +8726,7 @@ int zxvision_coords_in_front_window(zxvision_window *w,int x,int y)
 void zxvision_draw_window_contents(zxvision_window *w)
 {
 
-	if (!strcmp(scr_driver_name,"stdout")) {
+	if (!strcmp(scr_new_driver_name,"stdout")) {
 		zxvision_draw_window_contents_stdout(w);
 		return;
 	}
@@ -7452,7 +8827,9 @@ void zxvision_draw_window_contents(zxvision_window *w)
 					//printf ("despues de putchar\n");
 
 				if (indice_speech<MAX_BUFFER_SPEECH) {
-					buffer_linea[indice_speech++]=caracter_escribir;
+					//Evitar caracteres fuera de rango
+					//por ejemplo el 255 puede entrar como caracter transparente en ventana de keyboard help
+					if (caracter_escribir<127) buffer_linea[indice_speech++]=caracter_escribir;
 				}
 
 				}
@@ -7475,6 +8852,130 @@ void zxvision_draw_window_contents(zxvision_window *w)
 
 		//printf ("sonda 4\n");
 	}
+
+
+}
+
+
+//Funcion derivada de zxvision_draw_window_contents
+//usada para obtener los hotkeys de mouse
+void zxvision_get_character_at_mouse(zxvision_window *w,int x,int y,overlay_screen *caracter_retorno)
+{
+
+
+	int width,height;
+
+	width=zxvision_get_effective_width(w);
+
+	//Alto del contenido es 2 menos, por el titulo de ventana y la linea por debajo de margen
+	height=zxvision_get_effective_height(w);
+
+
+
+	//for (y=0;y<height;y++) {
+		
+		//for (x=0;x<width;x++) {
+
+			//printf ("x %d y %d\n",x,y);
+		
+			//int xdestination=w->x+x;
+			//int ydestination=(w->y)+1+y; //y +1 porque empezamos a escribir debajo del titulo
+
+			//Ver si caracter final tiene ventana por encima
+			int ventana_encima=0;
+
+			
+			//obtener caracter
+			int out_of_bonds=0;
+
+			int offset_x_final=x+w->offset_x;
+			if (offset_x_final>=w->total_width) out_of_bonds=1;
+
+			int offset_y_final=y+w->offset_y;
+
+			int lower_margin_starts_at=height-(w->lower_margin);
+
+			//printf ("sonda 1\n");
+				
+				//Texto leyenda parte superior
+				if (y<w->upper_margin) {
+					offset_y_final=y;
+				}
+				//Texto leyenda parte inferior
+				else if (y>=lower_margin_starts_at) {
+					int effective_height=height-w->upper_margin-w->lower_margin;
+					int final_y=y-effective_height;
+					offset_y_final=final_y;
+				}
+				else {
+					offset_y_final +=w->lower_margin; //Dado que ya hemos pasado la parte superior, saltar la inferior
+				}
+			//printf ("sonda 2\n");
+
+			if (offset_y_final>=w->total_height) out_of_bonds=1;
+
+			if (!out_of_bonds) {
+
+				//Origen de donde obtener el texto
+				int offset_caracter;
+				
+				offset_caracter=((offset_y_final)*w->total_width)+offset_x_final;
+
+				overlay_screen *caracter;
+				caracter=w->memory;
+				caracter=&caracter[offset_caracter];
+
+				z80_byte caracter_escribir=caracter->caracter;
+
+				int tinta=caracter->tinta;
+				int papel=caracter->papel;
+
+				//Si esta linea cursor visible
+				int linea_cursor=w->cursor_line;
+				//tener en cuenta desplazamiento de margenes superior e inferior
+				linea_cursor +=w->lower_margin;
+				linea_cursor +=w->upper_margin;
+				if (w->visible_cursor && linea_cursor==offset_y_final) {
+					tinta=ESTILO_GUI_TINTA_SELECCIONADO;
+					papel=ESTILO_GUI_PAPEL_SELECCIONADO;
+				} 
+			
+				//Chapucilla para evitar que las ventanas en background sobreescriban a la current
+				//if (!zxvision_coords_in_front_window(w,xdestination,ydestination)) {
+
+				//Chapucilla para evitar que las ventanas en background sobreescriban a cualquiera que haya encima
+				if (!ventana_encima) {
+				//if (!zxvision_coords_in_superior_windows(w,xdestination,ydestination)) {
+
+				//printf ("antes de putchar\n");
+
+				caracter_retorno->caracter=caracter_escribir;
+
+				caracter_retorno->tinta=caracter->tinta;
+				caracter_retorno->papel=caracter->papel;
+				caracter_retorno->parpadeo=caracter->parpadeo;
+				return;
+				//putchar_menu_overlay_parpadeo(xdestination,ydestination,
+				//	caracter_escribir,tinta,papel,caracter->parpadeo);
+
+					//printf ("despues de putchar\n");
+
+
+				}
+			}
+
+			//Fuera de rango. Retornamos 0
+			else {
+				//printf ("fuera de rango\n");
+				if (!ventana_encima) {
+					caracter_retorno->caracter=0;
+				}
+			}
+
+
+	caracter_retorno->caracter=0;
+
+	
 
 
 }
@@ -7717,7 +9218,7 @@ Es lo que pasa con otras ventanas de texto, que no se amplía el ancho total al 
 }
 
 
-
+//Hacer putpixel sin tener en cuenta zoom_x ni y. Usado en help keyboard
 void zxvision_putpixel_no_zoom(zxvision_window *w,int x,int y,int color)
 {
 
@@ -7745,22 +9246,24 @@ Es lo que pasa con otras ventanas de texto, que no se amplía el ancho total al 
 	int window_pixel_start_x=(w->x)*menu_char_width*zoom_x;
 	int window_pixel_start_y=((w->y)+1)*8*zoom_y;
 
-	//int window_pixel_final_x=window_pixel_start_x+((w->visible_width)-zxvision_get_minus_width_byscrollvbar(w))*menu_char_width;
-	//int window_pixel_final_y=window_pixel_start_y+((w->visible_height)-2)*8;
+	int window_pixel_final_x=window_pixel_start_x+((w->visible_width)-zxvision_get_minus_width_byscrollvbar(w))*menu_char_width*zoom_x;
+	int window_pixel_final_y=window_pixel_start_y+((w->visible_height)-2)*8*zoom_y;
 
 	//Obtener coordenada x,y final donde va a parar
-	int xfinal=x+window_pixel_start_x-(w->offset_x)*menu_char_width;
-	int yfinal=y+window_pixel_start_y-(w->offset_y)*8;
+	int xfinal=x+window_pixel_start_x-(w->offset_x)*menu_char_width*zoom_x;
+	int yfinal=y+window_pixel_start_y-(w->offset_y)*8*zoom_y;
 
 
-	int total_width_window=((w->visible_width)-zxvision_get_minus_width_byscrollvbar(w))*menu_char_width*zoom_x;
-	int total_height_window=((w->visible_height)-2)*8*zoom_y;
+	//int total_width_window=((w->visible_width)-zxvision_get_minus_width_byscrollvbar(w))*menu_char_width*zoom_x;
+	//int total_height_window=((w->visible_height)-2)*8*zoom_y;
 
 
 
-	//Ver si esta dentro de rango
-	if (x>=0 && x<total_width_window && y>=0 && y<=total_height_window) {
-	//if (xfinal>=window_pixel_start_x && xfinal<window_pixel_final_x && yfinal>=window_pixel_start_y && yfinal<window_pixel_final_y*/) {
+	//Ver si esta dentro de rango. Metodo nuevo pero que no va bien
+	//if (x>=0 && x<total_width_window && y>=0 && y<=total_height_window) {
+	
+	//Antiguo metodo que tiene en cuenta los offsets
+	if (xfinal>=window_pixel_start_x && xfinal<window_pixel_final_x && yfinal>=window_pixel_start_y && yfinal<window_pixel_final_y) {
 
 		//Chapucilla para evitar que las ventanas en background sobreescriban a las de arriba
 		//if (!zxvision_coords_in_front_window(w,xfinal/menu_char_width,yfinal/8)) {		
@@ -8016,21 +9519,28 @@ void zxvision_handle_mouse_ev_switch_back_wind(zxvision_window *ventana_pulsada)
 			
 }
 
-int zxvision_if_mouse_in_zlogo_desktop(void)
+int zxvision_if_mouse_in_zlogo_or_buttons_desktop(void)
 {
-	//Ver si estamos por la zona del logo en el ext desktop
+	//Ver si estamos por la zona del logo en el ext desktop o de los botones
 	if (screen_ext_desktop_enabled && scr_driver_can_ext_desktop() ) {
-		int xlogo,ylogo;
-		menu_ext_desktop_get_logo_coords(&xlogo,&ylogo);
 
 		int mouse_pixel_x,mouse_pixel_y;
-
-
 		menu_calculate_mouse_xy_absolute_interface_pixel(&mouse_pixel_x,&mouse_pixel_y);
 
 		//multiplicamos por zoom
 		mouse_pixel_x *=zoom_x;
-		mouse_pixel_y *=zoom_y;
+		mouse_pixel_y *=zoom_y;		
+
+		/*
+		int xlogo,ylogo;
+		menu_ext_desktop_get_logo_coords(&xlogo,&ylogo);
+
+		
+
+
+		
+
+
 
 		//tamaño del logo
 		int ancho_logo=ZESARUX_ASCII_LOGO_ANCHO;
@@ -8041,11 +9551,163 @@ int zxvision_if_mouse_in_zlogo_desktop(void)
 		if (mouse_pixel_x>=xlogo && mouse_pixel_x<xlogo+ancho_logo &&
 			mouse_pixel_y>=ylogo && mouse_pixel_y<xlogo+alto_logo
 		) {
-			//printf ("Pulsado en el logo del ext desktop\n");
+			printf ("Pulsado en el logo del ext desktop\n");
 
 			return 1;
 		}
+		*/
+
+		//Si esta en zona botones de zx desktop. Y si estan habilitados
+
+		if (menu_zxdesktop_buttons_enabled.v) {
+			int ancho_boton,alto_boton,total_botones,xinicio_botones,xfinal_botones;
+			menu_ext_desktop_buttons_get_geometry(&ancho_boton,&alto_boton,&total_botones,&xinicio_botones,&xfinal_botones);
+
+			if (mouse_pixel_x>=xinicio_botones && mouse_pixel_x<xfinal_botones &&
+				mouse_pixel_y>=0 && mouse_pixel_y<alto_boton
+			) {
+				//printf ("Pulsado en zona botones del ext desktop\n");
+
+				//en que boton?
+				int numero_boton=(mouse_pixel_x-xinicio_botones)/ancho_boton;
+				//printf("boton pulsado: %d\n",numero_boton);
+				menu_pressed_zxdesktop_button_which=numero_boton;
+
+				return 1;
+			}	
+		}	
+
+
+		//Si esta en zona de iconos lower de zx desktop. Y si estan habilitados
+
+		if (menu_zxdesktop_buttons_enabled.v) {
+			int ancho_boton,alto_boton,xinicio_botones,xfinal_botones,yinicio_botones;
+			menu_ext_desktop_lower_icons_get_geometry(&ancho_boton,&alto_boton,NULL,&xinicio_botones,&xfinal_botones,&yinicio_botones);
+
+			if (mouse_pixel_x>=xinicio_botones && mouse_pixel_x<xfinal_botones &&
+				mouse_pixel_y>=yinicio_botones && mouse_pixel_y<yinicio_botones+alto_boton
+			) {
+				//printf ("Pulsado en zona lower icons del ext desktop\n");
+
+				//en que boton?
+				int numero_boton=(mouse_pixel_x-xinicio_botones)/ancho_boton;
+				//printf("boton pulsado: %d\n",numero_boton);
+
+				//Buscar indice array
+				int indice_array=zxdesktop_lowericon_find_index(numero_boton);
+
+				if (indice_array>=0) {
+
+					
+
+						//printf ("boton esta visible\n");
+
+
+						menu_pressed_zxdesktop_lower_icon_which=numero_boton;
+
+						return 1;
+				}
+				else {
+					//printf ("boton NO esta visible\n");
+				}
+				
+			}	
+		}			
 	}
+	return 0;
+}
+
+
+z80_byte zxvision_get_char_at_position(zxvision_window *w,int x,int y,int *inverso)
+{
+
+	//Asumimos
+	*inverso=0;
+
+	overlay_screen caracter;
+
+	zxvision_get_character_at_mouse(w,x,y,&caracter);
+
+	//printf ("Caracter: %c (%d)\n",(caracter.caracter>31 && caracter.caracter<126 ? caracter.caracter : '.') ,caracter.caracter);
+
+	//Interpretar si es inverso
+	if (caracter.caracter>=32 && caracter.caracter<=126) {
+		if (caracter.tinta==ESTILO_GUI_PAPEL_NORMAL && caracter.papel==ESTILO_GUI_TINTA_NORMAL) {
+			//printf ("Caracter es inverso\n");
+			*inverso=1;
+				
+		}
+	}
+			
+
+	return caracter.caracter;
+}
+
+z80_byte zxvision_get_key_hotkey(zxvision_window *w,int x,int y)
+{
+
+
+	//int xorig=x;
+
+	int inverso;
+			/*
+-Hot key ratón:
+
+-buscar a la izquierda hasta x cero o espacio
+-de ahí hacia la derecha hasta espacio, final de ancho o : puntos
+-contar caracteres inverso: si solo 1, enviar Tecla. Si es más de 1 puede ser “enter” y por tanto ignorar. O si es “ent” enviar 13
+
+-cuidado con Y siendo mayor que el rango			
+			*/
+
+			//Ir hacia inicio del todo a la izquierda
+
+
+
+	for (;x>=0;x--) {
+
+	
+		z80_byte caracter=zxvision_get_char_at_position(w,x,y,&inverso);
+
+		//Espacio, salir
+		if (caracter==32) break;
+
+	}
+
+	x++;
+
+	//de ahí hacia la derecha hasta espacio, final de ancho o : puntos
+	//-contar caracteres inverso: si solo 1, enviar Tecla. Si es más de 1 puede ser “enter” y por tanto ignorar. O si es “ent” enviar 13
+
+	int total_inversos=0;
+
+	z80_byte caracter_inverso=0;
+
+	for (;x<=w->visible_width;x++) {
+
+
+		z80_byte caracter=zxvision_get_char_at_position(w,x,y,&inverso);
+
+		//printf ("X %d Y %d car: %c inverso: %d\n",x,y,caracter,inverso);
+
+		//Interpretar si es inverso
+		if (inverso) {
+			total_inversos++;
+			caracter_inverso=caracter;
+		}
+
+		//Espacio, salir
+		if (caracter==32 || caracter==':') break;
+
+	}					
+
+	if (total_inversos==1 && caracter_inverso!=0) {
+		//printf ("Detectada tecla hotkey: %c\n",caracter_inverso);
+		return caracter_inverso;
+	}
+
+			
+
 	return 0;
 }
 
@@ -8103,7 +9765,9 @@ void zxvision_handle_mouse_events(zxvision_window *w)
 			}
 
 			//Ver si hemos pulsado por la zona del logo en el ext desktop
-			else if (zxvision_if_mouse_in_zlogo_desktop()) {
+			else if (zxvision_if_mouse_in_zlogo_or_buttons_desktop()) {
+
+				menu_draw_ext_desktop_dibujar_boton_or_lower_icon_pulsado();
 
 				menu_pressed_open_menu_while_in_menu.v=1;
 				salir_todos_menus=1;
@@ -8207,8 +9871,31 @@ void zxvision_handle_mouse_events(zxvision_window *w)
 					if (last_x_mouse_clicked==w->visible_width-1 && menu_hide_minimize_button.v==0 && w->can_be_resized) {
 						putchar_menu_overlay(w->x+w->visible_width-1,w->y,menu_retorna_caracter_minimizar(w),ESTILO_GUI_PAPEL_TITULO,ESTILO_GUI_TINTA_TITULO);
 					}
+
 				}
 			}
+
+
+			//Si se pulsa en ventana y alrededor tecla hotkey
+			/*
+			if (w->can_mouse_send_hotkeys && last_y_mouse_clicked>0) {
+				
+
+				z80_byte caracter=zxvision_get_key_hotkey(w,last_x_mouse_clicked,last_y_mouse_clicked-1);
+				
+				if (caracter>=32 && caracter<=126) {
+
+						mouse_pressed_hotkey_window=1;
+						mouse_pressed_hotkey_window_key=caracter;
+					
+				}
+
+				else {
+					mouse_pressed_hotkey_window=0;
+				}
+			}
+			*/
+					
 
 			//Pulsado en botones Scroll horizontal
 			if (zxvision_if_horizontal_scroll_bar(w)) {
@@ -8314,6 +10001,32 @@ void zxvision_handle_mouse_events(zxvision_window *w)
 			}
 
 
+			//Si se pulsa en ventana y alrededor tecla hotkey
+			
+			if (w->can_mouse_send_hotkeys && si_menu_mouse_en_ventana() && last_y_mouse_clicked>0 && last_y_mouse_clicked<w->visible_height-1) {
+
+				//printf ("visible height: %d\n",w->visible_height);
+				debug_printf (VERBOSE_DEBUG,"Looking for hotkeys at mouse position");
+				
+
+				z80_byte caracter=zxvision_get_key_hotkey(w,last_x_mouse_clicked,last_y_mouse_clicked-1);
+				
+				if (caracter>=32 && caracter<=126) {
+						debug_printf (VERBOSE_DEBUG,"Sending hotkey from mouse: %c",caracter);
+						mouse_pressed_hotkey_window=1;
+						mouse_pressed_hotkey_window_key=caracter;
+
+						return;
+					
+				}
+
+				else {
+					mouse_pressed_hotkey_window=0;
+				}
+			}	
+					
+
+
 
 		//Si se pulsa dentro de cualquier otra ventana o en logo Z. Esto solo cuando se libera boton
 		//Y si no tenemos el foco
@@ -8328,7 +10041,7 @@ void zxvision_handle_mouse_events(zxvision_window *w)
 
 			ventana_pulsada=zxvision_coords_in_below_windows(zxvision_current_window,absolute_mouse_x,absolute_mouse_y);			
 			
-			if (ventana_pulsada!=NULL || zxvision_if_mouse_in_zlogo_desktop()  /*&& !zxvision_keys_event_not_send_to_machine*/) {
+			if (ventana_pulsada!=NULL || zxvision_if_mouse_in_zlogo_or_buttons_desktop()  /*&& !zxvision_keys_event_not_send_to_machine*/) {
 				debug_printf (VERBOSE_DEBUG,"Clicked inside other window or zlogo. Events are not sent to emulated machine");
 				zxvision_keys_event_not_send_to_machine=1;
 				ventana_tipo_activa=1;
@@ -8851,6 +10564,123 @@ void zxvision_simple_progress_window(char *titulo, int (*funcioncond) (zxvision_
         zxvision_destroy_window(&ventana);
 }
 
+
+
+void zxvision_rearrange_background_windows(void)
+{
+
+	//printf("rearrange windows\n");
+	//debug_exec_show_backtrace();
+
+	//Por si acaso 
+	if (!menu_allow_background_windows) return;
+
+	int origen_x=menu_origin_x();
+
+	//printf ("origen_x: %d\n",origen_x);
+
+	//Si abrir ventanas en zxdesktop o no, contar todo el ancho visible o bien solo el de zxdesktop
+
+	int ancho;
+
+	if (menu_ext_desktop_enabled_place_menu() ) {
+		//ancho=screen_ext_desktop_width/menu_char_width/menu_gui_zoom;
+		ancho=menu_get_width_characters_ext_desktop();
+	}
+
+	else ancho=scr_get_menu_width();
+
+	//printf ("ancho: %d\n",ancho);
+
+	int xfinal=origen_x+ancho;
+
+
+	int alto=scr_get_menu_height();
+
+	//printf ("alto: %d\n",alto);
+
+	int yfinal=alto;
+
+
+	//Empezamos una a una, desde la de mas abajo
+	zxvision_window *ventana;
+
+	ventana=zxvision_current_window;
+
+	if (ventana==NULL) return;
+
+	ventana=zxvision_find_first_window_below_this(ventana);
+
+	if (ventana==NULL) return;
+
+	int origen_y=0;
+
+	//Si hay botones parte superior zxdesktop, origen_y lo incrementamos
+	if (screen_ext_desktop_enabled && scr_driver_can_ext_desktop() && menu_zxdesktop_buttons_enabled.v) {
+		origen_y=EXT_DESKTOP_BUTTONS_TOTAL_SIZE/8;
+	}
+
+	//Y de ahi para arriba
+	int x=origen_x;
+	int y=origen_y;
+
+	int alto_maximo_en_fila=0;
+
+	int cambio_coords_origen=0;
+
+	while (ventana!=NULL) {
+
+		debug_printf (VERBOSE_DEBUG,"Setting window %s to %d,%d",ventana->window_title,x,y);
+
+		ventana->x=x;
+		ventana->y=y;
+
+		//Y guardar la geometria
+		util_add_window_geometry_compact(ventana);
+
+		if (ventana->visible_height>alto_maximo_en_fila) alto_maximo_en_fila=ventana->visible_height;
+
+		int ancho_antes=ventana->visible_width;
+
+		ventana=ventana->next_window;
+		if (ventana!=NULL) {
+			x +=ancho_antes;
+			//printf ("%d %d %d\n",x,ventana->visible_width,ancho);
+			if (x+ventana->visible_width>xfinal) {
+
+				//printf ("Next column\n");
+				//Siguiente fila
+				x=origen_x;
+
+				y+=alto_maximo_en_fila;
+
+				alto_maximo_en_fila=0;
+
+
+			}
+
+			//Si volver al principio
+			if (y+ventana->visible_height>yfinal) {
+
+				debug_printf (VERBOSE_DEBUG,"Restart x,y coordinates");
+
+				//alternamos coordenadas origen, para darles cierto "movimiento", 4 caracteres derecha y abajo
+				cambio_coords_origen ^=4;
+
+				x=origen_x + cambio_coords_origen;
+				y=origen_y + cambio_coords_origen;
+						
+			}
+		}
+	}
+
+	cls_menu_overlay();
+}
+
+
+
+
+
 //Retorna el item i
 menu_item *menu_retorna_item(menu_item *m,int i)
 {
@@ -8873,7 +10703,7 @@ menu_item *menu_retorna_item(menu_item *m,int i)
 }
 
 
-//Retorna el item i
+//Retorna el item i segun posicion x,y del mouse
 menu_item *menu_retorna_item_tabulado_xy(menu_item *m,int x,int y,int *linea_buscada)
 {
 
@@ -8944,7 +10774,7 @@ int si_menu_mouse_en_ventana(void)
 int menu_allows_mouse(void)
 {
 	//Primero, fbdev no permite raton
-	if (!strcmp(scr_driver_name,"fbdev")) return 0;
+	if (!strcmp(scr_new_driver_name,"fbdev")) return 0;
 
 	//Luego, el resto de los drivers completos (xwindows, sdl, cocoa, ...)
 
@@ -9239,10 +11069,22 @@ z80_byte menu_da_todas_teclas(void)
 		acumulado |=1;
 	}	
 
+	//Boton hotkey ventana
+	if (mouse_pressed_hotkey_window) {
+		//printf ("pulsado hotkey desde menu_da_todas_teclas\n");
+		acumulado &=(255-1);
+		//NOTA: indicamos aqui que ha habido pulsacion de tecla,
+		//dado que partimos de mascara 255, poner ese bit a 0 le decimos que hay pulsada una tecla
+		//Misterio: porque con mouse_pressed_close_window y mouse_pressed_background_window le hago OR 1? no tiene sentido....
+	}	
+
 
 	//no ignorar disparo
 	z80_byte valor_joystick=(puerto_especial_joystick&31)^255;
+	
 	acumulado=acumulado & valor_joystick;
+
+	//printf ("acumulado 0 %d\n",acumulado);
 
 	//contar tambien botones mouse
 	if (si_menu_mouse_activado()) {
@@ -9250,22 +11092,30 @@ z80_byte menu_da_todas_teclas(void)
 		//quiza pareceria que no hay problema en leerlo dos veces, el problema es con la variable mouse_leido,
 		//que al llamarla aqui la segunda vez, siempre dira que el mouse no se ha movido
 
+		//printf("mouse left %d mouse_right %d mouse_movido %d\n",mouse_left,mouse_right,mouse_movido);
+
 		z80_byte valor_botones_mouse=(mouse_left | mouse_right | mouse_movido)^255;
 		acumulado=acumulado & valor_botones_mouse;
 	}
 
+	//printf ("acumulado 00 %d\n",acumulado);
+
 	//Contar también algunas teclas solo menu:
 	z80_byte valor_teclas_menus=(menu_backspace.v|menu_tab.v)^255;
+	//printf("valor_teclas_menus: %d\n",valor_teclas_menus);
 	acumulado=acumulado & valor_teclas_menus;
 
 
 
-  
+	//printf("acumulado: %d\n",acumulado);
 
-	if ( (acumulado&MENU_PUERTO_TECLADO_NINGUNA) !=MENU_PUERTO_TECLADO_NINGUNA) return acumulado;
+	if ( (acumulado&MENU_PUERTO_TECLADO_NINGUNA) !=MENU_PUERTO_TECLADO_NINGUNA) {
+		//printf ("Retornamos acumulado en menu_da_todas_teclas: %d\n",acumulado);
+		return acumulado;
+	}
 
 	
-
+	//printf ("Retornamos acumulado en menu_da_todas_teclas_2: %d\n",acumulado);
 	return acumulado;
 
 
@@ -10352,7 +12202,7 @@ int menu_dibuja_menu(int *opcion_inicial,menu_item *item_seleccionado,menu_item 
 	//Primera vez decir selected item. Luego solo el nombre del item
 	menu_active_item_primera_vez=1;
 
-    if (!strcmp(scr_driver_name,"stdout") ) {
+    if (!strcmp(scr_new_driver_name,"stdout") ) {
 
 		//Para que se envie a speech
 		//TODO: el texto se muestra dos veces en consola: 
@@ -10433,6 +12283,33 @@ int menu_dibuja_menu(int *opcion_inicial,menu_item *item_seleccionado,menu_item 
 
 	x=menu_center_x()-ancho/2;
 	y=menu_center_y()-alto/2;
+
+	//Si se abre desde botones de menu
+	if (direct_menus_button_pressed.v) {
+
+		//No lo desactivamos, así todos los menus que se abran dependiendo de este menu, tambien se posicionaran debajo del boton 
+		//direct_menus_button_pressed.v=0;
+
+		//printf ("Menu opened from direct buttons\n");
+
+		int alto_boton;
+		int ancho_boton;
+		menu_ext_desktop_buttons_get_geometry(&ancho_boton,&alto_boton,NULL,NULL,NULL);
+
+		//Ajustar coordenada y
+		int alto_texto=8*menu_gui_zoom*zoom_y;
+		y=(alto_boton/alto_texto)+1;
+
+		//Ajustar coordenada x
+		int origen_x=menu_get_origin_x_zxdesktop_aux(1);
+
+		int offset_x=direct_menus_button_pressed_which*ancho_boton;
+		int ancho_texto=menu_char_width*menu_gui_zoom*zoom_x;
+		x=origen_x+(offset_x/ancho_texto);
+
+		//Reajustar x por si se ha salido
+		if (x+ancho>scr_get_menu_width()) x=scr_get_menu_width()-ancho;
+	}
 
 	int ancho_visible=ancho;
 	int alto_visible=alto;
@@ -11367,7 +13244,7 @@ void menu_add_item_menu_inicial_format(menu_item **p,int tipo_opcion,t_menu_func
 
 }
 
-char *string_esc_go_back="ESC always go back to the previous menu, or return back to the emulated machine if you are in main menu";
+char *string_esc_go_back="ESC always goes back to the previous menu, or return back to the emulated machine if you are in main menu";
 
 //Agrega item de ESC normalmente.  En caso de aalib y consola es con tecla TAB
 void menu_add_ESC_item(menu_item *array_menu_item)
@@ -11443,20 +13320,20 @@ int menu_cond_zx8081_no_realvideo(void)
 
 int menu_cond_curses(void)
 {
-	if (!strcmp(scr_driver_name,"curses")) return 1;
+	if (!strcmp(scr_new_driver_name,"curses")) return 1;
 	return 0;
 }
 
 int menu_cond_stdout(void)
 {
-        if (!strcmp(scr_driver_name,"stdout")) return 1;
+        if (!strcmp(scr_new_driver_name,"stdout")) return 1;
 
         return 0;
 }
 
 int menu_cond_simpletext(void)
 {
-        if (!strcmp(scr_driver_name,"simpletext")) return 1;
+        if (!strcmp(scr_new_driver_name,"simpletext")) return 1;
 
         return 0;
 }
@@ -11467,7 +13344,7 @@ int menu_cond_simpletext(void)
 int menu_cond_no_stdout(void)
 {
         //esto solo se permite en drivers xwindows, caca, aa, curses. NO en stdout
-        if (!strcmp(scr_driver_name,"stdout")) return 0;
+        if (!strcmp(scr_new_driver_name,"stdout")) return 0;
         return 1;
 }
 */
@@ -11475,8 +13352,8 @@ int menu_cond_no_stdout(void)
 int menu_cond_no_curses_no_stdout(void)
 {
         //esto solo se permite en drivers xwindows, caca, aa. NO en curses ni stdout
-        if (!strcmp(scr_driver_name,"curses")) return 0;
-        if (!strcmp(scr_driver_name,"stdout")) return 0;
+        if (!strcmp(scr_new_driver_name,"curses")) return 0;
+        if (!strcmp(scr_new_driver_name,"stdout")) return 0;
 	return 1;
 }
 
@@ -11824,26 +13701,30 @@ void menu_audio_settings(MENU_ITEM_PARAMETERS)
 
         do {
 
+				
 
-					menu_add_item_menu_inicial(&array_menu_audio_settings,"AY ~~Registers",MENU_OPCION_NORMAL,menu_ay_registers,menu_cond_ay_chip);
+					menu_add_item_menu_inicial(&array_menu_audio_settings,"Audio Chip Registers",MENU_OPCION_NORMAL,menu_ay_registers,menu_cond_ay_or_sn_chip);
 					menu_add_item_menu_shortcut(array_menu_audio_settings,'r');
 
 
-					menu_add_item_menu_format(array_menu_audio_settings,MENU_OPCION_NORMAL,menu_ay_mixer,menu_cond_ay_chip,"AY Mi~~xer");
-					menu_add_item_menu_shortcut(array_menu_audio_settings,'x');
 
-					menu_add_item_menu_format(array_menu_audio_settings,MENU_OPCION_NORMAL,menu_ay_pianokeyboard,menu_cond_ay_chip,"AY P~~iano");
+
+					menu_add_item_menu_format(array_menu_audio_settings,MENU_OPCION_NORMAL,menu_ay_pianokeyboard,menu_cond_ay_or_sn_chip,"Audio Chip Piano");
 					menu_add_item_menu_shortcut(array_menu_audio_settings,'i');
 					menu_add_item_menu_tooltip(array_menu_audio_settings,"Shows a piano keyboard with the notes being played on the AY Chip");
                 	menu_add_item_menu_ayuda(array_menu_audio_settings,"Shows a piano keyboard with the notes being played on the AY Chip");
 
 
 		if (si_complete_video_driver() ) {
-					menu_add_item_menu_format(array_menu_audio_settings,MENU_OPCION_NORMAL,menu_ay_partitura,menu_cond_ay_chip,"AY ~~Sheet");
+					menu_add_item_menu_format(array_menu_audio_settings,MENU_OPCION_NORMAL,menu_ay_partitura,menu_cond_ay_or_sn_chip,"Audio Chip Sheet");
 					menu_add_item_menu_shortcut(array_menu_audio_settings,'s');
 
 		}
+
+					menu_add_item_menu_format(array_menu_audio_settings,MENU_OPCION_NORMAL,menu_audio_chip_info,menu_cond_ay_or_sn_chip,"Audio Chip Info");
 					
+					menu_add_item_menu_format(array_menu_audio_settings,MENU_OPCION_NORMAL,menu_ay_mixer,menu_cond_ay_chip,"AY Mi~~xer");
+					menu_add_item_menu_shortcut(array_menu_audio_settings,'x');					
 
 					menu_add_item_menu_format(array_menu_audio_settings,MENU_OPCION_NORMAL,menu_audio_new_ayplayer,NULL,"AY ~~Player");
 					menu_add_item_menu_tooltip(array_menu_audio_settings,"Opens the .ay file player menu");
@@ -13068,10 +14949,26 @@ void menu_z88_slots(MENU_ITEM_PARAMETERS)
 
 
 //Retorna 0 si ok
-//Retorna -1 si fuera de rango
+//Retorna -1 si no hay cambio de variable
 //Modifica valor de variable
 int menu_hardware_advanced_input_value(int minimum,int maximum,char *texto,int *variable)
 {
+	
+	int variable_copia;
+	variable_copia=*variable;
+
+	menu_ventana_scanf_numero_enhanced(texto,&variable_copia,4,+1,minimum,maximum,1);
+
+	if (variable_copia==(*variable)) {
+		//printf("no hay cambios\n");
+		return -1;
+	}
+
+	else {
+		*variable=variable_copia;
+		return 0;
+	}
+	/*
 
 	int valor;
 
@@ -13091,6 +14988,7 @@ int menu_hardware_advanced_input_value(int minimum,int maximum,char *texto,int *
 
 	*variable=valor;
 	return 0;
+	*/
 
 
 }
@@ -14535,25 +16433,7 @@ void menu_zxuno_spi_flash_file(MENU_ITEM_PARAMETERS)
 
 
 
-void menu_storage_zxpand_enable(MENU_ITEM_PARAMETERS)
-{
-	if (zxpand_enabled.v) zxpand_disable();
-	else zxpand_enable();
-}
 
-void menu_storage_zxpand_root_dir(MENU_ITEM_PARAMETERS)
-{
-
-	int ret;
-	ret=menu_storage_string_root_dir(zxpand_root_dir);
-
-	//Si sale con ESC
-	if (ret==0) {
-       	//directorio zxpand vacio
-        zxpand_cwd[0]=0;
-	}		
-
-}
 
 
 void menu_timexcart_load(MENU_ITEM_PARAMETERS)
@@ -15441,7 +17321,7 @@ void menu_timexcart(MENU_ITEM_PARAMETERS)
 
 
 
-#ifdef USE_PTHREADS
+#ifndef NETWORKING_DISABLED
 
 
 // Para el thread de descompresion de zip
@@ -15612,25 +17492,7 @@ int menu_storage_string_root_dir(char *string_root_dir)
 }
 
 
-void menu_ql_microdrive_floppy(MENU_ITEM_PARAMETERS)
-{
-	ql_microdrive_floppy_emulation ^=1;
-}
 
-void menu_ql_mdv1(MENU_ITEM_PARAMETERS)
-{
-	menu_storage_string_root_dir(ql_mdv1_root_dir);
-}
-
-void menu_ql_mdv2(MENU_ITEM_PARAMETERS)
-{
-	menu_storage_string_root_dir(ql_mdv2_root_dir);
-}
-
-void menu_ql_flp1(MENU_ITEM_PARAMETERS)
-{
-	menu_storage_string_root_dir(ql_flp1_root_dir);
-}
 
 
 void menu_storage_esxdos_traps_emulation(MENU_ITEM_PARAMETERS)
@@ -15934,6 +17796,154 @@ void menu_plusthreedisk(MENU_ITEM_PARAMETERS)
 
 }
 
+//Comun para coleco y msx
+void menu_msxcart_load(MENU_ITEM_PARAMETERS)
+{
+
+        char *filtros[3];
+
+		if (MACHINE_IS_COLECO) {
+        	filtros[0]="col";
+			filtros[1]=0;
+		}
+
+		else if (MACHINE_IS_SG1000) {
+        	filtros[0]="sg";
+			//Aunque extensión SC es de la sega sc3000, algunos cartuchos medio funcionan
+			filtros[1]="sc";
+			filtros[2]=0;
+		}		
+
+		else {
+			filtros[0]="rom";
+			filtros[1]=0;
+		}
+
+        
+
+
+
+        //guardamos directorio actual
+        char directorio_actual[PATH_MAX];
+        getcwd(directorio_actual,PATH_MAX);
+
+        //Obtenemos directorio de ultimo archivo
+        //si no hay directorio, vamos a rutas predefinidas
+        if (last_msx_cart[0]==0) menu_chdir_sharedfiles();
+
+        else {
+                char directorio[PATH_MAX];
+                util_get_dir(last_msx_cart,directorio);
+                //printf ("strlen directorio: %d directorio: %s\n",strlen(directorio),directorio);
+
+                //cambiamos a ese directorio, siempre que no sea nulo
+                if (directorio[0]!=0) {
+                        debug_printf (VERBOSE_INFO,"Changing to last directory: %s",directorio);
+                        menu_filesel_chdir(directorio);
+                }
+        }
+
+
+        int ret;
+
+        ret=menu_filesel("Select Cartridge",filtros,last_msx_cart);
+        //volvemos a directorio inicial
+		menu_filesel_chdir(directorio_actual);
+
+
+        if (ret==1) {
+		//                sprintf (last_msx_cart,"%s",msxcart_load_file);
+
+                //sin overlay de texto, que queremos ver las franjas de carga con el color normal (no apagado)
+                reset_menu_overlay_function();
+
+
+				if (MACHINE_IS_MSX) {
+                        msx_insert_rom_cartridge(last_msx_cart);
+				}
+				else if (MACHINE_IS_SG1000) {
+					sg1000_insert_rom_cartridge(last_msx_cart);
+				}
+
+				else if (MACHINE_IS_SVI) {
+					svi_insert_rom_cartridge(last_msx_cart);
+				}
+
+				else {
+					coleco_insert_rom_cartridge(last_msx_cart);
+				}
+
+                //restauramos modo normal de texto de menu
+                set_menu_overlay_function(normal_overlay_texto_menu);
+
+                //Y salimos de todos los menus
+                salir_todos_menus=1;
+        }
+
+
+}
+
+
+void menu_msxcart_eject(MENU_ITEM_PARAMETERS)
+{
+
+	if (MACHINE_IS_COLECO) coleco_empty_romcartridge_space();
+	else if (MACHINE_IS_SG1000) sg1000_empty_romcartridge_space();
+	else if (MACHINE_IS_SVI) svi_empty_romcartridge_space();
+	else msx_empty_romcartridge_space();
+	menu_generic_message("Eject Cartridge","OK. Cartridge ejected");
+}
+
+void menu_msxcart(MENU_ITEM_PARAMETERS)
+{
+
+        menu_item *array_menu_msxcart;
+        menu_item item_seleccionado;
+        int retorno_menu;
+
+        do {
+
+
+                menu_add_item_menu_inicial(&array_menu_msxcart,"~~Load Cartridge",MENU_OPCION_NORMAL,menu_msxcart_load,NULL);
+                menu_add_item_menu_shortcut(array_menu_msxcart,'l');
+                menu_add_item_menu_tooltip(array_menu_msxcart,"Load msx Cartridge");
+                menu_add_item_menu_ayuda(array_menu_msxcart,"Supported msx cartridge formats on load:\n"
+                                        "DCK");
+
+                menu_add_item_menu(array_menu_msxcart,"~~Eject Cartridge",MENU_OPCION_NORMAL,menu_msxcart_eject,NULL);
+                menu_add_item_menu_shortcut(array_menu_msxcart,'e');
+                menu_add_item_menu_tooltip(array_menu_msxcart,"Eject Cartridge");
+                menu_add_item_menu_ayuda(array_menu_msxcart,"Eject Cartridge");
+
+
+     				menu_add_item_menu(array_menu_msxcart,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+                menu_add_ESC_item(array_menu_msxcart);
+
+				char window_title[64];
+
+				if (MACHINE_IS_COLECO) strcpy(window_title,"Coleco Cartridge");
+				else if (MACHINE_IS_SG1000) strcpy(window_title,"SG1000 Cartridge");
+				else if (MACHINE_IS_SVI) strcpy(window_title,"SVI Cartridge");
+				else strcpy(window_title,"MSX Cartridge");
+
+                retorno_menu=menu_dibuja_menu(&msxcart_opcion_seleccionada,&item_seleccionado,array_menu_msxcart,window_title);
+
+                
+
+                if ((item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu>=0) {
+                        //llamamos por valor de funcion
+                        if (item_seleccionado.menu_funcion!=NULL) {
+                                //printf ("actuamos por funcion\n");
+                                item_seleccionado.menu_funcion(item_seleccionado.valor_opcion);
+                                
+                        }
+                }
+
+        } while ( (item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu!=MENU_RETORNO_ESC && !salir_todos_menus);
+
+}
+
+
 
 
 //menu storage settings
@@ -15959,6 +17969,9 @@ void menu_storage_settings(MENU_ITEM_PARAMETERS)
 		}
 
 		else if (MACHINE_IS_QL) {
+			menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_ql_mdv_flp,NULL,"Microdrive & Floppy");
+			
+			/*
 			menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_ql_microdrive_floppy,NULL,"Microdrive&Floppy: %s",
 				(ql_microdrive_floppy_emulation ? "Yes" : "No") );
 
@@ -15974,11 +17987,12 @@ void menu_storage_settings(MENU_ITEM_PARAMETERS)
 					menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_ql_mdv2,NULL,"Mdv2 root dir: %s",string_ql_mdv2_root_dir_shown);
 					menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_ql_flp1,NULL,"Flp1 root dir: %s",string_ql_flp1_root_dir_shown);
 				}
+			*/
 
 		}
 
 
-		else if (!MACHINE_IS_CHLOE) {
+		else if (!MACHINE_IS_CHLOE && !MACHINE_IS_COLECO && !MACHINE_IS_SG1000) {
 	            	menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_tape_settings,menu_tape_settings_cond,"~~Tape");
                 	menu_add_item_menu_shortcut(array_menu_storage_settings,'t');
                 	menu_add_item_menu_tooltip(array_menu_storage_settings,"Select tape and options");
@@ -16005,6 +18019,37 @@ void menu_storage_settings(MENU_ITEM_PARAMETERS)
 
 
 
+		if (MACHINE_IS_MSX) {
+			menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_msxcart,NULL,"MSX ~~Cartridge");
+			menu_add_item_menu_shortcut(array_menu_storage_settings,'c');
+			menu_add_item_menu_tooltip(array_menu_storage_settings,"MSX Cartridge Settings");
+			menu_add_item_menu_ayuda(array_menu_storage_settings,"MSX Cartridge Settings");
+		}
+
+		if (MACHINE_IS_COLECO) {
+			menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_msxcart,NULL,"Coleco ~~Cartridge");
+			menu_add_item_menu_shortcut(array_menu_storage_settings,'c');
+			menu_add_item_menu_tooltip(array_menu_storage_settings,"MSX Cartridge Settings");
+			menu_add_item_menu_ayuda(array_menu_storage_settings,"MSX Cartridge Settings");
+		}
+
+
+		if (MACHINE_IS_SG1000) {
+			menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_msxcart,NULL,"SG1000 ~~Cartridge");
+			menu_add_item_menu_shortcut(array_menu_storage_settings,'c');
+			menu_add_item_menu_tooltip(array_menu_storage_settings,"MSX Cartridge Settings");
+			menu_add_item_menu_ayuda(array_menu_storage_settings,"MSX Cartridge Settings");
+		}
+
+		if (MACHINE_IS_SVI) {
+			menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_msxcart,NULL,"SVI ~~Cartridge");
+			menu_add_item_menu_shortcut(array_menu_storage_settings,'c');
+			menu_add_item_menu_tooltip(array_menu_storage_settings,"MSX Cartridge Settings");
+			menu_add_item_menu_ayuda(array_menu_storage_settings,"MSX Cartridge Settings");
+		}		
+
+
+			/*
 		if (MACHINE_IS_ZX8081) {
 			menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_storage_zxpand_enable,NULL,"ZX~~pand emulation: %s",(zxpand_enabled.v ? "Yes" : "No"));
                         menu_add_item_menu_shortcut(array_menu_storage_settings,'p');
@@ -16025,6 +18070,14 @@ void menu_storage_settings(MENU_ITEM_PARAMETERS)
 					);
 
 			}
+		}
+		*/
+		if (MACHINE_IS_ZX8081) {
+			menu_add_item_menu_format(array_menu_storage_settings,MENU_OPCION_NORMAL,menu_zxpand,NULL,"ZX~~pand emulation");
+                        menu_add_item_menu_shortcut(array_menu_storage_settings,'p');
+			menu_add_item_menu_tooltip(array_menu_storage_settings,"ZXpand emulation");
+			menu_add_item_menu_ayuda(array_menu_storage_settings,"ZXpand emulation");
+
 		}
 
 		if (MACHINE_IS_SPECTRUM) {
@@ -16070,7 +18123,7 @@ void menu_storage_settings(MENU_ITEM_PARAMETERS)
 				"Use with caution, "
 				"only some ESXDOS calls are handled, the rest are handled from the mmc/ide virtual file firmware.\n"
 				"The list of supported calls are: \n"
-				"DISK_INFO, DISK_STATUS, F_CHDIR, F_CLOSE, F_FSTAT, F_GETCWD, F_MOUNT, F_OPEN, F_OPENDIR, F_READ, F_READDIR, F_RENAME, F_REWINDDIR, F_SEEK, F_SEEKDIR, F_STAT, F_SYNC, F_TELLDIR, F_UNLINK, F_WRITE, M_DRIVEINFO, M_GETSETDRV"
+				"DISK_INFO, DISK_STATUS, F_CHDIR, F_CLOSE, F_FSTAT, F_GETCWD, F_MKDIR, F_MOUNT, F_OPEN, F_OPENDIR, F_READ, F_READDIR, F_RENAME, F_REWINDDIR, F_SEEK, F_SEEKDIR, F_STAT, F_SYNC, F_TELLDIR, F_UNLINK, F_WRITE, M_DRIVEINFO, M_GETSETDRV"
 				"\n"
 				"Note: you can also enable and disable ESXDOS handler whenever you want, for example in programs that use unsupported functions for handler."
 
@@ -16718,15 +18771,22 @@ void menu_hardware_sam_ram(MENU_ITEM_PARAMETERS)
 
 void menu_cpu_speed(MENU_ITEM_PARAMETERS)
 {
+	menu_ventana_scanf_numero_enhanced("Emulator Speed (%)",&porcentaje_velocidad_emulador,5,+25,1,9999,0);
 
+	/*
         char string_speed[5];
 
         sprintf (string_speed,"%d",porcentaje_velocidad_emulador);
 
-        menu_ventana_scanf("Emulator Speed (%)",string_speed,5);
+        //menu_ventana_scanf("Emulator Speed (%)",string_speed,5);
+
+		int ret=menu_ventana_scanf_numero("Emulator Speed (%)",string_speed,5,25,1,9999,0);
+
+		if (ret<0) return;
 
         porcentaje_velocidad_emulador=parse_string_to_number(string_speed);
         if (porcentaje_velocidad_emulador<1 || porcentaje_velocidad_emulador>9999) porcentaje_velocidad_emulador=100;
+	*/
 
 	set_emulator_speed();
 
@@ -17002,7 +19062,7 @@ void menu_keyboard_settings(MENU_ITEM_PARAMETERS)
 
 		//Soporte para Azerty keyboard
 
-		if (!strcmp(scr_driver_name,"xwindows")) {
+		if (!strcmp(scr_new_driver_name,"xwindows")) {
 			menu_add_item_menu_format(array_menu_keyboard_settings,MENU_OPCION_NORMAL,menu_hardware_azerty,NULL,"[%c] ~~Azerty keyboard",(azerty_keyboard.v ? 'X' : ' ') );
 			menu_add_item_menu_shortcut(array_menu_keyboard_settings,'a');
 			menu_add_item_menu_tooltip(array_menu_keyboard_settings,"Enables azerty keyboard");
@@ -17029,7 +19089,7 @@ void menu_keyboard_settings(MENU_ITEM_PARAMETERS)
 		);
 
 #ifdef COMPILE_SDL
-		if (!strcmp(scr_driver_name,"sdl")) {
+		if (!strcmp(scr_new_driver_name,"sdl")) {
 			menu_add_item_menu_format(array_menu_keyboard_settings,MENU_OPCION_NORMAL,menu_hardware_sdl_raw_read,NULL,"[%c] SDL Raw keyboard",
 				(sdl_raw_keyboard_read.v ? 'X' : ' ') );
 			menu_add_item_menu_tooltip(array_menu_keyboard_settings,"Read the keyboard using raw mode. Needed for ZX Recreated to work");
@@ -17055,22 +19115,21 @@ void menu_keyboard_settings(MENU_ITEM_PARAMETERS)
 
 		}
 
-		if (MACHINE_IS_Z88 || MACHINE_IS_CPC || chloe_keyboard.v || MACHINE_IS_SAM || MACHINE_IS_QL)  {
+		if (MACHINE_IS_Z88 || MACHINE_IS_CPC || chloe_keyboard.v || MACHINE_IS_SAM || MACHINE_IS_QL || MACHINE_IS_MSX || MACHINE_IS_SVI)  {
 			//keymap solo hace falta con xwindows y sdl. fbdev y cocoa siempre leen en raw como teclado english
-			if (!strcmp(scr_driver_name,"xwindows")  || !strcmp(scr_driver_name,"sdl") ) {
-				if (MACHINE_IS_Z88) menu_add_item_menu_format(array_menu_keyboard_settings,MENU_OPCION_NORMAL,menu_hardware_keymap_z88_cpc,NULL,"Z88 K~~eymap [%s]",(z88_cpc_keymap_type == 1 ? "Spanish" : "Default" ));
-				else if (MACHINE_IS_CPC) menu_add_item_menu_format(array_menu_keyboard_settings,MENU_OPCION_NORMAL,menu_hardware_keymap_z88_cpc,NULL,"CPC K~~eymap [%s]",(z88_cpc_keymap_type == 1 ? "Spanish" : "Default" ));
-				else if (MACHINE_IS_SAM) menu_add_item_menu_format(array_menu_keyboard_settings,MENU_OPCION_NORMAL,menu_hardware_keymap_z88_cpc,NULL,"SAM K~~eymap [%s]",(z88_cpc_keymap_type == 1 ? "Spanish" : "Default" ));
-				else if (MACHINE_IS_QL) menu_add_item_menu_format(array_menu_keyboard_settings,MENU_OPCION_NORMAL,menu_hardware_keymap_z88_cpc,NULL,"QL K~~eymap [%s]",(z88_cpc_keymap_type == 1 ? "Spanish" : "Default" ));
+			if (!strcmp(scr_new_driver_name,"xwindows")  || !strcmp(scr_new_driver_name,"sdl") ) {
+				
+				menu_add_item_menu_format(array_menu_keyboard_settings,MENU_OPCION_NORMAL,menu_hardware_keymap_z88_cpc,NULL,"K~~eymap [%s]",realmachine_keymap_strings_types[z88_cpc_keymap_type]);
 
-				else menu_add_item_menu_format(array_menu_keyboard_settings,MENU_OPCION_NORMAL,menu_hardware_keymap_z88_cpc,NULL,"Chloe K~~eymap [%s]",(z88_cpc_keymap_type == 1 ? "Spanish" : "Default" ));
 				menu_add_item_menu_shortcut(array_menu_keyboard_settings,'e');
 				menu_add_item_menu_tooltip(array_menu_keyboard_settings,"Keyboard Layout");
-				menu_add_item_menu_ayuda(array_menu_keyboard_settings,"Used on Z88, CPC, Sam and Chloe machines, needed to map symbol keys. "
-						"You must indicate here which kind of physical keyboard you have. The keyboard will "
-						"be mapped always to a Z88/CPC/Sam/Chloe English keyboard, to the absolute positions of the keys. "
-						"You have two physical keyboard choices: Default (English) and Spanish");
-
+				menu_add_item_menu_ayuda(array_menu_keyboard_settings,"Used on Z88, CPC, Sam, QL, MSX, SVI and Chloe machines, needed to map symbol keys. "
+						"You must indicate here which kind of physical keyboard you have. Your physical keyboard will "
+						"be mapped always to the English keyboard on the emulated machine, to the absolute positions of the keys. "
+						"You have two physical keyboard choices: Default (English) and Spanish"
+						"\n"
+						"Note: Seems Windows version need this setting (usually) to be set to Default (please don't ask me why)"						
+						);
 			}
 		}
 
@@ -17253,7 +19312,7 @@ void menu_hardware_settings(MENU_ITEM_PARAMETERS)
 			menu_add_item_menu_shortcut(array_menu_hardware_settings,'s');
 
 			if (kempston_mouse_emulation.v) {
-			menu_add_item_menu_format(array_menu_hardware_settings,MENU_OPCION_NORMAL,menu_hardware_kempston_mouse_sensibilidad,NULL,"    Mouse Sensitivity: %d",kempston_mouse_factor_sensibilidad);
+			menu_add_item_menu_format(array_menu_hardware_settings,MENU_OPCION_NORMAL,menu_hardware_kempston_mouse_sensibilidad,NULL,"[%2d] Mouse Sensitivity",kempston_mouse_factor_sensibilidad);
 			}
 
 		}
@@ -17671,6 +19730,9 @@ int menu_file_filter(const char *name,char *filtros[])
 	//El archivo MENU_LAST_DIR_FILE_NAME zesarux_last_dir.txt usado para abrir archivos comprimidos, no lo mostrare nunca
 	if (!strcmp(name,MENU_LAST_DIR_FILE_NAME)) return 0;
 
+	//Archivo usado para indicar que archivo es la pantalla del juego. Usado en previews de tap, tzx etc
+	if (!strcmp(name,MENU_SCR_INFO_FILE_NAME)) return 0;
+
 	util_get_file_extension((char *) name,extension);
 
 	char *f;
@@ -17765,7 +19827,12 @@ int menu_file_filter(const char *name,char *filtros[])
 int menu_filesel_filter_func(const struct dirent *d)
 {
 
+#ifdef HAIKU_OS
+	int tipo_archivo=1; //Asumimos siempre tipo archivo regular
+#else
+
 	int tipo_archivo=get_file_type(d->d_type,(char *)d->d_name);
+#endif
 
 
 	//si es directorio, ver si empieza con . y segun el filtro activo
@@ -17779,7 +19846,10 @@ int menu_filesel_filter_func(const struct dirent *d)
 	//Si no es archivo ni link, no ok
 
 	if (tipo_archivo  == 0) {
+#ifdef HAIKU_OS
+#else
 		debug_printf (VERBOSE_DEBUG,"Item is not a directory, file or link. Type: %d",d->d_type);
+#endif
 		return 0;
 	}
 
@@ -17869,7 +19939,13 @@ primer_filesel_item=NULL;
 
 		strcpy(item->d_name,nombreactual->d_name);
 
+
+#ifdef HAIKU_OS
+		item->d_type=1; //Asumimos siempre tipo archivo regular
+#else
 		item->d_type=nombreactual->d_type;
+#endif
+
 		item->next=NULL;
 
 		//primer item
@@ -17932,7 +20008,7 @@ void menu_smartload(MENU_ITEM_PARAMETERS)
 
 	menu_first_aid("smartload");
 
-        char *filtros[31];
+        char *filtros[35];
 
         filtros[0]="zx";
         filtros[1]="sp";
@@ -17981,7 +20057,15 @@ void menu_smartload(MENU_ITEM_PARAMETERS)
 
 	filtros[29]="pzx";
 
-	filtros[30]=0;
+	filtros[30]="rom";
+
+	filtros[31]="col";
+
+	filtros[32]="sg";
+
+	filtros[33]="cas";
+
+	filtros[34]=0;
 
 
         //guardamos directorio actual
@@ -17999,7 +20083,9 @@ void menu_smartload(MENU_ITEM_PARAMETERS)
                 //cambiamos a ese directorio, siempre que no sea nulo
                 if (directorio[0]!=0) {
                         debug_printf (VERBOSE_INFO,"Changing to last directory: %s",directorio);
+						//printf ("antes menu_filesel_chdir\n");
                         menu_filesel_chdir(directorio);
+						//printf ("despues menu_filesel_chdir\n");
                 }
 
 				util_get_file_no_directory(quickfile,menu_filesel_posicionar_archivo_nombre);
@@ -18015,8 +20101,14 @@ void menu_smartload(MENU_ITEM_PARAMETERS)
 
         int ret;
 
-        ret=menu_filesel("Select File",filtros,quickload_file);
+		//printf ("antes menu_filesel\n");
+
+        ret=menu_filesel("Smart load",filtros,quickload_file);
+
+		//printf ("despues menu_filesel\n");
+
         //volvemos a directorio inicial
+		
         menu_filesel_chdir(directorio_actual);
 
         if (ret==1) {
@@ -18043,43 +20135,45 @@ void menu_smartload(MENU_ITEM_PARAMETERS)
 }
 
 
+int menu_tape_out_open_last_rotated=10;
+
 void menu_tape_out_open(MENU_ITEM_PARAMETERS)
 {
 
-        char *filtros[5];
+	char *filtros[5];
 	char mensaje_existe[20];
 
-        if (MACHINE_IS_ZX8081) {
+	if (MACHINE_IS_ZX8081) {
 
-			if (MACHINE_IS_ZX80) filtros[0]="o";
-			else filtros[0]="p";
+		if (MACHINE_IS_ZX80) filtros[0]="o";
+		else filtros[0]="p";
 
-			filtros[1]=0;
+		filtros[1]=0;
 
-			strcpy(mensaje_existe,"Overwrite?");
-		}
+		strcpy(mensaje_existe,"Overwrite?");
+	}
 
-		else {
-			filtros[0]="tzx";
-			filtros[1]="tap";
-			filtros[2]="pzx";
-			filtros[3]=0;
-			strcpy(mensaje_existe,"Append?");
-		}
+	else {
+		filtros[0]="tzx";
+		filtros[1]="tap";
+		filtros[2]="pzx";
+		filtros[3]=0;
+		strcpy(mensaje_existe,"Append?");
+	}
 
 
-        if (menu_filesel("Select Output Tape",filtros,tape_out_open_file)==1) {
+	if (menu_filesel("Select Output Tape",filtros,tape_out_open_file)==1) {
 
 		//Ver si archivo existe y preguntar
-                struct stat buf_stat;
+		struct stat buf_stat;
 
-                if (stat(tape_out_open_file, &buf_stat)==0) {
+		if (stat(tape_out_open_file, &buf_stat)==0) {
 
-                	if (MACHINE_IS_ZX8081) {
-                        	if (menu_confirm_yesno_texto("File exists",mensaje_existe)==0) {
-					tape_out_file=NULL;
-					tap_out_close();
-					return;
+			if (MACHINE_IS_ZX8081) {
+					if (menu_confirm_yesno_texto("File exists",mensaje_existe)==0) {
+						tape_out_file=NULL;
+						tap_out_close();
+						return;
 				}
 			}
 
@@ -18098,19 +20192,47 @@ void menu_tape_out_open(MENU_ITEM_PARAMETERS)
 				if (opcion==2) {
 					util_truncate_file(tape_out_open_file);
 				}
+
+				//Rotate
+				if (opcion==3) {
+					//Rotar
+					char string_rotaciones[3];
+
+
+					int valor_leido;
+					sprintf (string_rotaciones,"%d",menu_tape_out_open_last_rotated);
+
+					menu_ventana_scanf("Number of files",string_rotaciones,3);
+
+					valor_leido=parse_string_to_number(string_rotaciones);
+
+					if (valor_leido<1 || valor_leido>99) {
+							debug_printf (VERBOSE_ERR,"Invalid value %d",valor_leido);
+							tape_out_file=NULL;
+							tap_out_close();
+							return;
+					}
+
+					menu_tape_out_open_last_rotated=valor_leido;
+
+
+					util_rotate_file(tape_out_open_file,menu_tape_out_open_last_rotated);
+					//El actual ya se creará cuando se escriba la primera vez
+				}				
+
 			}
 
-                }
+		}
 
-                tape_out_file=tape_out_open_file;
-                tape_out_init();
-        }
+		tape_out_file=tape_out_open_file;
+		tape_out_init();
+	}
 
 
-        else {
-                tape_out_file=NULL;
-			tap_out_close();
-        }
+	else {
+		tape_out_file=NULL;
+		tap_out_close();
+	}
 
 
 
@@ -18141,6 +20263,16 @@ void menu_tape_open(MENU_ITEM_PARAMETERS)
                 filtros[5]="wav";
                 filtros[6]=0;
         }
+
+	else if (MACHINE_IS_MSX) {
+                filtros[0]="cas";
+                filtros[1]=0;
+        }		
+
+	else if (MACHINE_IS_SVI) {
+                filtros[0]="cas";
+                filtros[1]=0;
+        }				
 
 	else {
         filtros[0]="tzx";
@@ -18216,18 +20348,6 @@ void menu_realtape_insert(MENU_ITEM_PARAMETERS)
 	else realtape_eject();
 }
 
-void menu_realtape_play(MENU_ITEM_PARAMETERS)
-{
-	if (realtape_playing.v) realtape_stop_playing();
-	else realtape_start_playing();
-}
-
-void menu_realtape_volumen(MENU_ITEM_PARAMETERS)
-{
-	realtape_volumen++;
-	if (realtape_volumen==16) realtape_volumen=0;
-}
-
 int menu_realtape_cond(void)
 {
 	if (realtape_name==NULL) return 0;
@@ -18239,6 +20359,23 @@ int menu_realtape_inserted_cond(void)
 	if (menu_realtape_cond()==0) return 0;
 	return realtape_inserted.v;
 }
+
+void menu_realtape_pause_unpause(MENU_ITEM_PARAMETERS)
+{
+	//Este if solo es util cuando se llama desde una tecla F
+	if (!menu_realtape_inserted_cond()) return;
+
+	realtape_pause_unpause();
+}
+
+void menu_realtape_volumen(MENU_ITEM_PARAMETERS)
+{
+	realtape_volumen++;
+	if (realtape_volumen==16) realtape_volumen=-16;
+}
+
+
+
 
 void menu_realtape_open(MENU_ITEM_PARAMETERS)
 {
@@ -18911,7 +21048,7 @@ void menu_file_trd_browser_show(char *filename,char *tipo_imagen)
 
 //Retorna el offset al dsk segun la pista y sector dados (ambos desde 0...)
 //-1 si no se encuentra
-int menu_dsk_getoff_track_sector(z80_byte *dsk_memoria,int total_pistas,int pista_buscar,int sector_buscar)
+int menu_dsk_getoff_track_sector(z80_byte *dsk_memoria,int total_pistas,int pista_buscar,int sector_buscar,int longitud_dsk)
 {
 
 /*
@@ -18950,8 +21087,26 @@ sectores van alternados:
 
 		for (sector=0;sector<sectores_en_pista;sector++) {
 			int offset_tabla_sector=sector*8; 
-			z80_byte pista_id=dsk_memoria[iniciopista+offset_tabla_sector]; //Leemos pista id
-			z80_byte sector_id=dsk_memoria[iniciopista+offset_tabla_sector+2]; //Leemos c1, c2, etc
+
+			//printf("before getting pista_id sumando %d %d\n",iniciopista,offset_tabla_sector);
+
+			int offset_leer_dsk;
+
+			offset_leer_dsk=iniciopista+offset_tabla_sector;
+			//Validar offset
+			if (offset_leer_dsk>=longitud_dsk) return -1;
+
+			z80_byte pista_id=dsk_memoria[offset_leer_dsk]; //Leemos pista id
+			//printf("before getting sector_id\n");
+
+
+			//Validar offset
+			offset_leer_dsk=iniciopista+offset_tabla_sector+2;
+			if (offset_leer_dsk>=longitud_dsk) return -1;
+
+
+			z80_byte sector_id=dsk_memoria[offset_leer_dsk]; //Leemos c1, c2, etc
+			//printf("after getting sector_id\n");
 
 			//debug_printf(VERBOSE_DEBUG,"%02X ",sector_id);
 
@@ -18965,6 +21120,7 @@ sectores van alternados:
 		                int offset=iniciopista_orig+256;
 
                 		//int iniciopista=traps_plus3dos_getoff_start_track(pista);
+						//printf("returning ok\n");
 		                return offset+512*sector;
 			}
 
@@ -18979,6 +21135,7 @@ sectores van alternados:
 	debug_printf(VERBOSE_DEBUG,"Not found sector %d/%d",pista_buscar,sector_buscar);	
 	
 	//retornamos offset fuera de rango
+	//printf("returning -1\n");
 	return -1;
 
 
@@ -19007,14 +21164,16 @@ void menu_dsk_getoff_block(z80_byte *dsk_file_memory,int longitud_dsk,int bloque
 			//int offset=pista*4864+sector_en_pista*512;
 
 
-
-			*offset1=menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,pista,sector_en_pista);
+			//printf("before getting offset1\n");
+			*offset1=menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,pista,sector_en_pista,longitud_dsk);
 
 			sector_total++;
 			pista=sector_total/9; //9 sectores por pista
 			sector_en_pista=sector_total % 9;			
 
-			*offset2=menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,pista,sector_en_pista);
+			//printf("before getting offset2\n");
+			*offset2=menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,pista,sector_en_pista,longitud_dsk);
+			//printf("after getting offset2\n");
 
 }
 
@@ -19034,7 +21193,7 @@ int menu_dsk_get_start_filesystem(z80_byte *dsk_file_memory,int longitud_dsk)
 
 
 
-                        return menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,0,0);
+                        return menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,0,0,longitud_dsk);
 
 }
 
@@ -19060,6 +21219,8 @@ void menu_file_dsk_browser_show(char *filename)
 		debug_printf(VERBOSE_ERR,"Unable to assign memory");
 		return;
 	}
+
+	int longitud_dsk=bytes_to_load;
 	
 	//Leemos archivo dsk
         FILE *ptr_file_dsk_browser;
@@ -19193,7 +21354,7 @@ Me encuentro con algunos discos en que empiezan en pista 1 y otros en pista 0 ??
 			//printf ("Filesystem doesnt seem to be at track 0. Trying with track 1\n");
             int total_pistas=bytes_to_load/4864;
 
-            puntero=menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,1,0);
+            puntero=menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,1,0,longitud_dsk);
 
 			if (puntero==-1) {
 		                //printf ("Filesystem track/sector not found. Guessing it\n");
@@ -19338,14 +21499,25 @@ After these 6 bytes, the data for the block comes.
 
     			debug_printf (VERBOSE_INFO,"Block id: %u Size: %u",block_id,block_lenght);
 
-    			sprintf(buffer_texto,"Id: %u (%s) Size: %u",block_id,zsf_get_block_id_name(block_id),block_lenght);
+    			sprintf(buffer_texto,"Id: %2u (%s) Size: %u",block_id,zsf_get_block_id_name(block_id),block_lenght);
     			indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);
 
     			bytes_to_load -=6;
     			bytes_to_load -=block_lenght;
 
-
+				//Saltar la cabecera del bloque
     			indice_zsf +=6;
+
+				//Mas info si el campo es de fecha
+				if (block_id==ZSF_DATETIME) {
+    				sprintf(buffer_texto,"        %d/%02d/%02d %02d:%02d",
+						value_8_to_16(zsf_file_memory[indice_zsf+3],zsf_file_memory[indice_zsf+2]),zsf_file_memory[indice_zsf+1],
+						zsf_file_memory[indice_zsf+0],zsf_file_memory[indice_zsf+4],zsf_file_memory[indice_zsf+5]);
+
+    				indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);					
+				}
+
+				//Saltar la longitud del bloque
     			indice_zsf +=block_lenght;
 
 	}
@@ -20278,6 +22450,130 @@ void menu_file_z80_browser_show(char *filename)
 }
 
 
+
+void menu_file_col_browser_show(char *filename)
+{
+	
+	//Leemos cabecera archivo col
+        FILE *ptr_file_z80_browser;
+        ptr_file_z80_browser=fopen(filename,"rb");
+
+        if (!ptr_file_z80_browser) {
+		debug_printf(VERBOSE_ERR,"Unable to open file");
+		return;
+	}
+
+	//Leemos primeros 256 bytes de cabecera
+	z80_byte z80_header[256];
+
+        int leidos=fread(z80_header,1,256,ptr_file_z80_browser);
+
+	if (leidos==0) {
+                debug_printf(VERBOSE_ERR,"Error reading file");
+                return;
+        }
+
+		fclose(ptr_file_z80_browser);
+
+		char texto_info[256];
+		char buffer_texto[512];
+
+		//8000 - 8001:   If bytes are AAh and 55h, the CV will show a title screen
+        //       and game name, etc.
+        //       If bytes are 55h and AAh, the CV will jump directly to the
+        //       start of code vector.
+
+
+		if (z80_header[0]==0xAA && z80_header[1]==0x55) {
+
+			//Offset a Texto info
+			int i=0x24;
+
+			//8024 - nnnn:   String with two delemiters "/" as "LINE2/LINE1/YEAR"
+
+			int salir=0;
+
+			
+			
+
+			int destino=0;
+
+			int contador_barras=0;
+
+			int digitos_anyos=0;
+
+			for (;i<256 && !salir;i++) {
+				z80_byte letra=z80_header[i];
+
+				//Si dos barras, contar 4 digitos de anyos
+				if (contador_barras>=2) {
+					digitos_anyos++;
+
+					//Fin
+					if (digitos_anyos==4) salir=1;
+				}				
+
+				//Contar cuantas barras division
+				if (letra=='/') contador_barras++;
+
+				//Evitar caracteres raros
+				if (letra<32 || letra>126) letra='.';
+
+				//Cada barra es un salto de linea
+				if (letra=='/') letra='\n';
+
+				texto_info[destino++]=letra;
+
+
+		
+
+			}
+
+			texto_info[destino]=0;
+
+		}
+
+		else {
+			strcpy(texto_info,"Unknown");
+		}
+
+	char texto_browser[MAX_TEXTO_BROWSER];
+	int indice_buffer=0;
+
+	sprintf(buffer_texto,"Game description:\n%s\n",texto_info);
+ 	indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);
+	/*
+	8002 - 8003:   Pointer to RAM copy of the sprite name table 
+8004 - 8005:   Pointer to RAM sprite table
+8006 - 8007:   Pointer to free buffer space in RAM
+8008 - 8009:   Pointer to controller memory map
+800A - 800B:   Pointer to start of code
+	*/
+
+ 	sprintf(buffer_texto,"Sprite name table copy: %02X%02XH",z80_header[0x03],z80_header[0x02]);
+ 	indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);
+
+ 	sprintf(buffer_texto,"Sprite table:           %02X%02XH",z80_header[0x05],z80_header[0x04]);
+ 	indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);	 
+
+ 	sprintf(buffer_texto,"Free buffer space:      %02X%02XH",z80_header[0x07],z80_header[0x06]);
+ 	indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);	
+
+ 	sprintf(buffer_texto,"Controller memory map:  %02X%02XH",z80_header[0x09],z80_header[0x08]);
+ 	indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);	 	 
+
+ 	sprintf(buffer_texto,"Code start:             %02X%02XH",z80_header[0x0b],z80_header[0x0a]);
+ 	indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);
+
+	texto_browser[indice_buffer]=0;
+	//menu_generic_message_tooltip("Z80 file browser", 0, 0, 1, NULL, "%s", texto_browser);
+	zxvision_generic_message_tooltip("Colecovision file browser" , 0 , 0, 0, 1, NULL, 1, "%s", texto_browser);
+
+	//int util_tape_tap_get_info(z80_byte *tape,char *texto)
+
+
+}
+
 void menu_file_tzx_browser_show(char *filename)
 {
 
@@ -20487,6 +22783,141 @@ void menu_file_tzx_browser_show(char *filename)
 	zxvision_generic_message_tooltip("TZX file browser" , 0 , 0, 0, 1, NULL, 1, "%s", texto_browser);
 
 	free(tzx_file_mem);
+
+}
+
+
+//Retorna nombre de cinta cas (6 bytes)
+void menu_file_cas_browser_show_getname(z80_byte *tape,char *texto)
+{
+	int i;
+	z80_byte caracter;
+
+	for (i=0;i<6;i++) {
+		caracter=*tape++;
+		if (caracter<32 || caracter>126) caracter='.';
+
+		*texto++=caracter;
+	}
+
+	*texto=0;
+}
+
+
+void menu_file_cas_browser_show(char *filename)
+{
+	long posicion_lectura;
+	z80_byte buffer[10];
+	FILE *ptr_file_cas_browser;
+
+	char texto_browser[MAX_TEXTO_BROWSER];
+	int indice_buffer=0;
+
+	//Extracted from https://github.com/joyrex2001/castools/blob/master/casdir.c
+
+	#define CAS_NEXT_NONE   0
+	#define CAS_NEXT_BINARY 1
+	#define CAS_NEXT_DATA   2
+
+	char cas_filename[7]="123456"; //no deberia entrar inicializado pero por si acaso
+
+	int next=CAS_NEXT_NONE;
+
+	z80_byte cas_ascii[10]={ 0xEA,0xEA,0xEA,0xEA,0xEA,0xEA,0xEA,0xEA,0xEA,0xEA };
+	z80_byte cas_bin[10]={ 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0 };
+	z80_byte cas_basic[10]={ 0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3,0xD3 };
+
+
+	char buffer_texto[300]; //Para poder contener info de msx cas extensa
+
+	ptr_file_cas_browser=fopen(filename,"rb");
+
+	if (ptr_file_cas_browser==NULL) {
+		debug_printf(VERBOSE_ERR,"Error opening cas file %s",filename);
+		return;
+	}
+
+	posicion_lectura=0;
+	while (fread(buffer,1,8,ptr_file_cas_browser)==8) {
+    
+		if (!memcmp(buffer,msx_cabecera_firma,8)) {
+		
+			if (fread(buffer,1,10,ptr_file_cas_browser)==10) {
+			
+				if (next==CAS_NEXT_BINARY) {
+				
+					fseek(ptr_file_cas_browser,posicion_lectura+8,SEEK_SET);
+
+					z80_byte buffer_datos[6];
+
+					fread(buffer_datos,1,6,ptr_file_cas_browser);
+
+					z80_int start,stop,exec;
+
+					start=buffer_datos[0]+256*buffer_datos[1];
+					stop=buffer_datos[2]+256*buffer_datos[3];
+					exec=buffer_datos[4]+256*buffer_datos[5];
+
+					if (!exec) exec=start;
+
+					sprintf(buffer_texto,"Binary: %s\n  Start: %d Stop: %d\n  Exec:  %d",cas_filename,start,stop,exec);
+					indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);	  
+					next=CAS_NEXT_NONE;
+				}
+				
+				else if (next==CAS_NEXT_DATA) {
+					next=CAS_NEXT_NONE;
+				}
+				
+				else if (!memcmp(buffer,cas_ascii,10)) {
+				
+					z80_byte buffer_nombre[7];
+					fread(buffer_nombre,1,6,ptr_file_cas_browser);
+					menu_file_cas_browser_show_getname(buffer_nombre,cas_filename);
+
+					sprintf(buffer_texto,"Ascii: %s",cas_filename);
+					indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);	  	  
+
+					while (fgetc(ptr_file_cas_browser)!=0x1a && !feof(ptr_file_cas_browser));
+					posicion_lectura=ftell(ptr_file_cas_browser);
+				} 
+				
+				else if (!memcmp(buffer,cas_bin,10)) {  
+					z80_byte buffer_nombre[7];
+					fread(buffer_nombre,1,6,ptr_file_cas_browser);
+					menu_file_cas_browser_show_getname(buffer_nombre,cas_filename);
+					next=CAS_NEXT_BINARY;
+				}
+
+				else if (!memcmp(buffer,cas_basic,10)) {
+					z80_byte buffer_nombre[7];
+					fread(buffer_nombre,1,6,ptr_file_cas_browser);
+					menu_file_cas_browser_show_getname(buffer_nombre,cas_filename);					
+				
+					next=CAS_NEXT_DATA;
+					sprintf(buffer_texto,"Basic: %s", cas_filename);
+					indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);		  
+				}
+				
+				else  {
+					sprintf(buffer_texto,"Custom");
+					indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);			
+				}
+			
+			}
+
+    	}
+	
+		posicion_lectura++;
+    	fseek(ptr_file_cas_browser,posicion_lectura,SEEK_SET);
+      
+	}
+
+	fclose(ptr_file_cas_browser);
+	
+	texto_browser[indice_buffer]=0;
+	zxvision_generic_message_tooltip("CAS file browser" , 0 , 0, 0, 1, NULL, 1, "%s", texto_browser);
+
 
 }
 
@@ -20852,6 +23283,13 @@ void menu_tape_browser_show(char *filename)
 		return;
 	}	
 
+	//Si cas
+	if (!util_compare_file_extension(filename,"cas") 
+		) {
+		menu_file_cas_browser_show(filename);
+		return;
+	}		
+
 	//tapefile
 	if (util_compare_file_extension(filename,"tap")!=0) {
 		debug_printf(VERBOSE_ERR,"Tape browser not supported for this tape type");
@@ -21025,7 +23463,7 @@ void menu_tape_settings(MENU_ITEM_PARAMETERS)
 
 
 
-		menu_add_item_menu_format(array_menu_tape_settings,MENU_OPCION_NORMAL,menu_realtape_play,menu_realtape_inserted_cond,"[%c] ~~Playing", (realtape_playing.v==1 ? 'X' : ' '));
+		menu_add_item_menu_format(array_menu_tape_settings,MENU_OPCION_NORMAL,menu_realtape_pause_unpause,menu_realtape_inserted_cond,"[%c] ~~Playing", (realtape_playing.v==1 ? 'X' : ' '));
 		menu_add_item_menu_shortcut(array_menu_tape_settings,'p');
 		menu_add_item_menu_tooltip(array_menu_tape_settings,"Start playing the audio tape");
 		menu_add_item_menu_ayuda(array_menu_tape_settings,"Start playing the audio tape");
@@ -21702,7 +24140,32 @@ void menu_debug_special_nmi(MENU_ITEM_PARAMETERS)
 }
 
 
+void menu_testeo_scanf_numero(MENU_ITEM_PARAMETERS)
+{
 
+        char string_zoom[3];
+	int temp_zoom;
+
+
+	//comprobaciones previas para no petar el sprintf
+	if (zoom_x>9 || zoom_x<1) zoom_x=1;
+
+        sprintf (string_zoom,"%d",zoom_x);
+
+
+        int retorno=menu_ventana_scanf_numero("Number test",string_zoom,3,+2,0,9,0);
+		if (retorno<0) {
+			menu_warn_message("Pulsado ESC");
+		}
+		else {
+
+			temp_zoom=parse_string_to_number(string_zoom);
+
+
+			menu_generic_message_format("Test","Value %d",temp_zoom);
+		}
+
+}
 
 
 void menu_run_mantransfer(MENU_ITEM_PARAMETERS)
@@ -22562,6 +25025,8 @@ void menu_file_viewer_read_file(char *title,char *file_name)
 
 	else if (!util_compare_file_extension(file_name,"z80")) menu_file_z80_browser_show(file_name);
 
+	else if (!util_compare_file_extension(file_name,"col")) menu_file_col_browser_show(file_name);
+
 	else if (!util_compare_file_extension(file_name,"sna")) menu_file_sna_browser_show(file_name);
 
 	else if (!util_compare_file_extension(file_name,"spg")) menu_file_spg_browser_show(file_name);
@@ -22594,6 +25059,8 @@ void menu_file_viewer_read_file(char *title,char *file_name)
 	else if (!util_compare_file_extension(file_name,"dsk")) menu_file_dsk_browser_show(file_name);
 
 	else if (!util_compare_file_extension(file_name,"tzx")) menu_file_tzx_browser_show(file_name);
+
+	else if (!util_compare_file_extension(file_name,"cas")) menu_file_cas_browser_show(file_name);
 
 	else if (!util_compare_file_extension(file_name,"pzx")) menu_file_pzx_browser_show(file_name);
 
@@ -22981,6 +25448,8 @@ void menu_debug_settings(MENU_ITEM_PARAMETERS)
         menu_item *array_menu_debug_settings;
         menu_item item_seleccionado;
 	int retorno_menu;
+
+		//letras usadas: rhndmictxbsvfpoaug
         do {
                 menu_add_item_menu_inicial(&array_menu_debug_settings,"~~Reset",MENU_OPCION_NORMAL,menu_debug_reset,NULL);
 		menu_add_item_menu_shortcut(array_menu_debug_settings,'r');
@@ -23042,11 +25511,38 @@ void menu_debug_settings(MENU_ITEM_PARAMETERS)
 		}
 
 		if (MACHINE_IS_TSCONF || MACHINE_IS_TBBLUE) {
-			if (MACHINE_IS_TSCONF) menu_add_item_menu_format(array_menu_debug_settings,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue,NULL,"~~TSConf");
-			if (MACHINE_IS_TBBLUE) menu_add_item_menu_format(array_menu_debug_settings,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue,NULL,"~~TBBlue");
+			if (MACHINE_IS_TSCONF) menu_add_item_menu_format(array_menu_debug_settings,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue_msx,NULL,"~~TSConf");
+			if (MACHINE_IS_TBBLUE) menu_add_item_menu_format(array_menu_debug_settings,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue_msx,NULL,"~~TBBlue");
 			menu_add_item_menu_shortcut(array_menu_debug_settings,'t');
 		}
 
+		if (MACHINE_HAS_VDP_9918A) {
+			char buffer_item[32];
+			
+			strcpy(buffer_item,"~~MSX");
+			// por defecto
+
+
+			if (MACHINE_IS_COLECO) {
+				strcpy(buffer_item,"Colecovision");
+			}
+
+			if (MACHINE_IS_SG1000) {
+				strcpy(buffer_item,"SG-1000");
+			}		
+
+			if (MACHINE_IS_SVI) {
+				strcpy(buffer_item,"Spectravideo");
+			}	
+
+
+			menu_add_item_menu_format(array_menu_debug_settings,MENU_OPCION_NORMAL,menu_debug_tsconf_tbblue_msx,NULL,buffer_item);
+
+			if (MACHINE_IS_MSX) {
+				//Letra M tambien se usa en DMA, pero como no hay DMA en MSX, pues no estaran nunca las dos opciones a la vez
+				menu_add_item_menu_shortcut(array_menu_debug_settings,'m');
+			}			
+		}		
 
 
 		menu_add_item_menu(array_menu_debug_settings,"He~~xadecimal Editor",MENU_OPCION_NORMAL,menu_debug_hexdump,NULL);
@@ -23184,6 +25680,8 @@ void menu_debug_settings(MENU_ITEM_PARAMETERS)
 					"instead ZEsarUX will only work if the cpu is in IM1 mode (and not IM2)");
 	}
 
+	//testeo
+	menu_add_item_menu_format(array_menu_debug_settings,MENU_OPCION_NORMAL,menu_testeo_scanf_numero,NULL,"Test scanf number");
 
 		/* De momento desactivado
 		if (MACHINE_IS_SPECTRUM) {
@@ -23605,6 +26103,9 @@ void menu_interface_border(MENU_ITEM_PARAMETERS)
 	screen_restart_pantalla_restore_overlay(previous_function,menu_antes);	
 
 	//printf ("--despues de restore overlay\n");
+
+	debug_printf (VERBOSE_DEBUG,"Rearrange zxvision windows after changing border settings");
+	zxvision_rearrange_background_windows();
 	
 }
 
@@ -23804,7 +26305,7 @@ void menu_change_video_driver_get(void)
 {
 	int i;
         for (i=0;i<num_scr_driver_array;i++) {
-		if (!strcmp(scr_driver_name,scr_driver_array[i].driver_name)) {
+		if (!strcmp(scr_new_driver_name,scr_driver_array[i].driver_name)) {
 			num_menu_scr_driver=i;
 			num_previo_menu_scr_driver=i;
 			return;
@@ -23869,7 +26370,7 @@ screen_restart_pantalla_restore_overlay(previous_function,menu_antes);
                 }
 
 		else {
-			debug_printf(VERBOSE_ERR,"Can not set video driver. Restoring to previous driver %s",scr_driver_name);
+			debug_printf(VERBOSE_ERR,"Can not set video driver. Restoring to previous driver %s",scr_new_driver_name);
 			menu_change_video_driver_get();
 
 
@@ -23898,7 +26399,7 @@ screen_restart_pantalla_restore_overlay(previous_function,menu_antes);
 	menu_init_footer();
 
 
-	if (!strcmp(scr_driver_name,"aa")) {
+	if (!strcmp(scr_new_driver_name,"aa")) {
 		menu_generic_message_format("Warning","Remember that on aa video driver, menu is opened with %s",openmenu_key_message);
 	}
 
@@ -23991,7 +26492,32 @@ void menu_interface_footer(MENU_ITEM_PARAMETERS)
 void menu_interface_frameskip(MENU_ITEM_PARAMETERS)
 {
 
-        menu_hardware_advanced_input_value(0,49,"Frameskip",&frameskip);
+    //menu_hardware_advanced_input_value(0,49,"Frameskip",&frameskip);
+	menu_ventana_scanf_numero_enhanced("Frameskip",&frameskip,3,+1,0,49,0);
+	/*
+
+	int valor;
+
+        char string_value[3];
+
+        sprintf (string_value,"%d",frameskip);
+
+
+        //menu_ventana_scanf("Frameskip",string_value,3);
+		int ret=menu_ventana_scanf_numero("Frameskip",string_value,3,+1,0,49,0);
+
+		if (ret<0) return;
+
+        valor=parse_string_to_number(string_value);
+
+	if (valor<0 || valor>49) {
+		debug_printf (VERBOSE_ERR,"Value out of range. Minimum: 0 Maximum: 49");
+		return;
+	}
+
+	frameskip=valor;
+	*/
+
 }
 
 void menu_interface_show_splash_texts(MENU_ITEM_PARAMETERS)
@@ -24035,12 +26561,20 @@ void menu_interface_zoom(MENU_ITEM_PARAMETERS)
         sprintf (string_zoom,"%d",zoom_x);
 
 
-        menu_ventana_scanf("Window Zoom",string_zoom,2);
+        //menu_ventana_scanf_numero("Window Zoom",string_zoom,2);
+		//menu_ventana_scanf("Window Zoom",string_zoom,2);
 
-        temp_zoom=parse_string_to_number(string_zoom);
+		int retorno=menu_ventana_scanf_numero("Window Zoom",string_zoom,2,+1,1,9,0);
+		if (retorno>=0) {
+	        temp_zoom=parse_string_to_number(string_zoom);
 
 
-	screen_set_window_zoom(temp_zoom);
+			screen_set_window_zoom(temp_zoom);
+		}
+
+		//else {
+		//	printf("pulsado ESC\n");
+		//}
 
 }
 
@@ -24184,6 +26718,9 @@ void menu_interface_charwidth(MENU_ITEM_PARAMETERS)
 	menu_char_width--;
 
 	if (menu_char_width==4) menu_char_width=8;
+
+	//Reorganizar ventanas en background segun nuevo tamaño caracter
+	if (menu_allow_background_windows) zxvision_rearrange_background_windows();	
 }
 
 void menu_window_settings_reduce_075(MENU_ITEM_PARAMETERS)
@@ -24325,7 +26862,7 @@ void menu_window_settings(MENU_ITEM_PARAMETERS)
 			menu_add_item_menu_shortcut(array_menu_window_settings,'b');
 		}
 
-		if (!strcmp(scr_driver_name,"xwindows")  || !strcmp(scr_driver_name,"sdl") || !strcmp(scr_driver_name,"cocoa") ) {
+		if (!strcmp(scr_new_driver_name,"xwindows")  || !strcmp(scr_new_driver_name,"sdl") || !strcmp(scr_new_driver_name,"cocoa") ) {
 			menu_add_item_menu_format(array_menu_window_settings,MENU_OPCION_NORMAL,menu_interface_hidemouse,NULL,"[%c] ~~Mouse pointer", (mouse_pointer_shown.v==1 ? 'X' : ' ') );
 			menu_add_item_menu_shortcut(array_menu_window_settings,'m');
 		}
@@ -24651,6 +27188,16 @@ void menu_interface_force_confirm_yes(MENU_ITEM_PARAMETERS)
 	force_confirm_yes.v ^=1;
 }
 
+void menu_setting_select_machine_by_name(MENU_ITEM_PARAMETERS)
+{
+	setting_machine_selection_by_name.v ^=1;
+}
+
+void menu_setting_filesel_previews(MENU_ITEM_PARAMETERS)
+{
+	menu_filesel_show_previews.v ^=1;
+}
+
 void menu_interface_settings(MENU_ITEM_PARAMETERS)
 {
         menu_item *array_menu_interface_settings;
@@ -24686,8 +27233,8 @@ void menu_interface_settings(MENU_ITEM_PARAMETERS)
 
 		menu_add_item_menu_format(array_menu_interface_settings,MENU_OPCION_NORMAL,menu_interface_charwidth,NULL,"[%d] Menu char w~~idth",menu_char_width);
 		menu_add_item_menu_shortcut(array_menu_interface_settings,'i');	
-		menu_add_item_menu_tooltip(array_menu_interface_settings,"Menu character width. EXPERIMENTAL feature");
-		menu_add_item_menu_ayuda(array_menu_interface_settings,"Menu character width. EXPERIMENTAL feature");
+		menu_add_item_menu_tooltip(array_menu_interface_settings,"Menu character width");
+		menu_add_item_menu_ayuda(array_menu_interface_settings,"Menu character width. You can reduce it so allowing more text columns in a window");
 
 
 
@@ -24746,6 +27293,14 @@ void menu_interface_settings(MENU_ITEM_PARAMETERS)
 		menu_add_item_menu_tooltip(array_menu_interface_settings,"Limit the action to open menu (F5 by default, joystick button)");			
 		menu_add_item_menu_ayuda(array_menu_interface_settings,"Limit the action to open menu (F5 by default, joystick button). To open it, you must press the key 3 times in one second");
 
+
+		menu_add_item_menu_format(array_menu_interface_settings,MENU_OPCION_NORMAL,menu_setting_select_machine_by_name,NULL,"[%c] Select machine by name",
+			(setting_machine_selection_by_name.v ? 'X' : ' ') );
+		menu_add_item_menu_tooltip(array_menu_interface_settings,"Select machine by name instead of manufacturer");
+		menu_add_item_menu_ayuda(array_menu_interface_settings,"Select machine by name instead of manufacturer");
+
+
+
 		menu_add_item_menu_format(array_menu_interface_settings,MENU_OPCION_NORMAL,menu_setting_quickexit,NULL,"[%c] ~~Quick exit",
 			(quickexit.v ? 'X' : ' ') );
 		menu_add_item_menu_shortcut(array_menu_interface_settings,'q');	
@@ -24758,6 +27313,12 @@ void menu_interface_settings(MENU_ITEM_PARAMETERS)
 		menu_add_item_menu_tooltip(array_menu_interface_settings,"Hide directories from file selector menus");
 		menu_add_item_menu_ayuda(array_menu_interface_settings,"Hide directories from file selector menus. "
 								"Useful on demo environments and you don't want the user to be able to navigate the filesystem");
+
+
+		menu_add_item_menu_format(array_menu_interface_settings,MENU_OPCION_NORMAL,menu_setting_filesel_previews,NULL,"[%c] Show file previews",
+			(menu_filesel_show_previews.v ? 'X' : ' ') );
+		menu_add_item_menu_tooltip(array_menu_interface_settings,"Show file previews in the file selector");
+		menu_add_item_menu_ayuda(array_menu_interface_settings,"Show file previews for .scr, .tap, .tzx, etc...");
 
 
 		menu_add_item_menu_format(array_menu_interface_settings,MENU_OPCION_NORMAL,menu_interface_change_gui_style,NULL,"    GUI ~~style [%s]",
@@ -24787,7 +27348,7 @@ void menu_interface_settings(MENU_ITEM_PARAMETERS)
 		menu_add_item_menu_shortcut(array_menu_interface_settings,'w');
 
 		//Con driver cocoa, no permitimos cambiar a otro driver
-		if (strcmp(scr_driver_name,"cocoa")) {
+		if (strcmp(scr_new_driver_name,"cocoa")) {
 			menu_add_item_menu_format(array_menu_interface_settings,MENU_OPCION_NORMAL,menu_change_video_driver,menu_change_video_driver_cond,"Change Video Driver");
 		}
 
@@ -26014,7 +28575,48 @@ int menu_hotswap_machine_cond(void) {
 	return 0;
 }
 
-void menu_machine_selection_for_manufacturer(int fabricante)
+
+void menu_machine_set_machine_by_id(int id_maquina)
+{
+current_machine_type=id_maquina;
+
+				     set_machine(NULL);
+                                        cold_start_cpu_registers();
+                                        reset_cpu();
+
+                                        //desactivar autoload
+                                        //noautoload.v=1;
+                                        //initial_tap_load.v=0;
+
+
+                                        //expulsamos cintas
+                                        eject_tape_load();
+                                        eject_tape_save();
+
+                                        //Y salimos de todos los menus
+                                        salir_todos_menus=1;
+
+
+										
+										if (MACHINE_IS_TBBLUE) {
+												//Si se pregunta si se quiere autoconfigurar SD, solo si esta el grabado de configuracion, e interfaz permite menu (no stdout ni simpletext ni null)
+												if (save_configuration_file_on_exit.v && tbblue_autoconfigure_sd_asked.v==0 && si_normal_menu_video_driver()) {
+													if (menu_confirm_yesno_texto("Autoconfigure Initial SD","Sure?")) {
+														menu_storage_mmc_autoconfigure_tbblue(0);
+													}
+
+													tbblue_autoconfigure_sd_asked.v=1;
+												}
+
+										}
+
+										if (MACHINE_IS_SG1000) {
+											menu_first_aid("sg1000_boot");
+										}
+											
+}
+
+void menu_machine_selection_manufacturer_machines(int fabricante)
 {
 	int i;
 	int *maquinas;
@@ -26049,7 +28651,7 @@ void menu_machine_selection_for_manufacturer(int fabricante)
 
 
 			if (i==0) {
-				//Primer fabricante
+				//Primera maquina
 	                        menu_add_item_menu_inicial_format(&array_menu_machine_selection_por_fabricante,MENU_OPCION_NORMAL,NULL,NULL,"%s",nombre_maquina);
 
 			}
@@ -26086,45 +28688,22 @@ void menu_machine_selection_for_manufacturer(int fabricante)
 
 
 
-					//printf ("Seleccion opcion=%d\n",machine_selection_por_fabricante_opcion_seleccionada);
-					int id_maquina=maquinas[machine_selection_por_fabricante_opcion_seleccionada];
-					//printf ("Maquina= %d %s\n",id_maquina, get_machine_name(id_maquina) );
-
-					current_machine_type=id_maquina;
-
-				     set_machine(NULL);
-                                        cold_start_cpu_registers();
-                                        reset_cpu();
-
-                                        //desactivar autoload
-                                        //noautoload.v=1;
-                                        //initial_tap_load.v=0;
+								//printf ("Seleccion opcion=%d\n",machine_selection_por_fabricante_opcion_seleccionada);
+								int id_maquina=maquinas[machine_selection_por_fabricante_opcion_seleccionada];
+								//printf ("Maquina= %d %s\n",id_maquina, get_machine_name(id_maquina) );
 
 
-                                        //expulsamos cintas
-                                        eject_tape_load();
-                                        eject_tape_save();
-
-                                        //Y salimos de todos los menus
-                                        salir_todos_menus=1;
 
 
+								menu_machine_set_machine_by_id(id_maquina);
+
+					
 										
-										if (MACHINE_IS_TBBLUE) {
-												//Si se pregunta si se quiere autoconfigurar SD, solo si esta el grabado de configuracion, e interfaz permite menu (no stdout ni simpletext ni null)
-												if (save_configuration_file_on_exit.v && tbblue_autoconfigure_sd_asked.v==0 && si_normal_menu_video_driver()) {
-													if (menu_confirm_yesno_texto("Autoconfigure Initial SD","Sure?")) {
-														menu_storage_mmc_autoconfigure_tbblue(0);
-													}
-
-													tbblue_autoconfigure_sd_asked.v=1;
-												}
-
-										}
-										
-
 
                               }
+
+
+
                                 //llamamos por valor de funcion
                                 if (item_seleccionado.menu_funcion!=NULL) {
                                         //printf ("actuamos por funcion\n");
@@ -26145,7 +28724,8 @@ void menu_machine_selection_for_manufacturer(int fabricante)
 
 }
 
-void menu_machine_selection(MENU_ITEM_PARAMETERS)
+//Seleccion de maquina por fabricante
+void menu_machine_selection_manufacturer(MENU_ITEM_PARAMETERS)
 {
 
 	//Seleccion por fabricante
@@ -26208,7 +28788,7 @@ void menu_machine_selection(MENU_ITEM_PARAMETERS)
                                         //int last_machine_type=machine_type;
 
 
-					menu_machine_selection_for_manufacturer(machine_selection_opcion_seleccionada);
+					menu_machine_selection_manufacturer_machines(machine_selection_opcion_seleccionada);
 
 
 
@@ -26230,7 +28810,152 @@ void menu_machine_selection(MENU_ITEM_PARAMETERS)
 
 }
 
+int menu_machine_selection_by_name_alphasort(const struct s_machine_names **d1, const struct s_machine_names **d2)
+{
 
+        //printf ("menu_filesel_alphasort %s %s\n",(*d1)->d_name,(*d2)->d_name );
+
+        //compara nombre
+        return (strcasecmp((*d1)->nombre_maquina,(*d2)->nombre_maquina));
+}
+
+void menu_machine_selection_by_name_set(MENU_ITEM_PARAMETERS)
+{
+	menu_machine_set_machine_by_id(valor_opcion);
+}
+
+//Seleccion de maquina por nombre
+void menu_machine_selection_by_name(MENU_ITEM_PARAMETERS)
+{
+
+	
+	int total_maquinas;
+
+
+	total_maquinas=0;
+
+	int i;
+
+	for (i=0;i<99999 && machine_names[i].nombre_maquina[0]!=0;i++) {
+		//printf ("id: %03d nombre: %s\n",machine_names[i].id,machine_names[i].nombre_maquina);
+		total_maquinas++;
+	}
+	
+	//printf ("total maquinas: %d\n",total_maquinas);
+
+
+	//Meterlas en array, para poderlas ordenar
+
+	struct s_machine_names *sorted_machine_names;
+
+	int tamanyo_struct=sizeof(struct s_machine_names);
+
+	int tamanyo_total=tamanyo_struct*total_maquinas;
+
+	//printf ("Allocating memory for %d\n",tamanyo_total);
+
+	sorted_machine_names=malloc(tamanyo_total);
+
+	if (sorted_machine_names==NULL) cpu_panic ("Cannot allocate memory for machine list");
+
+	//Insertar listado en memoria
+	for (i=0;i<total_maquinas;i++) {
+		//printf ("id: %03d nombre: %s\n",machine_names[i].id,machine_names[i].nombre_maquina);
+
+		strcpy(sorted_machine_names[i].nombre_maquina,machine_names[i].nombre_maquina);
+		sorted_machine_names[i].id=machine_names[i].id;
+	}
+
+	//Array de punteros para poderlos ordenar
+	struct s_machine_names **memoria_punteros;
+
+        
+	//Asignamos memoria
+    memoria_punteros=malloc(sizeof(struct dirent *)*total_maquinas);
+
+
+    if (memoria_punteros==NULL) {
+                cpu_panic("Error allocating memory when sorting machine list");
+    }	
+
+	//Meter en esa lista de punteros cada item de la estructura
+	for (i=0;i<total_maquinas;i++) {
+		memoria_punteros[i]=&sorted_machine_names[i];
+	}
+
+	//Ordenar ese listado de punteros
+
+	//lanzar qsort
+	int (*funcion_compar)(const void *, const void *);
+
+	funcion_compar=( int (*)(const void *, const void *)  ) menu_machine_selection_by_name_alphasort;
+
+	qsort(memoria_punteros,total_maquinas,sizeof(struct s_machine_names *), funcion_compar);	
+
+	//Imprimir listado de memoria
+	/*for (i=0;i<total_maquinas;i++) {
+		printf ("sorted id: %03d nombre: %s\n",memoria_punteros[i]->id,memoria_punteros[i]->nombre_maquina);
+
+	}
+	*/	
+
+
+	//Meter cada uno en menu. Asignar id maquina como valor_opcion
+
+	//Dado que es una variable local, siempre podemos usar este nombre array_menu_common
+	menu_item *array_menu_common;
+	menu_item item_seleccionado;
+	int retorno_menu;
+
+	
+	do {
+
+
+		//Como no sabemos cual sera el item inicial, metemos este sin asignar, que se sobreescribe en el siguiente menu_add_item_menu
+		menu_add_item_menu_inicial(&array_menu_common,"",MENU_OPCION_UNASSIGNED,NULL,NULL);
+
+		for (i=0;i<total_maquinas;i++) {
+			//printf ("sorted id: %03d nombre: %s\n",memoria_punteros[i]->id,memoria_punteros[i]->nombre_maquina);
+			menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,menu_machine_selection_by_name_set,NULL,memoria_punteros[i]->nombre_maquina);
+
+			menu_add_item_menu_valor_opcion(array_menu_common,memoria_punteros[i]->id);
+
+			//Si coincide id con la maquina actual, cambiar menu_machine_selection_by_name_opcion_seleccionada
+			if (current_machine_type==memoria_punteros[i]->id) {
+				menu_machine_selection_by_name_opcion_seleccionada=i;
+				//printf ("Match current machine %d with list entry %d. Changing last selected\n",current_machine_type,i);
+			}
+
+		}	
+			
+		
+					
+		menu_add_item_menu(array_menu_common,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+
+		menu_add_ESC_item(array_menu_common);
+
+		retorno_menu=menu_dibuja_menu(&menu_machine_selection_by_name_opcion_seleccionada,&item_seleccionado,array_menu_common,"Select Machine" );
+
+			
+			if ((item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu>=0) {
+					//llamamos por valor de funcion
+					if (item_seleccionado.menu_funcion!=NULL) {
+							//printf ("actuamos por funcion\n");
+							item_seleccionado.menu_funcion(item_seleccionado.valor_opcion);
+							
+					}
+			}
+
+	} while ( (item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu!=MENU_RETORNO_ESC && !salir_todos_menus);	
+
+
+	free(sorted_machine_names);
+	free(memoria_punteros);
+			
+
+ 
+
+}
 
 
 
@@ -26292,7 +29017,7 @@ int menu_generic_message_aux_filter(char *texto,int inicio, int final)
 
 		//Caracter 255 significa "transparente"
 		else if ( !(si_valid_char(caracter)) && caracter!=255 ) {
-			printf ("detectado caracter extranyo %d en posicion %d\n",caracter,inicio);
+			//printf ("detectado caracter extranyo %d en posicion %d\n",caracter,inicio);
 
 			texto[inicio]='?';
 		}
@@ -26771,7 +29496,7 @@ int menu_confirm_yesno_texto(char *texto_ventana,char *texto_interior)
 	//printf ("confirm\n");
 
         //En caso de stdout, es mas simple, mostrar texto y esperar tecla
-        if (!strcmp(scr_driver_name,"stdout")) {
+        if (!strcmp(scr_new_driver_name,"stdout")) {
 		char buffer_texto[256];
                 printf ("%s\n%s\n",texto_ventana,texto_interior);
 
@@ -26980,7 +29705,7 @@ int menu_simple_four_choices(char *texto_ventana,char *texto_interior,char *opci
 
 
 
-//Retorna 0=Cancel, 1=Append, 2=Truncate
+//Retorna 0=Cancel, 1=Append, 2=Truncate, 3=Rotate
 int menu_ask_no_append_truncate_texto(char *texto_ventana,char *texto_interior)
 {
 
@@ -26997,36 +29722,52 @@ int menu_ask_no_append_truncate_texto(char *texto_ventana,char *texto_interior)
 
 	//Siempre indicamos el Cancel
 	int ask_no_append_truncate_opcion_seleccionada=1;
-        do {
+	do {
 
 		menu_add_item_menu_inicial_format(&array_menu_ask_no_append_truncate,MENU_OPCION_SEPARADOR,NULL,NULL,texto_interior);
 
-                menu_add_item_menu_format(array_menu_ask_no_append_truncate,MENU_OPCION_NORMAL,NULL,NULL,"~~Cancel");
+		menu_add_item_menu_format(array_menu_ask_no_append_truncate,MENU_OPCION_NORMAL,NULL,NULL,"~~Cancel");
 		menu_add_item_menu_shortcut(array_menu_ask_no_append_truncate,'c');
+		menu_add_item_menu_tooltip(array_menu_ask_no_append_truncate,"Cancel operation and don't set file");
+		menu_add_item_menu_ayuda(array_menu_ask_no_append_truncate,"Cancel operation and don't set file");		
 
-                menu_add_item_menu_format(array_menu_ask_no_append_truncate,MENU_OPCION_NORMAL,NULL,NULL,"~~Append");
+		menu_add_item_menu_format(array_menu_ask_no_append_truncate,MENU_OPCION_NORMAL,NULL,NULL,"~~Append");
 		menu_add_item_menu_shortcut(array_menu_ask_no_append_truncate,'a');
+		menu_add_item_menu_tooltip(array_menu_ask_no_append_truncate,"Open the selected file in append mode");
+		menu_add_item_menu_ayuda(array_menu_ask_no_append_truncate,"Open the selected file in append mode");			
 
-                menu_add_item_menu_format(array_menu_ask_no_append_truncate,MENU_OPCION_NORMAL,NULL,NULL,"~~Truncate");
-                menu_add_item_menu_shortcut(array_menu_ask_no_append_truncate,'t');
+		menu_add_item_menu_format(array_menu_ask_no_append_truncate,MENU_OPCION_NORMAL,NULL,NULL,"~~Truncate");
+		menu_add_item_menu_shortcut(array_menu_ask_no_append_truncate,'t');
+		menu_add_item_menu_tooltip(array_menu_ask_no_append_truncate,"Truncates selected file to 0 size");
+		menu_add_item_menu_ayuda(array_menu_ask_no_append_truncate,"Truncates selected file to 0 size");			
 
-                //separador adicional para que quede mas grande la ventana y mas mono
-                menu_add_item_menu_format(array_menu_ask_no_append_truncate,MENU_OPCION_SEPARADOR,NULL,NULL," ");
+		menu_add_item_menu_format(array_menu_ask_no_append_truncate,MENU_OPCION_NORMAL,NULL,NULL,"~~Rotate");
+		menu_add_item_menu_shortcut(array_menu_ask_no_append_truncate,'r');	
+		menu_add_item_menu_tooltip(array_menu_ask_no_append_truncate,"Rotate selected file to keep history files");
+		menu_add_item_menu_ayuda(array_menu_ask_no_append_truncate,"Rename selected file adding extension suffix .1. \n"
+			"If that file also exists, the extension suffix is renamed to .2. \n"
+			"If that file also exists, the extension suffix is renamed to .3, and so on... \n"
+			"You can set the maximum file rotations, by default 10."
+		
+			);							
+
+		//separador adicional para que quede mas grande la ventana y mas mono
+		menu_add_item_menu_format(array_menu_ask_no_append_truncate,MENU_OPCION_SEPARADOR,NULL,NULL," ");
 
 
 
-                retorno_menu=menu_dibuja_menu(&ask_no_append_truncate_opcion_seleccionada,&item_seleccionado,array_menu_ask_no_append_truncate,texto_ventana);
+		retorno_menu=menu_dibuja_menu(&ask_no_append_truncate_opcion_seleccionada,&item_seleccionado,array_menu_ask_no_append_truncate,texto_ventana);
 
-                
+		
 
-                if ((item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu>=0) {
-                        //llamamos por valor de funcion
-			//if (ask_no_append_truncate_opcion_seleccionada==1) return 1;
-			//else return 0;
-                        return ask_no_append_truncate_opcion_seleccionada-1; //0=Cancel, 1=Append, 2=Truncate
-                }
+		if ((item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu>=0) {
+				//llamamos por valor de funcion
+	//if (ask_no_append_truncate_opcion_seleccionada==1) return 1;
+	//else return 0;
+				return ask_no_append_truncate_opcion_seleccionada-1; //0=Cancel, 1=Append, 2=Truncate, 3=Rotate
+		}
 
-        } while ( (item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu!=MENU_RETORNO_ESC && !salir_todos_menus);
+	} while ( (item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu!=MENU_RETORNO_ESC && !salir_todos_menus);
 
 	return 0;
 
@@ -27123,7 +29864,7 @@ void zxvision_menu_generic_message_setting(char *titulo, const char *texto, char
 	
 	zxvision_generic_message_tooltip(titulo , lineas_agregar , 0, 0, 0, NULL, 1, "%s", texto);
 	
-	if (!strcmp(scr_driver_name,"stdout")) {
+	if (!strcmp(scr_new_driver_name,"stdout")) {
 		printf ("%s\n",texto_opcion);
 		scrstdout_menu_print_speech_macro (texto_opcion);
 		printf("Enable or disable setting? 0 or 1?\n");
@@ -27229,7 +29970,7 @@ void menu_ventana_scanf(char *titulo,char *texto,int max_length)
 {
 
     //En caso de stdout, es mas simple, mostrar texto y esperar texto
-	if (!strcmp(scr_driver_name,"stdout")) {
+	if (!strcmp(scr_new_driver_name,"stdout")) {
 		printf ("%s\n",titulo);
 		scrstdout_menu_print_speech_macro(titulo);
 
@@ -27272,7 +30013,7 @@ void menu_ventana_scanf(char *titulo,char *texto,int max_length)
 	zxvision_draw_window(&ventana);
 
 
-	zxvision_scanf(&ventana,texto,max_length,scanf_ancho-2,1,0);
+	zxvision_scanf(&ventana,texto,max_length,scanf_ancho-2,1,0,0);
 
 	//menu_scanf(texto,max_length,scanf_ancho-2,scanf_x+1,scanf_y+1);
 	//int menu_scanf(char *string,unsigned int max_length,int max_length_shown,int x,int y)
@@ -27285,6 +30026,278 @@ void menu_ventana_scanf(char *titulo,char *texto,int max_length)
 
 }
 
+void menu_ventana_scanf_number_aux(zxvision_window *ventana,char *texto,int max_length,int x_texto_input)
+{
+	//En entrada de texto no validamos el maximo y minimo. Eso lo tiene que seguir haciendo la funcion que llama a menu_ventana_scanf_numero
+	//Si que se controla al pulsar botones de + y -
+	zxvision_scanf(ventana,texto,max_length,max_length,x_texto_input,0,1);
+}
+
+void menu_ventana_scanf_number_print_buttons(zxvision_window *ventana,char *texto,int x_boton_menos,int x_boton_mas,int x_texto_input,int x_boton_ok,int x_boton_cancel)
+{
+			//Borrar linea entera
+		zxvision_print_string_defaults_fillspc(ventana,x_boton_menos,0,"");
+
+		//Escribir - +
+		zxvision_print_string_defaults(ventana,x_boton_menos,0,"-");
+		zxvision_print_string_defaults(ventana,x_boton_mas,0,"+");
+
+		//Escribir numero
+		zxvision_print_string_defaults(ventana,x_texto_input,0,texto);
+
+		zxvision_print_string_defaults(ventana,x_boton_ok,2,"<OK>");	
+
+		zxvision_print_string_defaults(ventana,x_boton_cancel,2,"<Cancel>");	
+}
+
+//busca donde apunta el mouse y retorna opcion seleccionada
+int menu_ventana_scanf_number_ajust_cursor_mouse(menu_item *m,int posicion_raton_x,int posicion_raton_y)
+{
+
+	//printf ("buscando en %d,%d\n",posicion_raton_x,posicion_raton_y);
+
+	menu_item *buscar_tabulado;
+	int linea_buscada;
+
+	buscar_tabulado=menu_retorna_item_tabulado_xy(m,posicion_raton_x,posicion_raton_y,&linea_buscada);
+
+	int linea_seleccionada=-1;
+
+	if (buscar_tabulado!=NULL) {
+		//Buscar por coincidencia de coordenada x,y
+		if (buscar_tabulado->tipo_opcion!=MENU_OPCION_SEPARADOR) {
+			linea_seleccionada=linea_buscada;
+			//printf("encontrada opcion en %d\n",linea_buscada);
+			//redibuja_ventana=1;
+			//menu_tooltip_counter=0;
+		}
+	}
+	else {
+		//printf ("item no encontrado\n");
+	}
+
+	return linea_seleccionada;
+}
+
+/*
+max_length: maxima longitud, contando caracter 0 del final
+minimo: valor minimo admitido
+maximo: valor maximo admitido
+circular: si al pasar umbral, se resetea al otro umbral
+
+En entrada de texto no validamos el maximo y minimo. Eso lo tiene que seguir haciendo la funcion que llama a menu_ventana_scanf_numero
+Si que se controla al pulsar botones de + y -
+	
+*/
+
+//Retorna -1 si pulsado ESC
+int menu_ventana_scanf_numero(char *titulo,char *texto,int max_length,int incremento,int minimo,int maximo,int circular)
+{
+
+    //En caso de stdout, es mas simple, mostrar texto y esperar texto
+	//Lo gestiona la propia rutina de menu_ventana_scanf
+	if (!strcmp(scr_new_driver_name,"stdout")) {
+		menu_ventana_scanf(titulo,texto,max_length);
+		return 0;
+	}
+
+
+	int ancho_ventana=32;
+	int alto_ventana=5;
+
+
+	int xventana=menu_center_x()-ancho_ventana/2;
+	int yventana=menu_center_y()-alto_ventana/2;
+
+	zxvision_window ventana;
+
+	zxvision_new_window(&ventana,xventana,yventana,ancho_ventana,alto_ventana,
+                                                        ancho_ventana-1,alto_ventana-2,titulo);
+
+	//Dado que es una variable local, siempre podemos usar este nombre array_menu_common
+	menu_item *array_menu_common;
+	menu_item item_seleccionado;
+	int retorno_menu;
+
+	//El foco en el numero
+	int comun_opcion_seleccionada=1;
+
+
+	//Donde van los bloques
+
+	//int inicio_bloque_x=8;
+	//int inicio_bloque_y=2;
+	//int ancho_bloque=6;
+
+	//int linea=inicio_bloque_y;
+
+	int max_input_visible=ancho_ventana-2-2-2; //2 laterales, 2 de los botones, y 2 de espacios entre botones
+	if (max_length<max_input_visible) max_input_visible=max_length;
+
+	int x_boton_menos=1;
+	int x_texto_input=x_boton_menos+2;
+	int x_boton_mas=x_texto_input+max_input_visible+1;
+	int x_boton_ok=1;	
+	int x_boton_cancel=x_boton_ok+5;
+
+	//Dibujar texto interior
+	menu_ventana_scanf_number_print_buttons(&ventana,texto,x_boton_menos,x_boton_mas,x_texto_input,x_boton_ok,x_boton_cancel);
+
+	//Dibujar ventana antes de scanf
+	zxvision_draw_window(&ventana);
+	zxvision_draw_window_contents(&ventana);
+	
+	//Entramos primero editando el numero
+	menu_ventana_scanf_number_aux(&ventana,texto,max_length,x_texto_input);
+
+	//Cambiar la opcion seleccionada a la del OK, al pulsar enter
+	//comun_opcion_seleccionada=3;	
+
+
+
+	//Decir que habra que ajustar raton segun posicion mouse actual
+	int debe_ajustar_cursor_segun_mouse=1;
+
+
+	do {
+
+
+
+		//Escribir primero numero
+
+		//Dibujar texto interior
+		menu_ventana_scanf_number_print_buttons(&ventana,texto,x_boton_menos,x_boton_mas,x_texto_input,x_boton_ok,x_boton_cancel);
+
+		
+		menu_add_item_menu_inicial_format(&array_menu_common,MENU_OPCION_NORMAL,NULL,NULL,"-");
+		menu_add_item_menu_tabulado(array_menu_common,x_boton_menos,0);
+
+		menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,NULL,NULL,texto);
+		menu_add_item_menu_tabulado(array_menu_common,x_texto_input,0);			
+
+		menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,NULL,NULL,"+");
+		menu_add_item_menu_tabulado(array_menu_common,x_boton_mas,0);	
+		
+		menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL,NULL,NULL,"<OK>");
+		menu_add_item_menu_tabulado(array_menu_common,x_boton_ok,2);	
+
+		menu_add_item_menu_format(array_menu_common,MENU_OPCION_NORMAL|MENU_OPCION_ESC,NULL,NULL,"<Cancel>");
+		menu_add_item_menu_tabulado(array_menu_common,x_boton_cancel,2);	
+
+
+		//Antes de abrir el menu, ajustar la opcion seleccionada cuando ha salido del input de numero
+		//y a que boton apunta el mouse
+		if (debe_ajustar_cursor_segun_mouse) {
+			debe_ajustar_cursor_segun_mouse=0;
+
+			//Asumimos que esta en OK
+			//Cambiar la opcion seleccionada a la del OK, al pulsar enter
+			comun_opcion_seleccionada=3;
+
+			int opcion_sel=menu_ventana_scanf_number_ajust_cursor_mouse(array_menu_common,menu_mouse_x,menu_mouse_y-1);		
+			//printf("opcion seleccionada: %d\n",opcion_sel);
+			if (opcion_sel>=0) {
+				comun_opcion_seleccionada=opcion_sel;
+			}
+		}
+
+		retorno_menu=menu_dibuja_menu(&comun_opcion_seleccionada,&item_seleccionado,array_menu_common,titulo);
+
+			
+			if ((item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu>=0) {
+				
+
+					//botones menos y mas
+					if (comun_opcion_seleccionada==0 || comun_opcion_seleccionada==2) {
+
+						int numero=parse_string_to_number(texto);
+
+						if (comun_opcion_seleccionada==0) {							
+							numero-=incremento;
+							if (numero<minimo) {
+								if (circular) {
+									numero=maximo;
+								}
+								else {
+									numero=minimo;
+								}
+							}
+						}	
+
+						if (comun_opcion_seleccionada==2) {
+							numero+=incremento;
+
+							if (numero>maximo) {
+								if (circular) {
+									numero=minimo;
+								}
+								else {
+									numero=maximo;
+								}
+							}							
+						}	
+
+						sprintf(texto,"%d",numero);	
+					}							
+
+					if (comun_opcion_seleccionada==1) {
+						menu_ventana_scanf_number_aux(&ventana,texto,max_length,x_texto_input);
+						//zxvision_scanf(&ventana,texto,max_length,max_length,x_texto_input,0,1);
+						//menu_espera_no_tecla();
+
+
+
+						//Pero ajustar el mouse si apunta a alguna opcion
+						debe_ajustar_cursor_segun_mouse=1;
+					}
+
+			
+
+			}
+
+    } while ( (item_seleccionado.tipo_opcion&MENU_OPCION_ESC)==0 && retorno_menu!=MENU_RETORNO_ESC && !salir_todos_menus && comun_opcion_seleccionada<3);
+
+
+    //En caso de menus tabulados, es responsabilidad de este de liberar ventana
+    zxvision_destroy_window(&ventana);	
+
+	cls_menu_overlay();
+
+	if (comun_opcion_seleccionada==4 || retorno_menu==MENU_RETORNO_ESC) return -1; //Pulsado Cancel
+
+	else return 0;
+}
+
+//Similar a menu_ventana_scanf_numero pero evita tener que crear el buffer de char temporal
+//Y ademas muestra error si limites se exceden
+void menu_ventana_scanf_numero_enhanced(char *titulo,int *variable,int max_length,int incremento,int minimo,int maximo,int circular)
+{
+
+	//Asignar memoria para el buffer
+	char *buf_texto;
+
+	buf_texto=malloc(max_length);
+	if (buf_texto==NULL) cpu_panic("Can not allocate memory for input text");
+
+	sprintf(buf_texto,"%d",*variable);
+
+	int ret=menu_ventana_scanf_numero(titulo,buf_texto,max_length,incremento,minimo,maximo,circular);
+	if (ret>=0) {
+
+		int numero=parse_string_to_number(buf_texto);
+
+		if (numero<minimo || numero>maximo) {
+			debug_printf(VERBOSE_ERR,"Out of range. Allowed range: minimum: %d maximum: %d",minimo,maximo);
+		}
+		else {
+			*variable=numero;
+		}
+	}
+
+	//printf("liberando memoria\n");
+	free(buf_texto);
+	
+}
 
 void menu_about_read_file(char *title,char *aboutfile)
 {
@@ -27450,6 +30463,11 @@ void menu_about_license_qemu(MENU_ITEM_PARAMETERS)
         menu_about_read_file("Qemu License","licenses/LICENSE_qemu");
 }
 
+void menu_about_license_hilow(MENU_ITEM_PARAMETERS)
+{
+        menu_about_read_file("Hilow License","licenses/LICENSE_hilow");
+}
+
 
 void menu_about_statistics(MENU_ITEM_PARAMETERS)
 {
@@ -27458,10 +30476,14 @@ void menu_about_statistics(MENU_ITEM_PARAMETERS)
 
 	menu_generic_message_format("Statistics",
 		"Source code lines: %d\n"
-		"Total time used on coding ZEsarUX: ^^%d^^ hours (and growing)\n\n"
+		"Total time used on coding ZEsarUX: ^^%d^^ hours (and growing)\n"
+		"ZEsarUX yesterday users: %s"
+		"\n\n"
 		"Edited with VSCode, Working Copy and vim\n"
 		"Developed on macOS Catalina, Debian 10, Raspbian, FreeBSD 12, and MinGW environment on Windows\n"
-		,LINES_SOURCE,tiempo_trabajado_en_zesarux);
+		,LINES_SOURCE,tiempo_trabajado_en_zesarux,
+		(stats_last_yesterday_users[0]==0 ? "Unknown" : stats_last_yesterday_users)
+		);
 
 }
 
@@ -27549,7 +30571,7 @@ void menu_about_running_info(MENU_ITEM_PARAMETERS)
 		"%s"
 		"%s"
 		,
-		scr_driver_name,string_video_drivers,audio_driver_name,string_audio_drivers,
+		scr_new_driver_name,string_video_drivers,audio_new_driver_name,string_audio_drivers,
 		directorio_actual,
 
 #if defined(__APPLE__)
@@ -27723,6 +30745,55 @@ void menu_about_help(MENU_ITEM_PARAMETERS)
 }
 
 
+void menu_help_background_windows(MENU_ITEM_PARAMETERS)
+{
+
+	
+		menu_generic_message("Background Windows Help",
+			"When you enable Background Windows (from Settings-> GUI Settings-> Windows Settings), "
+			"some features are added to the ZX Desktop and some behaviour is modified. \n"
+			"\n"
+			"First, we will refer to 'menu' to all the menu windows and all the windows in background. "
+			"When we say that the 'menu is open' or the 'menu is closed', we refer to all the menu windows and all the windows "
+			"in background, that they are visible or not. \n"
+			"\n"
+			"We will refer to 'main menu' to the main ZEsarUX menu window (the one with Smartload, Machine, etc). \n"
+			"\n"
+			"Windows that can be sent to background, have a new button (exclamation mark !) in the window title. \n"
+			"Pressing that button (or F6 key) will send the window to the background and go back to the previous window. \n"
+			"\n"
+			"A window in the background is open, doesn't have the focus, and usually is refreshing its contents "
+			"(we will talk about it later). \n"
+			"If you click to another window, the current window will be sent to background, if it allows to do it. "
+			"If it's not allowed, the current window will be closed. \n"
+			"A window that is in background and refreshes its contents, will have it's background button (!) flashing, only if you have multitasking enabled (by default). \n" 
+			"Some background windows don't refresh their contents when they are in background, like Debug CPU. \n"
+			"\n"
+			"Pressing F5 when on menu or pressing the ZEsarUX logo (on the bottom right of ZX Desktop) will send you back to the main menu.\n"
+			"The ZEsarUX logo only appears when menu is open. \n"
+			"\n"
+			//???? "si venimos de conmutar de otra ventana, se abrira menu principal"
+			"Pressing window close button, ESC or right click on the mouse it always closes the current window (same behaviour with background windows disabled). \n" 
+			"\n"
+			"When menu is open, pressing on the emulated machine section (usually on the left), the keyboard focus is lost from the menu "
+			"and goes to the emulated machine. To return the keyboard focus to the menu, press on any of the background windows, "
+			"or in the ZEsarUX logo, or press F5. \n"
+			"\n"
+			"Pressing ESC on the main menu, makes disappear all windows. But pressing F5 again will restore all windows. \n"
+			"Keep in mind that F-keys are only read when menu is closed (except F4, F5 and F6, which are also read with menu open). "
+			"\n"
+			"You can enable a setting to restore windows when ZEsarUX is opened (from Settings-> GUI Settings-> Windows Settings-> "
+			"Reopen windows on start). \n"
+			"\n"
+			"You can have background windows enabled but multitasking disabled (not recommended, but allowed). "
+
+			
+	);
+
+
+}
+
+
 void menu_licenses(MENU_ITEM_PARAMETERS)
 {
         menu_item *array_menu_common;
@@ -27741,6 +30812,9 @@ void menu_licenses(MENU_ITEM_PARAMETERS)
 
 			menu_add_item_menu(array_menu_common,"~~Fuse disassembler",MENU_OPCION_NORMAL,menu_about_license_fuse,NULL);
 			menu_add_item_menu_shortcut(array_menu_common,'f');	
+
+			menu_add_item_menu(array_menu_common,"~~Hilow",MENU_OPCION_NORMAL,menu_about_license_hilow,NULL);
+			menu_add_item_menu_shortcut(array_menu_common,'h');
 
 			menu_add_item_menu(array_menu_common,"m~~dvtool",MENU_OPCION_NORMAL,menu_about_license_mdvtool,NULL);
 			menu_add_item_menu_shortcut(array_menu_common,'d');	
@@ -27808,6 +30882,9 @@ void menu_about(MENU_ITEM_PARAMETERS)
 
 			menu_add_item_menu(array_menu_about,"~~Help",MENU_OPCION_NORMAL,menu_about_help,NULL);
 			menu_add_item_menu_shortcut(array_menu_about,'h');
+
+			menu_add_item_menu(array_menu_about,"Help ~~Background Windows",MENU_OPCION_NORMAL,menu_help_background_windows,NULL);
+			menu_add_item_menu_shortcut(array_menu_about,'b');
 
 			menu_add_item_menu(array_menu_about,"Help ~~Keyboard",MENU_OPCION_NORMAL,menu_help_show_keyboard,NULL);
 			menu_add_item_menu_shortcut(array_menu_about,'k');			
@@ -27893,6 +30970,11 @@ void menu_about(MENU_ITEM_PARAMETERS)
 }
 
 
+void menu_msx_loading_noise_reduction(MENU_ITEM_PARAMETERS)
+{
+	msx_loading_noise_reduction.v ^=1;
+}
+
 //menu tape settings
 void menu_settings_tape(MENU_ITEM_PARAMETERS)
 {
@@ -27961,6 +31043,12 @@ void menu_settings_tape(MENU_ITEM_PARAMETERS)
 		menu_add_item_menu_tooltip(array_menu_settings_tape,"Apply offset to sound value read");
 		menu_add_item_menu_ayuda(array_menu_settings_tape,"Indicates some value (positive or negative) to sum to the raw value read "
 					"(considering range from -128 to +127) to the input audio value read");
+
+
+		if (MACHINE_IS_MSX) {
+			menu_add_item_menu_format(array_menu_settings_tape,MENU_OPCION_NORMAL,menu_msx_loading_noise_reduction,NULL,"[%c] Loading noise reduction",
+			(msx_loading_noise_reduction.v==1 ? 'X' : ' '));
+		}
 
 		if (MACHINE_IS_SPECTRUM) {
 			menu_add_item_menu_format(array_menu_settings_tape,MENU_OPCION_NORMAL,menu_realtape_accelerate_loaders,NULL,"[%c] A~~ccelerate loaders",
@@ -28490,10 +31578,17 @@ void menu_settings(MENU_ITEM_PARAMETERS)
 		menu_add_item_menu_tooltip(array_menu_settings,"Snapshot settings");
 		menu_add_item_menu_ayuda(array_menu_settings,"Snapshot settings");
 
+#ifndef NETWORKING_DISABLED	
+
+		//De momento todo lo que hay en el menu de Statistics requiere red, y este requiere pthreads
+		//Si no hay threads, tampoco este menu
+
 		menu_add_item_menu(array_menu_settings,"Stat~~istics",MENU_OPCION_NORMAL,menu_settings_statistics,NULL);
 		menu_add_item_menu_shortcut(array_menu_settings,'i');
 		menu_add_item_menu_tooltip(array_menu_settings,"Statistics settings");
 		menu_add_item_menu_ayuda(array_menu_settings,"Statistics settings");		
+
+#endif
 
 		menu_add_item_menu(array_menu_settings,"S~~torage",MENU_OPCION_NORMAL,menu_settings_storage,NULL);
 		menu_add_item_menu_shortcut(array_menu_settings,'t');
@@ -28594,6 +31689,145 @@ void menu_inicio_pre_retorno_reset_flags(void)
 	menu_event_open_menu.v=0;
 }
 
+void menu_machine_selection(MENU_ITEM_PARAMETERS)
+{
+	if (setting_machine_selection_by_name.v==0) {
+		menu_machine_selection_manufacturer(0);
+	}
+	else {
+		menu_machine_selection_by_name(0);
+	}
+}
+
+void menu_inicio_handle_lower_icon_presses(void)
+{
+
+	int pulsado_boton=menu_pressed_zxdesktop_lower_icon_which;
+
+
+
+	//Para que no vuelva a saltar
+	menu_pressed_zxdesktop_lower_icon_which=-1; 	
+
+	// Ver que este activo
+
+	        int total_botones;
+
+        int ancho_boton;
+        int alto_boton;
+
+        int yinicio;
+
+        menu_ext_desktop_lower_icons_get_geometry(&ancho_boton,&alto_boton,&total_botones,NULL,NULL,&yinicio);
+
+        //printf("yinicio: %d\n",)
+
+
+        if (pulsado_boton>=total_botones) return;
+
+		//Ver indice del array
+
+		int indice_array=zxdesktop_lowericon_find_index(pulsado_boton);
+
+		if (indice_array<0) return;
+
+		
+
+//Ejecutar accion
+
+        void (*funcion_accion)(void);
+
+
+        funcion_accion=zdesktop_lowericons_array[indice_array].accion;
+
+		funcion_accion();
+	
+	salir_todos_menus=1;
+
+
+
+}
+void menu_inicio_handle_button_presses(void)
+{
+
+	int pulsado_boton=menu_pressed_zxdesktop_button_which;
+
+
+
+	//Avisar que se abren menus desde botones directo, para cambiar coordenada x,y
+	direct_menus_button_pressed.v=1;
+	direct_menus_button_pressed_which=menu_pressed_zxdesktop_button_which;
+
+
+	//Para que no vuelva a saltar
+	menu_pressed_zxdesktop_button_which=-1; 	
+
+	switch (pulsado_boton) {
+		case 0:
+			//Nada. Solo abrir el menu
+		break;
+
+		case 1:
+			//printf("antes smartload\n");
+			menu_smartload(0);
+			//printf("despues smartload\n");
+		break;
+
+		case 2:
+			menu_snapshot(0);
+		break;
+
+		case 3:
+			menu_machine_selection(0);
+		break;
+
+		case 4:
+			menu_audio_settings(0);
+		break;
+
+		case 5:
+			menu_display_settings(0);
+		break;
+
+		case 6:
+			menu_storage_settings(0);
+		break;
+
+		case 7:
+			menu_debug_settings(0);
+		break;	
+
+		case 8:
+			menu_network(0);
+		break;
+
+		case 9:
+			menu_windows(0);
+		break;
+
+		case 10:
+			menu_settings(0);
+		break;
+
+		case 11:
+			menu_about(0);
+		break;
+
+		case 12:
+			menu_principal_salir_emulador(0);
+		break;																			
+	}
+
+	salir_todos_menus=1;
+
+	//Y decir que el siguiente menu ya no se abre desde boton y por tanto no se posiciona debajo del boton
+	//Antes se quitaba el flag tambien en menu_dibuja_menu, pero ya no. Asi conseguimos que todos los menus
+	//que se abran dependiendo del boton, queden debajo de dicho boton
+	direct_menus_button_pressed.v=0;
+
+}
+
+
 void menu_inicio_bucle_main(void)
 {
 	menu_first_aid("initial_menu");
@@ -28614,7 +31848,29 @@ void menu_inicio_bucle_main(void)
 
 	do {
 
-		if (strcmp(scr_driver_name,"xwindows")==0 || strcmp(scr_driver_name,"sdl")==0 || strcmp(scr_driver_name,"caca")==0 || strcmp(scr_driver_name,"fbdev")==0 || strcmp(scr_driver_name,"cocoa")==0 || strcmp(scr_driver_name,"curses")==0) f_functions=1;
+
+		if (menu_pressed_zxdesktop_button_which>=0 || menu_pressed_zxdesktop_lower_icon_which>=0) {
+			cls_menu_overlay();
+		//Si se habia pulsado boton de zx desktop y boton no es el 0
+		//con boton 0 lo que hacemos es abrir el menu solamente			
+			if (menu_pressed_zxdesktop_button_which>0) {
+							menu_inicio_handle_button_presses();
+			}
+
+			//Si era 0 es el menu inicio y liberamos el boton
+			else if (menu_pressed_zxdesktop_button_which==0) {
+				menu_pressed_zxdesktop_button_which=-1;
+			}
+
+			else if (menu_pressed_zxdesktop_lower_icon_which>=0) {
+				menu_inicio_handle_lower_icon_presses();
+			}
+			//printf ("despues menu_inicio_handle_button_presses\n");
+		}
+
+		else {		
+
+		if (strcmp(scr_new_driver_name,"xwindows")==0 || strcmp(scr_new_driver_name,"sdl")==0 || strcmp(scr_new_driver_name,"caca")==0 || strcmp(scr_new_driver_name,"fbdev")==0 || strcmp(scr_new_driver_name,"cocoa")==0 || strcmp(scr_new_driver_name,"curses")==0) f_functions=1;
 		else f_functions=0;
 
 
@@ -28631,20 +31887,18 @@ void menu_inicio_bucle_main(void)
 
 					);
 
-		menu_add_item_menu(array_menu_principal,"~~Machine",MENU_OPCION_NORMAL,menu_machine_selection,NULL);
-		menu_add_item_menu_shortcut(array_menu_principal,'m');
-		menu_add_item_menu_tooltip(array_menu_principal,"Change active machine");
-		menu_add_item_menu_ayuda(array_menu_principal,"You can switch to another machine. It also resets the machine");
-
-		menu_add_item_menu_format(array_menu_principal,MENU_OPCION_NORMAL,menu_storage_settings,NULL,"S~~torage");
-		menu_add_item_menu_shortcut(array_menu_principal,'t');
-		menu_add_item_menu_tooltip(array_menu_principal,"Select storage mediums, like tape, MMC, IDE, etc");
-		menu_add_item_menu_ayuda(array_menu_principal,"Select storage mediums, like tape, MMC, IDE, etc");		
 
 		menu_add_item_menu(array_menu_principal,"S~~napshot",MENU_OPCION_NORMAL,menu_snapshot,NULL);
 		menu_add_item_menu_shortcut(array_menu_principal,'n');
 		menu_add_item_menu_tooltip(array_menu_principal,"Load or save snapshots");
 		menu_add_item_menu_ayuda(array_menu_principal,"Load or save different snapshot images. Snapshot images are loaded or saved at once");
+
+
+		menu_add_item_menu(array_menu_principal,"~~Machine",MENU_OPCION_NORMAL,menu_machine_selection,NULL);
+		menu_add_item_menu_shortcut(array_menu_principal,'m');
+		menu_add_item_menu_tooltip(array_menu_principal,"Change active machine");
+		menu_add_item_menu_ayuda(array_menu_principal,"You can switch to another machine. It also resets the machine");
+
 
 		menu_add_item_menu(array_menu_principal,"~~Audio",MENU_OPCION_NORMAL,menu_audio_settings,NULL);
 		menu_add_item_menu_shortcut(array_menu_principal,'a');
@@ -28652,20 +31906,28 @@ void menu_inicio_bucle_main(void)
 		menu_add_item_menu_ayuda(array_menu_principal,"Audio related actions");
 
 
-		menu_add_item_menu(array_menu_principal,"Netw~~ork",MENU_OPCION_NORMAL,menu_network,NULL);
-		menu_add_item_menu_shortcut(array_menu_principal,'o');
-		menu_add_item_menu_tooltip(array_menu_principal,"Network related actions");
-		menu_add_item_menu_ayuda(array_menu_principal,"Network related actions");
+		menu_add_item_menu(array_menu_principal,"~~Display",MENU_OPCION_NORMAL,menu_display_settings,NULL);
+		menu_add_item_menu_shortcut(array_menu_principal,'d');
+		menu_add_item_menu_tooltip(array_menu_principal,"Display related actions");
+		menu_add_item_menu_ayuda(array_menu_principal,"Display related actions");		
+
+
+		menu_add_item_menu_format(array_menu_principal,MENU_OPCION_NORMAL,menu_storage_settings,NULL,"S~~torage");
+		menu_add_item_menu_shortcut(array_menu_principal,'t');
+		menu_add_item_menu_tooltip(array_menu_principal,"Select storage mediums, like tape, MMC, IDE, etc");
+		menu_add_item_menu_ayuda(array_menu_principal,"Select storage mediums, like tape, MMC, IDE, etc");
+
 
 		menu_add_item_menu(array_menu_principal,"D~~ebug",MENU_OPCION_NORMAL,menu_debug_settings,NULL);
 		menu_add_item_menu_shortcut(array_menu_principal,'e');
 		menu_add_item_menu_tooltip(array_menu_principal,"Debug tools");
 		menu_add_item_menu_ayuda(array_menu_principal,"Tools to debug the machine");
 
-		menu_add_item_menu(array_menu_principal,"~~Display",MENU_OPCION_NORMAL,menu_display_settings,NULL);
-		menu_add_item_menu_shortcut(array_menu_principal,'d');
-		menu_add_item_menu_tooltip(array_menu_principal,"Display related actions");
-		menu_add_item_menu_ayuda(array_menu_principal,"Display related actions");
+
+		menu_add_item_menu(array_menu_principal,"Netw~~ork",MENU_OPCION_NORMAL,menu_network,NULL);
+		menu_add_item_menu_shortcut(array_menu_principal,'o');
+		menu_add_item_menu_tooltip(array_menu_principal,"Network related actions");
+		menu_add_item_menu_ayuda(array_menu_principal,"Network related actions");
 
 
 		if (menu_allow_background_windows) {
@@ -28675,14 +31937,16 @@ void menu_inicio_bucle_main(void)
 			menu_add_item_menu_ayuda(array_menu_principal,"Window management");
 		}
 
+
+		menu_add_item_menu(array_menu_principal,"",MENU_OPCION_SEPARADOR,NULL,NULL);		
+
+
 		menu_add_item_menu(array_menu_principal,"Sett~~ings",MENU_OPCION_NORMAL,menu_settings,NULL);
 		menu_add_item_menu_shortcut(array_menu_principal,'i');
 		menu_add_item_menu_tooltip(array_menu_principal,"General Settings");
 		menu_add_item_menu_ayuda(array_menu_principal,"General Settings");
 
-		
-
-		menu_add_item_menu(array_menu_principal,"",MENU_OPCION_SEPARADOR,NULL,NULL);
+			
 		menu_add_item_menu(array_menu_principal,"He~~lp...",MENU_OPCION_NORMAL,menu_about,NULL);
 		menu_add_item_menu_shortcut(array_menu_principal,'l');
 		menu_add_item_menu_tooltip(array_menu_principal,"Help menu");
@@ -28696,11 +31960,12 @@ void menu_inicio_bucle_main(void)
 		menu_add_item_menu_ayuda(array_menu_principal,"Exit emulator");
 
 
+
 		retorno_menu=menu_dibuja_menu(&menu_inicio_opcion_seleccionada,&item_seleccionado,array_menu_principal,"ZEsarUX v." EMULATOR_VERSION );
 
-		printf ("Opcion seleccionada: %d\n",menu_inicio_opcion_seleccionada);
-		printf ("Tipo opcion: %d\n",item_seleccionado.tipo_opcion);
-		printf ("Retorno menu: %d\n",retorno_menu);
+		//printf ("Opcion seleccionada: %d\n",menu_inicio_opcion_seleccionada);
+		//printf ("Tipo opcion: %d\n",item_seleccionado.tipo_opcion);
+		//printf ("Retorno menu: %d\n",retorno_menu);
 		
 
 		if ( (retorno_menu!=MENU_RETORNO_ESC) &&  (retorno_menu==MENU_RETORNO_F10)  ) {
@@ -28726,27 +31991,18 @@ void menu_inicio_bucle_main(void)
 			
 		}
 
-		//printf ("Opcion seleccionada: %d\n",menu_inicio_opcion_seleccionada);
-		//printf ("Tipo opcion: %d\n",item_seleccionado.tipo_opcion);
-		//printf ("Retorno menu: %d\n",retorno_menu);
 
-		//opcion numero 11: ESC back
-		//item_seleccionado.tipo_opcion&MENU_OPCION_ESC
-
-		/*
-		if (retorno_menu!=MENU_RETORNO_ESC && menu_inicio_opcion_seleccionada==11) {
-			printf ("opcion 11\n");
-			salir_menu=1;
-		}
-		if (retorno_menu==MENU_RETORNO_ESC) salir_menu=1;
-		*/
 
 		if (retorno_menu==MENU_RETORNO_ESC || (item_seleccionado.tipo_opcion & MENU_OPCION_ESC) == MENU_OPCION_ESC) {
-			printf ("opcion ESC o pulsado ESC\n");
+			//printf ("opcion ESC o pulsado ESC\n");
 			salir_menu=1;
+		}
+
 		}
 
 	} while (!salir_menu && !salir_todos_menus);
+
+	//printf ("Fin menu_inicio_bucle_main\n");
 
 }
 
@@ -28761,7 +32017,7 @@ void menu_inicio_bucle(void)
 	//Si no hiciera esto, se abriria menu, y luego se reabriria al cerrarlo, 
 	//dado que tenemos menu_pressed_open_menu_while_in_menu.v activado
 	if (menu_pressed_open_menu_while_in_menu.v) {
-		printf ("Forgetting Z logo click action done before executing main menu\n");
+		//printf ("Forgetting Z logo click action done before executing main menu\n");
 					menu_pressed_open_menu_while_in_menu.v=0;
 					salir_todos_menus=0;
 
@@ -28774,13 +32030,18 @@ void menu_inicio_bucle(void)
 	do {
 		reopen_menu=0;
 
+		//Si se ha pulsado en algun boton de menu
+		if (menu_pressed_zxdesktop_button_which>=0 || menu_pressed_zxdesktop_lower_icon_which>=0) {
+			//printf ("Reabrimos menu para boton pulsado %d lower icon %d\n",menu_pressed_zxdesktop_button_which,menu_pressed_zxdesktop_lower_icon_which);
+		}
+
 		menu_inicio_bucle_main();
 
 		//Se reabre el menu tambien si pulsada tecla F5 en cualquiera de los menus
 		if (menu_pressed_open_menu_while_in_menu.v) {
 			menu_pressed_open_menu_while_in_menu.v=0;
 			reopen_menu=1;
-			printf ("Reabrimos menu\n");
+			//printf ("Reabrimos menu\n");
 		}
 
 
@@ -28840,7 +32101,7 @@ void menu_inicio_bucle(void)
 						//Se reabre el menu tambien si pulsada tecla F5 en cualquiera de los menus
 						if (menu_pressed_open_menu_while_in_menu.v) {
 							menu_pressed_open_menu_while_in_menu.v=0;
-						}					
+						}
 			
 					}
 				}
@@ -28890,6 +32151,19 @@ menu_init_footer hace falta pues el layer de menu se borra y se queda negro en l
 
 	//Redibujar ext desktop, para que no se vea el logo (logo solo aparece si menu abierto)
 	menu_draw_ext_desktop();
+
+	//Si salimos de menu y se ha pulsado dicha tecla F para activar la función, volver con menu overlay activo
+	if (overlay_visible_when_menu_closed) {
+		menu_overlay_activo=1;
+
+		//Y redibujamos las ventanas, para que se vean los titulos sobretodo (pues los overlay en background no redibujan los titulos)
+		//decir que ventana principal no esta activa, para indicar que están todas en background
+		ventana_tipo_activa=0;
+
+		generic_footertext_print_operating("BKWIND");
+
+		zxvision_redraw_all_windows();
+	}
 
 }
 
@@ -29014,6 +32288,10 @@ void menu_process_f_functions_by_action(int accion)
 			menu_reinsert_tape();
 		break;
 
+		case F_FUNCION_PAUSEUNPAUSETAPE:
+			menu_realtape_pause_unpause(0);
+		break;		
+
 		case F_FUNCION_DEBUGCPU:
 			menu_debug_registers(0);
 		break;
@@ -29028,6 +32306,25 @@ void menu_process_f_functions_by_action(int accion)
 
 		case F_FUNCION_EXITEMULATOR:
 			end_emulator();
+		break;
+
+		case F_FUNCION_OVERLAY_WINDOWS:
+			//Solo permitido si esta el setting de background windows
+			if (!menu_allow_background_windows) {
+                menu_error_message("Background windows setting is not enabled. You can enable it on Settings-> GUI-> Windows-> Background windows");
+        	}
+			else { 
+				//Solo si opcion esta desactivada
+				//Y solo desde el menu. Aunque para llegar aqui se abre el menu, con lo que el check es redundante
+				if (!overlay_visible_when_menu_closed && menu_abierto) {
+					overlay_visible_when_menu_closed=1;
+					debug_printf(VERBOSE_INFO,"Enabling ShowBackgroundWindows");
+				}
+				//Al lanzar menu de inicio siempre se pone overlay_visible_when_menu_closed=0,
+				//por lo que al llegar aqui siempre estar a 0 y se activara
+				//Por tanto para activar hay que pulsar la tecla F asociada,
+				//pero para desactivarlo hay que pulsar cualquier otra tecla F (y no la misma, o se reactivaria)
+			}
 		break;
 
 
@@ -29082,6 +32379,25 @@ void menu_inicio(void)
 {
 
 	//printf ("inicio menu_inicio\n");
+
+	//Comprobar si se ha pulsado un boton para colorearlo
+	if (mouse_left) {
+		if (zxvision_if_mouse_in_zlogo_or_buttons_desktop() ) {
+			//printf("Pulsado en un boton\n");
+
+			//Dibujamos de otro color ese boton
+			//que boton=menu_pressed_zxdesktop_button_which
+
+			//menu_draw_ext_desktop_dibujar_boton_pulsado(menu_pressed_zxdesktop_button_which);
+			menu_draw_ext_desktop_dibujar_boton_or_lower_icon_pulsado();
+
+		}
+	}
+
+				//Esto se ha puesto a 1 antes desde zxvision_if_mouse_in_zlogo_or_buttons_desktop,
+				//indirectamente cuando llama a menu_calculate_mouse_xy_absolute_interface_pixel
+				
+				mouse_movido=0;	
 
 	//Pulsado boton salir del emulador, en drivers xwindows, sdl, etc, en casos con menu desactivado, sale del todo
 	if (menu_button_exit_emulator.v && (menu_desactivado.v || menu_desactivado_andexit.v)
@@ -29144,7 +32460,7 @@ void menu_inicio(void)
 	}
 
 
-	//printf ("before menu_espera_no_tecla\n");
+	//printf ("after menu_inicio_reset_emulated_keys\n");
 
 	//Si se ha pulsado tecla de OSD keyboard, al llamar a espera_no_tecla, se abrira osd y no conviene.
 	
@@ -29155,13 +32471,13 @@ void menu_inicio(void)
 	//printf ("after menu_espera_no_tecla\n");
 
 
-        if (!strcmp(scr_driver_name,"stdout")) {
+        if (!strcmp(scr_new_driver_name,"stdout")) {
 		//desactivar menu multitarea con stdout
 		menu_multitarea=0;
         }
 
 	//simpletext no soporta menu
-        if (!strcmp(scr_driver_name,"simpletext")) {
+        if (!strcmp(scr_new_driver_name,"simpletext")) {
 		printf ("Can not open menu: simpletext video driver does not support menu.\n");
 		menu_inicio_pre_retorno();
 		return;
@@ -29177,11 +32493,12 @@ void menu_inicio(void)
 
 	//quitar splash text por si acaso
 	menu_splash_segundos=1;
-	reset_splash_text();
+	reset_welcome_message();
 
 
 	cls_menu_overlay();
     set_menu_overlay_function(normal_overlay_texto_menu);
+	overlay_visible_when_menu_closed=0;
 
 
 	//Y refrescar footer. Hacer esto para que redibuje en pantalla y no en layer de mezcla de menu
@@ -29191,6 +32508,8 @@ void menu_inicio(void)
 
 	//Establecemos variable de salida de todos menus a 0
 	salir_todos_menus=0;
+
+	//printf ("inicio menu_inicio2\n");
 
 
 	//Si first aid al inicio
@@ -29406,12 +32725,42 @@ void menu_inicio(void)
 		osd_kb_no_mostrar_desde_menu=0; //Volver a permitir aparecer teclado osd
 		
 		//Abrir menu normal
-		//printf ("Abrir menu normal\n");
+		//printf ("Abrir menu normal. mouse left: %d\n",mouse_left);
+
+		//Ver si se ha pulsado en botones de zx desktop
+		if (menu_was_open_by_left_mouse_button.v) {
+			menu_was_open_by_left_mouse_button.v=0;
+
+			if (zxvision_if_mouse_in_zlogo_or_buttons_desktop() ) {
+				//necesario para que no se piense que se está moviendo el raton
+				//Esto es un poco puñetero porque si no lo pongo aqui a 0,
+				//al lanzar por ejemplo smartload se queda al principio esperando que se 
+				//libere el "movimiento" desde menu_espera_no_tecla desde menu_filesel
+				//como no se llama a eventos handle_mouse pues no se pone a 0
+
+				
+				//Esto se ha puesto a 1 antes desde zxvision_if_mouse_in_zlogo_or_buttons_desktop,
+				//indirectamente cuando llama a menu_calculate_mouse_xy_absolute_interface_pixel
+				
+				mouse_movido=0;	
+
+				//printf("Se ha pulsado en zona botones con menu cerrado\n");
+			}
+			else {
+				//printf ("No pulsado en zona botones con menu cerrado\n");
+			}
+		}
+
+		
+
 		menu_inicio_bucle();
 
 	}
 
 	}
+
+
+	menu_was_open_by_left_mouse_button.v=0;
 
 
 	//printf ("salir menu\n");
@@ -29429,7 +32778,7 @@ void menu_inicio(void)
 //Escribe bloque de cuadrado de color negro  
 void set_splash_zesarux_logo_put_space(int x,int y)
 {
-	if (!strcmp(scr_driver_name,"aa")) {
+	if (!strcmp(scr_new_driver_name,"aa")) {
 		putchar_menu_overlay(x,y,'X',7,0);
 	}
 	else putchar_menu_overlay(x,y,' ',7,0);
@@ -29633,69 +32982,71 @@ RRRYYY
 
 
 
-char *zesarux_ascii_logo[ZESARUX_ASCII_LOGO_ALTO]={
-    //01234567890123456789012345
-    "WWWWWWWWWWWWWWWWWWWWWWWWWW",     //0
-  	"WXXXXXXXXXXXXXXXXXXXXXXXXW",      
-	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
-	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
-	"WXXXXXXXXXXXXXXXXXXXXXXXXW",	
-	"WWWWWWWWWWWWWWWWWXXXXWWWWW",			
-	"                WXXXXW   W",			
-	"                WXXXXW  RW", 		
-	"             WWWWXXXXW RRW",		
-	"            WXXXXWWWW RRRW",		
-	"            WXXXXW   RRRRW",	//10	
-	"            WXXXXW  RRRRYW",		
-	"         WWWWXXXXW RRRRYYW",		
-	"        WXXXXWWWW RRRRYYYW",		
-	"        WXXXXW   RRRRYYYYW",		
-	"        WXXXXW  RRRRYYYYGW",		
-	"     WWWWXXXXW RRRRYYYYGGW",		
-	"    WXXXXWWWW RRRRYYYYGGGW",		
-	"    WXXXXW   RRRRYYYYGGGGW",		
-	"    WXXXXW  RRRRYYYYGGGGCW",		
-	"WWWWWXXXXW RRRRYYYYGGGGCCW",    //20
-	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
-	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
-	"WXXXXXXXXXXXXXXXXXXXXXXXXW",		
-	"WXXXXXXXXXXXXXXXXXXXXXXXXW",
-	"WWWWWWWWWWWWWWWWWWWWWWWWWW" 		//25
-};
-
 
 //Retorna color de paleta spectrum segun letra color logo ascii W: white, X: Black, etc
+//en mayusculas es con brillo, sin mayusculas es sin brillo
 int return_color_zesarux_ascii(char c)
 {
+
+	int color;
+
+	int brillo=0;
+
+	if (c>='A' && c<='Z') {
+		brillo=1;
+		c=letra_minuscula(c);
+	}
+
 	switch (c) {
-		case 'W':
-			return 7;
+
+
+		//Black
+		case 'x':
+			color=0;
 		break;
 
-		case 'X':
-			return 0;
+		//Blue
+		case 'b':
+			color=1;
+		break;		
+
+		//Red
+		case 'r':
+			color=2;
 		break;
 
-		case 'R':
-			return 2;
+		//Magenta
+		case 'm':
+			color=3;
+		break;		
+
+		//Green
+		case 'g':
+			color=4;
 		break;
 
-		case 'G':
-			return 4;
+		//Cyan
+		case 'c':
+			color=5;
 		break;
 
-		case 'C':
-			return 5;
+		//Yellow
+		case 'y':
+			color=6;
 		break;
 
-		case 'Y':
-			return 6;
-		break;
+		//White
+		case 'w':
+			color=7;
+		break;		
 
+		//Black default
 		default:
-			return 0;
+			color=0;
 		break;
 	}
+
+	return color+brillo*8;
 }
 
 void set_splash_zesarux_logo(void)
@@ -29705,7 +33056,7 @@ void set_splash_zesarux_logo(void)
 	set_splash_zesarux_logo_paso(splash_zesarux_logo_paso);
 }
 
-void set_splash_text(void)
+void set_welcome_message(void)
 {
 	cls_menu_overlay();
 	char texto_welcome[40];
@@ -29753,10 +33104,11 @@ void set_splash_text(void)
 
 	//Enviar texto de bienvenida tambien a speech
 	//stdout y simpletext no
-	if (!strcmp(scr_driver_name,"stdout")) return;
-	if (!strcmp(scr_driver_name,"simpletext")) return;
+	if (!strcmp(scr_new_driver_name,"stdout")) return;
+	if (!strcmp(scr_new_driver_name,"simpletext")) return;
 
 	textspeech_print_speech(texto_welcome);
+	textspeech_print_speech(texto_edition);
 	textspeech_print_speech(texto_esc_menu);
 
 }
@@ -29780,7 +33132,7 @@ void menu_tell_if_realjoystick_detected(void)
 			}				
 }
 
-void reset_splash_text(void)
+void reset_welcome_message(void)
 {
 	if (menu_splash_text_active.v==1) {
 
@@ -30388,6 +33740,26 @@ extern int convert_p_to_rwa_tmpdir(char *origen, char *destino);
  
                 } 
         }		
+
+		else if (!util_compare_file_extension(archivo,"sna")) {
+                char *opciones[]={
+					"SNA to SCR",
+                        NULL};
+
+        int opcion=menu_ask_list_texto("File converter","Select conversion",opciones);
+		if (opcion<0) {
+			//Salido con ESC
+			return;
+		}				
+                switch (opcion) {
+                        case 0:
+                                sprintf(archivo_destino,"%s/%s.scr",directorio,archivo);
+								util_convert_sna_to_scr(fullpath,archivo_destino);
+                        break;
+
+ 
+                } 
+        }			
 
 
         else if (!util_compare_file_extension(archivo,"hdf")) {
@@ -31124,6 +34496,7 @@ void set_charset(void)
 {
 
 	if (estilo_gui_activo==ESTILO_GUI_CPC) char_set=char_set_cpc;
+	else if (estilo_gui_activo==ESTILO_GUI_MSX) char_set=char_set_msx;
 	else if (estilo_gui_activo==ESTILO_GUI_Z88) char_set=char_set_z88;
 	else if (estilo_gui_activo==ESTILO_GUI_SAM) char_set=char_set_sam;
 	else if (estilo_gui_activo==ESTILO_GUI_MANSOFTWARE) char_set=char_set_mansoftware;
@@ -31612,10 +34985,19 @@ char *first_aid_string_realjoystick_detected="A real joystick has been detected\
 							"You can go to menu Settings->Hardware->Real joystick support and set your buttons configuration";	
 
 
+int first_aid_no_sg1000_boot=0;
+char *first_aid_string_sg1000_boot="The SG1000 doesn't have a BIOS, so you must insert a game rom from menu Storage->SG1000 Cartridge";
+							
+
+
 int first_aid_no_backgroundwindows=0;
 char *first_aid_string_backgroundwindows="You can enable background windows and put some windows on the background. "
 		"Go to Settings-> GUI-> Windows settings-> Background windows to enable it";
 
+
+int first_aid_no_tbblue_download_sd_bugs=0;
+char *first_aid_string_tbblue_download_sd_bugs="In case of glitches or bugs, maybe the official image uses features not emulated in ZEsarUX yet. "
+		"If it's that the case, use the included tbblue sd image in ZEsarUX";
 
 
 void menu_first_aid_init(void)
@@ -31629,6 +35011,8 @@ void menu_first_aid_init(void)
 	menu_first_aid_add("initial_menu",&first_aid_no_initial_menu,first_aid_string_initial_menu,0);
 	menu_first_aid_add("no_ssl_wos",&first_aid_no_ssl_wos,first_aid_string_no_ssl_wos,0);
 	menu_first_aid_add("realjoystick_detected",&first_aid_no_realjoystick_detected,first_aid_string_realjoystick_detected,0);
+	menu_first_aid_add("sg1000_boot",&first_aid_no_sg1000_boot,first_aid_string_sg1000_boot,0);
+	menu_first_aid_add("tbblue_download_sd_bug",&first_aid_no_tbblue_download_sd_bugs,first_aid_string_tbblue_download_sd_bugs,0);
 
 	//Items que se disparan en startup
 	menu_first_aid_add("startup_aid",&first_aid_no_startup_aid,first_aid_string_startup_aid,1);
@@ -31855,6 +35239,578 @@ void menu_filesel_save_params_window(zxvision_window *ventana)
 }
 
 
+zxvision_window *menu_filesel_overlay_window;
+
+int menu_filesel_overlay_valor_contador_segundo_anterior;
+
+
+//Estructura de memoria para mostrar previews. coordenadas, color
+
+struct s_filesel_preview_mem {
+	int color;
+};
+
+//Datos del ultimo preview mostrado
+
+int menu_filesel_overlay_last_preview_width=0;
+int menu_filesel_overlay_last_preview_height=0;
+
+//Puntero a la previsualizacion
+struct s_filesel_preview_mem *menu_filesel_overlay_last_preview_memory=NULL;
+
+
+void menu_filesel_overlay_assign_memory_preview(int width,int height)
+{
+
+	//Liberar si conviene
+	if (menu_filesel_overlay_last_preview_memory==NULL) free(menu_filesel_overlay_last_preview_memory);
+
+
+	int elementos=width*height;
+
+	int total_mem=elementos*sizeof(struct s_filesel_preview_mem);
+
+	menu_filesel_overlay_last_preview_memory=malloc(total_mem);
+
+	if (menu_filesel_overlay_last_preview_memory==NULL) cpu_panic("Cannot allocate memory for image preview");
+
+	menu_filesel_overlay_last_preview_width=width;
+	menu_filesel_overlay_last_preview_height=height;
+}
+
+
+void menu_filesel_overlay_draw_preview(void)
+{
+	//No hay imagen asignada?
+	if (menu_filesel_overlay_last_preview_memory==NULL) return;	
+
+	//Pero tiene tamanyo?
+	if (menu_filesel_overlay_last_preview_width<=0 || menu_filesel_overlay_last_preview_height<=0) return;
+
+
+		//printf("putpixel preview\n");
+
+		//zxvision_putpixel
+        //Ancho de zona waveform variable segun el tamanyo de ventana
+        int ancho_ventana=menu_filesel_overlay_window->visible_width-1;
+
+		int alto_ventana=menu_filesel_overlay_window->visible_height-2;		
+
+
+		//Preview pegar a la derecha
+		int xorigen=ancho_ventana-menu_filesel_overlay_last_preview_width/menu_char_width;
+
+		//Restar barra desplazamiento, texto <dir> y mas margen
+		xorigen=xorigen-1-5-1;
+
+
+		int yorigen;
+
+
+		/*
+		int zxvision_get_filesel_alto_dir(zxvision_window *ventana)
+{
+	return ventana->visible_height - ventana->upper_margin - ventana->lower_margin - 2;
+}
+
+cursor:
+filesel_linea_seleccionada   
+
+alto:
+zxvision_get_filesel_alto_dir(ventana)-1
+		*/
+
+		//Con esto se clavaria justo en el cursor
+		//yorigen=menu_filesel_overlay_window->upper_margin+filesel_linea_seleccionada;
+
+		int alto_zona_dir=zxvision_get_filesel_alto_dir(menu_filesel_overlay_window)-1;
+
+		//Si cursor esta por arriba
+		if (filesel_linea_seleccionada<=alto_zona_dir/2+1) {
+			//El preview esta abajo
+			yorigen=alto_zona_dir-menu_filesel_overlay_last_preview_height/8+1;
+		}
+
+		else {
+			//Si no, arriba
+			yorigen=0;
+		}
+
+
+		//Sumar zona de cabeceras
+		yorigen +=menu_filesel_overlay_window->upper_margin;
+
+		//Y ver que no se salga por la izquierda por ejemplo
+		if (xorigen<0 || yorigen<0) return;
+
+		//TODO ver que quepa entero
+
+		//Sumar scroll ventana
+		xorigen +=menu_filesel_overlay_window->offset_x;
+		yorigen +=menu_filesel_overlay_window->offset_y;
+
+
+		ancho_ventana *=menu_char_width;
+		alto_ventana *=8;
+		xorigen *=menu_char_width;
+		yorigen *=8;
+
+
+		int x,y;
+		int contador=0;
+
+		for (y=0;y<menu_filesel_overlay_last_preview_height;y++) {
+			for (x=0;x<menu_filesel_overlay_last_preview_width;x++) {
+			
+				int color=menu_filesel_overlay_last_preview_memory[contador].color;
+				contador++;
+
+				//Por si acaso comprobar rangos
+				if (color<0 || color>=EMULATOR_TOTAL_PALETTE_COLOURS) color=0;
+				zxvision_putpixel(menu_filesel_overlay_window,xorigen+x,yorigen+y,color);
+			}
+		}
+
+		//Le pongo recuadro en el mismo tamaño del preview
+		int color_recuadro=ESTILO_GUI_PAPEL_TITULO;
+
+		//Horizontal
+		for (x=0;x<menu_filesel_overlay_last_preview_width;x++) {
+			zxvision_putpixel(menu_filesel_overlay_window,xorigen+x,yorigen,color_recuadro);
+			zxvision_putpixel(menu_filesel_overlay_window,xorigen+x,yorigen+menu_filesel_overlay_last_preview_height-1,color_recuadro);
+		}
+
+		//Vertical
+		for (y=0;y<menu_filesel_overlay_last_preview_height;y++) {
+			zxvision_putpixel(menu_filesel_overlay_window,xorigen,yorigen+y,color_recuadro);
+			zxvision_putpixel(menu_filesel_overlay_window,xorigen+menu_filesel_overlay_last_preview_width-1,yorigen+y,color_recuadro);
+		}
+
+		//ponerle sombreado
+
+		int offset_sombra=4;
+
+		int grosor_sombra=4;
+
+		int color_sombra=7;
+		//TODO: quizar buscar mejor color o hacerlo dependiendo del tema
+
+		//Vertical
+		for (y=offset_sombra;y<menu_filesel_overlay_last_preview_height+grosor_sombra;y++) {
+			int i;
+			for (i=0;i<grosor_sombra;i++) 
+			{
+				zxvision_putpixel(menu_filesel_overlay_window,xorigen+menu_filesel_overlay_last_preview_width+i,yorigen+y,color_sombra);
+			}
+		}
+
+		//Horizontal
+		for (x=offset_sombra;x<menu_filesel_overlay_last_preview_width+grosor_sombra;x++) {
+			int i;
+			for (i=0;i<grosor_sombra;i++) 
+			{
+				zxvision_putpixel(menu_filesel_overlay_window,xorigen+x,yorigen+menu_filesel_overlay_last_preview_height+i,color_sombra);
+			}
+		}		
+}
+
+
+//Reduce una imagen de un buffer , monocroma, a la mitad con destino en preview
+//Entrada: colores son 0  o 1
+//Salida: colores son 7 o 0
+void menu_filesel_preview_reduce_monochome(int *buffer_intermedio,int ancho, int alto)
+{
+
+
+	int x,y;
+
+	int offset_final=0;
+
+	for (y=0;y<alto;y+=2) {
+		for (x=0;x<ancho;x+=2) {
+
+			int offset_orig;
+			offset_orig=y*ancho+x;
+			int color1=buffer_intermedio[offset_orig];
+
+			offset_orig=y*ancho+x+1;
+			int color2=buffer_intermedio[offset_orig];
+
+			offset_orig=(y*ancho+1)+x;
+			int color3=buffer_intermedio[offset_orig];
+
+			offset_orig=(y*ancho+1)+x+1;
+			int color4=buffer_intermedio[offset_orig];
+
+			int suma=color1+color2+color3+color4;
+
+			//maximo sera 4
+
+			int color_final=(suma>2 ? 0 : 7);
+
+			//int offset_final=(y/2)*ancho_final+x/2;
+
+			//buffer_intermedio[offset_final++]=color_final;
+
+			menu_filesel_overlay_last_preview_memory[offset_final++].color=color_final;
+
+		}
+	}
+
+
+}
+
+
+//Reduce una imagen de un buffer , color, a la mitad con destino en preview
+void menu_filesel_preview_reduce_scr_color(int *buffer_intermedio,int ancho, int alto)
+{
+
+
+	int x,y;
+
+	int offset_final=0;
+
+
+
+	for (y=0;y<alto;y+=2) {
+		for (x=0;x<ancho;x+=2) {
+
+			int colores_cuadricula[4];
+
+			//Sacar los 4 colores de la cuadricula de 2x2
+			int offset_orig;
+			offset_orig=y*ancho+x;
+			colores_cuadricula[0]=buffer_intermedio[offset_orig];
+
+			offset_orig=y*ancho+x+1;
+			colores_cuadricula[1]=buffer_intermedio[offset_orig];
+
+			offset_orig=(y*ancho+1)+x;
+			colores_cuadricula[2]=buffer_intermedio[offset_orig];
+
+			offset_orig=(y*ancho+1)+x+1;
+			colores_cuadricula[3]=buffer_intermedio[offset_orig];
+
+
+
+			//Dado que partimos de una pantalla de spectrum, en una cuadricula de 2x2 habran como mucho 2 colores diferentes
+			//Ver cual de los dos se repite mas
+
+			//Asumimos el primer color, para simplificar la comparacion mas abajo
+			int color_final1=colores_cuadricula[0];
+			//Segundo color inicialmente a nada valido
+			int color_final2=-1;
+
+			int veces_color_final1=0;
+			int veces_color_final2=0;		
+
+			int i;
+
+			for (i=0;i<3;i++) {	
+
+				if (colores_cuadricula[i]==color_final1) {
+					veces_color_final1++;
+				}
+				else {
+					color_final2=colores_cuadricula[i];
+					veces_color_final2++;
+				}
+
+			}
+									
+
+			int color_final;
+
+			if (veces_color_final1>veces_color_final2) color_final=color_final1;
+			else color_final=color_final2;
+
+			menu_filesel_overlay_last_preview_memory[offset_final++].color=color_final;
+
+		}
+	}
+
+
+}
+
+void menu_filesel_preview_render_scr(char *archivo_scr)
+{
+			printf("es pantalla\n");
+
+	
+
+		//Leemos el archivo en memoria
+
+
+		printf("Renderizando..............\n");  
+
+		//buffer lectura archivo
+		z80_byte *buf_pantalla;
+
+		buf_pantalla=malloc(6912);
+
+		if (buf_pantalla==NULL) cpu_panic("Can not allocate buffer for screen read");
+
+		int leidos=lee_archivo(archivo_scr,(char *)buf_pantalla,6912);
+
+		if (leidos<=0) return;
+
+		//fread(buf_pantalla,1,6912,ptr_scrfile);
+
+		//fclose(ptr_scrfile);
+
+
+
+		//Asignamos primero buffer intermedio
+		int *buffer_intermedio;
+
+		int ancho=256;
+		int alto=192;
+
+
+		int elementos=ancho*alto;
+
+		buffer_intermedio=malloc(sizeof(int)*elementos);
+
+		if (buffer_intermedio==NULL)  cpu_panic("Cannot allocate memory for reduce buffer");					  
+		
+
+		int x,y,bit_counter;
+
+		z80_int offset_lectura=0;
+		for (y=0;y<192;y++) {
+			for (x=0;x<32;x++) {
+				z80_byte leido;
+				int offset_orig=screen_addr_table[y*32+x];
+				//fread(&leido,1,1,ptr_scrfile);
+				leido=buf_pantalla[offset_orig];
+
+				//int xdestino,ydestino;
+
+				//esta funcion no es muy rapida pero....
+				//util_spectrumscreen_get_xy(offset_lectura,&xdestino,&ydestino);
+
+				offset_lectura++;
+
+				int offset_destino=y*256+x*8;
+
+				int tinta;
+				int papel;
+
+				z80_byte atributo;
+
+				int pos_attr;
+
+				//pos_attr=(ydestino/8)*32+(xdestino/8);
+
+				pos_attr=6144+((y/8)*32)+x;
+				//printf("%d\n",pos_attr);
+
+				atributo=buf_pantalla[pos_attr];
+
+				//atributo=56;
+
+				tinta=(atributo)&7;
+				papel=(atributo>>3)&7;
+
+				if (atributo & 64) {
+					tinta +=8;
+					papel +=8;
+				}
+
+				
+
+				for (bit_counter=0;bit_counter<8;bit_counter++) {
+					
+					//de momento solo 0 o 1
+					int color=(leido & 128 ? tinta : papel);
+
+					
+					//menu_filesel_overlay_last_preview_memory[offset].color=color;
+
+					buffer_intermedio[offset_destino+bit_counter]=color;
+					leido=leido << 1;
+				}
+			}
+		}
+		
+
+
+		free(buf_pantalla);
+
+		//Reducir a 128x96
+		menu_filesel_overlay_assign_memory_preview(128,96);							
+
+		//menu_filesel_preview_reduce_monochome(buffer_intermedio,256,192);
+
+		menu_filesel_preview_reduce_scr_color(buffer_intermedio,256,192);
+
+		free(buffer_intermedio);
+
+
+
+}
+
+
+char menu_filesel_last_preview_file[PATH_MAX]="";
+
+//Renderizar preview en memoria del archivo seleccionado
+void menu_filesel_overlay_render_preview_in_memory(void)
+{
+
+
+
+	//de momento nada mas
+	printf("File: %s\n",filesel_nombre_archivo_seleccionado);
+
+	if (!strcmp(menu_filesel_last_preview_file,filesel_nombre_archivo_seleccionado)) {
+		printf("Archivo es el mismo que antes, no hacer nada\n");
+		return;
+	}
+
+	printf("Renderizar archivo\n");
+
+	strcpy(menu_filesel_last_preview_file,filesel_nombre_archivo_seleccionado);
+
+	//TODO: no renderizar si el archivo seleccionado era el mismo
+
+	//Si es tap o tzx o pzx o trd
+	// 
+	if (!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"tap") ||
+		!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"tzx") ||
+		!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"pzx") ||
+		!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"trd") ||
+		!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"dsk") 
+	
+	) {
+	
+		char tmpdir[PATH_MAX];
+
+		sprintf (tmpdir,"%s/%s",get_tmpdir_base(),filesel_nombre_archivo_seleccionado);
+		menu_filesel_mkdir(tmpdir);
+
+		int retorno=1;
+
+        if (!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"tap") ) {
+                debug_printf (VERBOSE_DEBUG,"Is a tap file");
+        	    retorno=util_extract_tap(filesel_nombre_archivo_seleccionado,tmpdir,NULL);
+        }
+
+        else if (!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"tzx") ) {
+                debug_printf (VERBOSE_DEBUG,"Is a tzx file");
+                retorno=util_extract_tzx(filesel_nombre_archivo_seleccionado,tmpdir,NULL);
+        }
+
+        else if (!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"pzx") ) {
+                debug_printf (VERBOSE_DEBUG,"Is a pzx file");
+                retorno=util_extract_pzx(filesel_nombre_archivo_seleccionado,tmpdir,NULL);
+        }		
+
+        else if (!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"trd") ) {
+                debug_printf (VERBOSE_DEBUG,"Is a trd file");
+                retorno=util_extract_trd(filesel_nombre_archivo_seleccionado,tmpdir);
+        }		
+
+        else if (!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"dsk") ) {
+                debug_printf (VERBOSE_DEBUG,"Is a dsk file");
+                retorno=util_extract_dsk(filesel_nombre_archivo_seleccionado,tmpdir);
+        }				
+
+		if (retorno!=0) {
+			//ERROR
+			return;
+		}
+
+		//Ver si hay archivo que indica pantalla
+
+		char archivo_info_pantalla[PATH_MAX];
+
+		sprintf(archivo_info_pantalla,"%s/%s",tmpdir,MENU_SCR_INFO_FILE_NAME);
+
+		if (si_existe_archivo(archivo_info_pantalla)) {
+			printf("HAY PANTALLA--------------- \n");
+
+			char buf_archivo_scr[PATH_MAX];
+
+			lee_archivo(archivo_info_pantalla,buf_archivo_scr,PATH_MAX-1);
+
+			printf ("PANTALLA:     %s\n",buf_archivo_scr);
+
+			menu_filesel_preview_render_scr(buf_archivo_scr);
+		}
+
+		else {
+			printf("NO HAY PANTALLA****************\n");
+
+			//liberar preview
+			menu_filesel_overlay_last_preview_width=0;
+			menu_filesel_overlay_last_preview_height=0;			
+		}
+	}
+
+
+	//Si es scr
+	else if (!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"scr")) {
+		printf("es pantalla\n");
+
+		menu_filesel_preview_render_scr(filesel_nombre_archivo_seleccionado);
+
+	}
+
+	//Si es sna
+	else if (!util_compare_file_extension(filesel_nombre_archivo_seleccionado,"sna")) {
+		printf("es snapshot sna\n");
+
+		char tmpdir[PATH_MAX];
+
+		sprintf (tmpdir,"%s/%s",get_tmpdir_base(),filesel_nombre_archivo_seleccionado);
+		menu_filesel_mkdir(tmpdir);	
+
+		char tmpfile[PATH_MAX];	
+		sprintf (tmpfile,"%s/%s.scr",tmpdir,filesel_nombre_archivo_seleccionado);
+
+		util_convert_sna_to_scr(filesel_nombre_archivo_seleccionado,tmpfile);
+
+		menu_filesel_preview_render_scr(tmpfile);
+
+	}	
+
+
+	else {
+		//Cualquier otra cosa, liberar preview
+		menu_filesel_overlay_last_preview_width=0;
+		menu_filesel_overlay_last_preview_height=0;
+	}
+
+}
+
+//Overlay para mostrar los previews
+void menu_filesel_overlay(void)
+{
+	if (!zxvision_drawing_in_background) normal_overlay_texto_menu();
+
+	//El overlay de la pantalla siempre
+	
+
+		//printf("overlay\n");
+
+
+		menu_filesel_overlay_draw_preview();
+
+	
+
+
+	//Y el procesado de nueva preview no tan seguido
+	//esto hara ejecutar esto 5 veces por segundo
+	if ( ((contador_segundo%200) == 0 && menu_filesel_overlay_valor_contador_segundo_anterior!=contador_segundo) || menu_multitarea==0) {
+		menu_filesel_overlay_valor_contador_segundo_anterior=contador_segundo;
+
+		//renderizar preview en memoria si conviene
+
+		menu_filesel_overlay_render_preview_in_memory();
+
+	}
+}
+
 //Retorna 1 si seleccionado archivo. Retorna 0 si sale con ESC
 //Si seleccionado archivo, lo guarda en variable *archivo
 //Si sale con ESC, devuelve en menu_filesel_last_directory_seen ultimo directorio
@@ -31862,7 +35818,7 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 {
 
 	//En el caso de stdout es mucho mas simple
-    if (!strcmp(scr_driver_name,"stdout")) {
+    if (!strcmp(scr_new_driver_name,"stdout")) {
 		printf ("%s :\n",titulo);
 		scrstdout_menu_print_speech_macro(titulo);
 		scanf("%s",archivo);
@@ -31899,7 +35855,11 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 
     //printf ("confirm\n");
 
+	//printf ("antes menu_espera_no_tecla en menu filesel\n");
+
 	menu_espera_no_tecla();
+
+	//printf ("despues menu_espera_no_tecla en menu filesel\n");
     	
 	zxvision_window ventana_filesel;
 	zxvision_window *ventana;
@@ -31948,7 +35908,8 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 		int ret=menu_filesel_readdir();
 		if (ret) {
 			//Error leyendo directorio
-   
+			//restauramos modo normal de texto de menu
+     		set_menu_overlay_function(normal_overlay_texto_menu);
 			cls_menu_overlay();
 			menu_espera_no_tecla();
 			menu_filesel_chdir(filesel_directorio_inicial);
@@ -31969,6 +35930,8 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 			//Guardar anteriores tamaños ventana
 			menu_filesel_save_params_window(ventana);
 
+			//restauramos modo normal de texto de menu
+     		set_menu_overlay_function(normal_overlay_texto_menu);
 
 			zxvision_destroy_window(ventana);
 		}
@@ -31996,7 +35959,23 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 		ventana->visible_cursor=1;
 		strcpy(ventana->geometry_name,"filesel");
 
+		if (menu_filesel_show_utils.v) {
+			//Activar los hotkeys desde raton en el caso de file utilities
+			ventana->can_mouse_send_hotkeys=1;
+		}
+
 		zxvision_draw_window(ventana);
+
+
+		//Overlay para los previews. Siempre que tengamos video driver completo
+        if (si_complete_video_driver() ) {
+                
+			if (menu_filesel_show_previews.v) {
+				menu_filesel_overlay_window=ventana;
+				set_menu_overlay_function(menu_filesel_overlay);
+			}
+
+		}
 
 		zxvision_menu_filesel_print_filters(ventana,filesel_filtros);
 		zxvision_menu_filesel_print_text_contents(ventana);
@@ -32025,6 +36004,8 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 			//printf ("cursor_line: %d filesel_linea_seleccionada: %d filesel_archivo_seleccionado %d\n",
 			//	ventana->cursor_line,filesel_linea_seleccionada,filesel_archivo_seleccionado);
 
+			//printf("filesel_linea_seleccionada: %d\n",filesel_linea_seleccionada);
+
 
 			//printf ("(FILESEL_ALTO-10): %d zxvision_get_filesel_alto_dir: %d\n",(FILESEL_ALTO-10),zxvision_get_filesel_alto_dir(ventana) );
 
@@ -32050,7 +36031,7 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 				else {
 
 
-				tecla=zxvision_scanf(ventana,filesel_nombre_archivo_seleccionado,PATH_MAX,ancho_mostrado,7,1);
+				tecla=zxvision_scanf(ventana,filesel_nombre_archivo_seleccionado,PATH_MAX,ancho_mostrado,7,1,0);
 				//); //6 ocupa el texto "File: "
 
 				if (tecla==15) {
@@ -32064,6 +36045,9 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 				//ESC
                 if (tecla==2) {
                 	menu_filesel_exist_ESC();
+					//restauramos modo normal de texto de menu
+     				set_menu_overlay_function(normal_overlay_texto_menu);
+
 					zxvision_destroy_window(ventana);
                     return 0;
 				}
@@ -32126,6 +36110,9 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 						menu_filesel_free_mem();
 
 						//return menu_avisa_si_extension_no_habitual(filtros,archivo);
+						//restauramos modo normal de texto de menu
+			     		set_menu_overlay_function(normal_overlay_texto_menu);
+
 						cls_menu_overlay();
 						zxvision_destroy_window(ventana);
 						last_filesused_insert(archivo);
@@ -32136,6 +36123,9 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 						else {
 							//Extension no conocida. No modificar variable archivo
 							//printf ("Unknown extension. Do not modify archivo. Contents: %s\n",archivo);
+							//restauramos modo normal de texto de menu
+     						set_menu_overlay_function(normal_overlay_texto_menu);
+
 							cls_menu_overlay();
 							zxvision_destroy_window(ventana);
 							return 0;
@@ -32271,6 +36261,9 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 						//printf ("salimos con ESC. nombre directorio: %s\n",archivo);
                         menu_filesel_exist_ESC();
 
+						//restauramos modo normal de texto de menu
+			     		set_menu_overlay_function(normal_overlay_texto_menu);
+
 						zxvision_destroy_window(ventana);
                         return 0;
 
@@ -32288,6 +36281,10 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
                                                 if (item_seleccionado==NULL) {
                                                         //Esto pasa en las carpetas vacias, como /home en Mac OS
                                                                         menu_filesel_exist_ESC();
+																		//restauramos modo normal de texto de menu
+																		set_menu_overlay_function(normal_overlay_texto_menu);
+
+
 																		zxvision_destroy_window(ventana);
                                                                         return 0;
 
@@ -32330,6 +36327,9 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 						if (item_seleccionado==NULL) {
 							//Esto pasa en las carpetas vacias, como /home en Mac OS
                                                                         menu_filesel_exist_ESC();
+																		//restauramos modo normal de texto de menu
+     																	set_menu_overlay_function(normal_overlay_texto_menu);
+
 																		zxvision_destroy_window(ventana);
                                                                         return 0;
 
@@ -32386,6 +36386,9 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 
 								if (menu_filesel_uncompress(item_seleccionado->d_name,tmpdir) ) {
 									menu_filesel_exist_ESC();
+									//restauramos modo normal de texto de menu
+     								set_menu_overlay_function(normal_overlay_texto_menu);
+
 									zxvision_destroy_window(ventana);
 									return 0;
 								}
@@ -32418,6 +36421,9 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
 									//Guardar anteriores tamaños ventana
 									menu_filesel_save_params_window(ventana);
 
+									//restauramos modo normal de texto de menu
+									set_menu_overlay_function(normal_overlay_texto_menu);
+
 									cls_menu_overlay();
 									zxvision_destroy_window(ventana);
 									last_filesused_insert(archivo);
@@ -32428,6 +36434,10 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
                                     else {
                                                         //Extension no conocida. No modificar variable archivo
                                                         //printf ("Unknown extension. Do not modify archivo. Contents: %s\n",archivo);
+
+														//restauramos modo normal de texto de menu
+														set_menu_overlay_function(normal_overlay_texto_menu);
+
 														cls_menu_overlay();
 														zxvision_destroy_window(ventana);
                                                         return 0;
@@ -32467,6 +36477,11 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
                                                                         menu_filesel_free_mem();
 
                                                                         //return menu_avisa_si_extension_no_habitual(filtros,archivo);
+
+																		//restauramos modo normal de texto de menu
+																		set_menu_overlay_function(normal_overlay_texto_menu);
+
+
                                                                         cls_menu_overlay();
                                                                         zxvision_destroy_window(ventana);
                                                                         return 1;
@@ -32642,6 +36657,11 @@ int menu_filesel(char *titulo,char *filtros[],char *archivo)
                                                 menu_espera_no_tecla();
                                                 menu_filesel_chdir(filesel_directorio_inicial);
 						menu_filesel_free_mem();
+
+						//restauramos modo normal de texto de menu
+						set_menu_overlay_function(normal_overlay_texto_menu);
+
+
 						zxvision_destroy_window(ventana);
                                                 return 0;
                                 }

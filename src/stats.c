@@ -49,6 +49,7 @@ char stats_uuid[128]="";
 z80_bit stats_enabled={0};
 z80_bit stats_asked={0};
 z80_bit stats_check_updates_enabled={1};
+z80_bit stats_check_yesterday_users_enabled={1};
 
 char stats_last_remote_version[MAX_UPDATE_VERSION_STRING]="";
 
@@ -177,8 +178,8 @@ pthread_t thread_send_stats_server;
 
 void send_stats_server(void)
 {
-	//Si no hay pthreads, no hacerlo
-	#ifdef USE_PTHREADS
+	//Si no hay pthreads/networking, no hacerlo
+	#ifndef NETWORKING_DISABLED
 	//Inicializar thread
 
 	if (pthread_create( &thread_send_stats_server, NULL, &send_stats_server_pthread, NULL) ) {
@@ -290,12 +291,93 @@ pthread_t thread_check_updates;
 
 void stats_check_updates(void)
 {
-	//Si no hay pthreads, no hacerlo
-	#ifdef USE_PTHREADS
+	//Si no hay pthreads/networking, no hacerlo
+	#ifndef NETWORKING_DISABLED
 	//Inicializar thread
 
 	if (pthread_create( &thread_check_updates, NULL, &stats_check_updates_pthread, NULL) ) {
 		debug_printf(VERBOSE_ERR,"Can not create check_updates pthread");
+	}	
+	#endif
+}
+
+
+
+
+
+char stats_last_yesterday_users[MAX_YESTERDAY_USERS_STRING+1]="";
+
+void *stats_check_yesterday_users_pthread(void *nada)
+{
+
+	//opcion de comprobar updates desactivada
+	if (stats_check_yesterday_users_enabled.v==0) return NULL;
+
+
+	debug_printf(VERBOSE_INFO,"Starting check yesterday users pthread");
+
+	char url_yesterday_users[NETWORK_MAX_URL];
+
+	strcpy(url_yesterday_users,STATS_URL_YESTERDAY_USERS);
+
+
+
+	int http_code;
+	char *mem;
+	char *orig_mem;
+
+	char *mem_after_headers;
+	int total_leidos;
+	int retorno;
+
+	char redirect_url[NETWORK_MAX_URL];	    
+	retorno=zsock_http(REMOTE_ZESARUX_SERVER,url_yesterday_users,&http_code,&mem,&total_leidos,&mem_after_headers,1,"",0,redirect_url,0);
+
+	orig_mem=mem;
+	
+	if (mem_after_headers!=NULL) {
+		if (http_code==200) {
+			int dif_header=mem_after_headers-mem;
+			total_leidos -=dif_header;
+			mem=mem_after_headers;
+
+			char yesterday_users_string[MAX_YESTERDAY_USERS_STRING+1];
+			if (total_leidos<=MAX_YESTERDAY_USERS_STRING) {
+				//Leemos la linea, con funcion de utils, para evitar leer saltos de linea y similares
+				int leidos_linea;
+				util_read_line(mem_after_headers,yesterday_users_string,total_leidos,MAX_YESTERDAY_USERS_STRING,&leidos_linea);
+				if (leidos_linea) {
+					debug_printf (VERBOSE_DEBUG,"yesterday_users string [%s]",yesterday_users_string);
+	
+					//Y guardar ese texto
+					strcpy(stats_last_yesterday_users,yesterday_users_string);	
+
+				}
+			}
+		}
+	
+		free(orig_mem);
+	}
+
+	debug_printf(VERBOSE_INFO,"Finishing check yesterday_users pthread");
+	return NULL;
+
+}	
+	
+
+#ifdef USE_PTHREADS
+pthread_t thread_check_yesterday_users;
+#endif
+
+
+void stats_check_yesterday_users(void)
+{
+	//Si no hay pthreads/pthreads, no hacerlo
+	#ifndef NETWORKING_DISABLED
+	//Inicializar thread
+
+	if (pthread_create( &thread_check_yesterday_users, NULL, &stats_check_yesterday_users_pthread, NULL) ) {
+		debug_printf(VERBOSE_ERR,"Can not create check_yesterday_users pthread");
 	}	
 	#endif
 }

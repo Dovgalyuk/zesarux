@@ -126,7 +126,7 @@ debug_printf (VERBOSE_INFO,"Init Null Video Driver");
         scr_get_menu_height=scrnull_get_menu_height;
 	scr_driver_can_ext_desktop=scrnull_driver_can_ext_desktop;
 
-	scr_driver_name="null";
+	scr_set_driver_name("null");
 
 	scr_set_fullscreen=scrnull_set_fullscreen;
 	scr_reset_fullscreen=scrnull_reset_fullscreen;

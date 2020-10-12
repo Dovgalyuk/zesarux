@@ -86,6 +86,9 @@ extern int mouse_wheel_vertical,mouse_wheel_horizontal;
 extern z80_bit kempston_mouse_emulation;
 extern int mouse_left,mouse_right,mouse_pressed_close_window,mouse_pressed_background_window;
 
+extern int mouse_pressed_hotkey_window;
+extern int mouse_pressed_hotkey_window_key;
+
 extern z80_byte kempston_mouse_x,kempston_mouse_y;
 
 extern void joystick_print_types(void);

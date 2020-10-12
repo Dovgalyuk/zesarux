@@ -42,6 +42,10 @@
 #include "sam.h"
 #include "ql.h"
 #include "settings.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "svi.h"
 
 
 #include <X11/Xlib.h> // Every Xlib program must include this
@@ -914,7 +918,21 @@ void scrxwindows_refresca_pantalla(void)
                 scr_refresca_pantalla_y_border_mk14();
         }
 
+	else if (MACHINE_IS_MSX) {
+		scr_refresca_pantalla_y_border_msx();
+	}  
 
+	else if (MACHINE_IS_SVI) {
+		scr_refresca_pantalla_y_border_svi();
+	}    		  		
+
+	else if (MACHINE_IS_COLECO) {
+		scr_refresca_pantalla_y_border_coleco();
+	}    
+
+	else if (MACHINE_IS_SG1000) {
+		scr_refresca_pantalla_y_border_sg1000();
+	}    
 
 	//printf ("%d\n",spectrum_colortable[1]);
 
@@ -1030,7 +1048,7 @@ void scrxwindows_z88_cpc_load_keymap(void)
 	switch (z88_cpc_keymap_type) {
 
 		case 1:
-			if (MACHINE_IS_Z88 || MACHINE_IS_SAM || MACHINE_IS_QL)  {
+			if (MACHINE_IS_Z88 || MACHINE_IS_SAM || MACHINE_IS_QL || MACHINE_IS_MSX || MACHINE_IS_SVI)  {
 				scrxwindows_keymap_z88_cpc_minus=XK_apostrophe;
 				scrxwindows_keymap_z88_cpc_equal=XK_exclamdown;
 				scrxwindows_keymap_z88_cpc_backslash=XK_masculine;
@@ -1088,7 +1106,7 @@ void scrxwindows_z88_cpc_load_keymap(void)
 
 		default:
 			//0 o default
-			if (MACHINE_IS_Z88 || MACHINE_IS_SAM) {
+			if (MACHINE_IS_Z88 || MACHINE_IS_SAM || MACHINE_IS_QL || MACHINE_IS_MSX || MACHINE_IS_SVI)  {
 				scrxwindows_keymap_z88_cpc_minus=XK_minus;
 				scrxwindows_keymap_z88_cpc_equal=XK_equal;
 				scrxwindows_keymap_z88_cpc_backslash=XK_backslash;
@@ -1240,7 +1258,7 @@ void deal_with_keys(XEvent *event,int pressrelease)
 
 
         int tecla_gestionada_sam_ql=0;
-        if (MACHINE_IS_SAM || MACHINE_IS_QL) {
+        if (MACHINE_IS_SAM || MACHINE_IS_QL || MACHINE_IS_MSX || MACHINE_IS_SVI) {
                 tecla_gestionada_sam_ql=1;
 
                         if (keysym==scrxwindows_keymap_z88_cpc_minus) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_MINUS,pressrelease);
@@ -2017,7 +2035,7 @@ scr_reallocate_layers_menu(ancho,alto);
 
 	//Otra inicializacion necesaria
 	//Esto debe estar al final, para que funcione correctamente desde menu, cuando se selecciona un driver, y no va, que pueda volver al anterior
-	scr_driver_name="xwindows";
+	scr_set_driver_name("xwindows");
 
 
         scr_z88_cpc_load_keymap();

@@ -31,14 +31,15 @@ extern void menu_settings_audio(MENU_ITEM_PARAMETERS);
 extern void menu_zxvision_test(MENU_ITEM_PARAMETERS);
 extern void menu_mem_breakpoints(MENU_ITEM_PARAMETERS);
 extern int menu_cond_ay_chip(void);
+extern int menu_cond_ay_or_sn_chip(void);
 extern int last_debug_poke_dir;
 extern void menu_debug_poke(MENU_ITEM_PARAMETERS);
 extern void menu_debug_cpu_resumen_stats(MENU_ITEM_PARAMETERS);
 extern void menu_about_core_statistics(MENU_ITEM_PARAMETERS);
 extern void menu_ay_registers(MENU_ITEM_PARAMETERS);
-extern void menu_debug_tsconf_tbblue_videoregisters(MENU_ITEM_PARAMETERS);
-extern void menu_debug_tsconf_tbblue_spritenav(MENU_ITEM_PARAMETERS);
-extern void menu_debug_tsconf_tbblue_tilenav(MENU_ITEM_PARAMETERS);
+extern void menu_debug_tsconf_tbblue_msx_videoregisters(MENU_ITEM_PARAMETERS);
+extern void menu_debug_tsconf_tbblue_msx_spritenav(MENU_ITEM_PARAMETERS);
+extern void menu_debug_tsconf_tbblue_msx_tilenav(MENU_ITEM_PARAMETERS);
 extern void menu_audio_new_waveform(MENU_ITEM_PARAMETERS);
 extern void menu_debug_new_visualmem(MENU_ITEM_PARAMETERS);
 extern void menu_audio_new_ayplayer(MENU_ITEM_PARAMETERS);
@@ -99,12 +100,17 @@ extern void menu_ay_pianokeyboard(MENU_ITEM_PARAMETERS);
 
 extern void menu_beeper_pianokeyboard(MENU_ITEM_PARAMETERS);
 
-extern void menu_debug_tsconf_tbblue(MENU_ITEM_PARAMETERS);
+extern void menu_debug_tsconf_tbblue_msx(MENU_ITEM_PARAMETERS);
 
 extern void menu_windows(MENU_ITEM_PARAMETERS);
 
 extern void menu_help_show_keyboard(MENU_ITEM_PARAMETERS);
 
+extern void menu_audio_chip_info(MENU_ITEM_PARAMETERS);
+
+extern void menu_zxpand(MENU_ITEM_PARAMETERS);
+
+extern void menu_ql_mdv_flp(MENU_ITEM_PARAMETERS);
 
 #endif
 

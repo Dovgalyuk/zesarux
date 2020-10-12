@@ -305,12 +305,7 @@ void cpu_core_loop_zx8081(void)
 			if (t_estados>=screen_testados_total) {
 
                                 //Siguiente frame de pantalla
-                                core_cpu_timer_frame_difftime=timer_stats_diference_time(&core_cpu_timer_frame_antes,&core_cpu_timer_frame_despues);
-
-                                //printf ("tiempo transcurrido: %ld microsec\n",tiempo_timer_difftime);
-                                //media de tiempo
-                                core_cpu_timer_frame_media=(core_cpu_timer_frame_media+core_cpu_timer_frame_difftime)/2;
-                                //printf ("tiempo medio transcurrido: %ld microsec\n",core_cpu_timer_frame_media);
+                                timer_get_elapsed_core_frame_post();
 
 
 
@@ -426,7 +421,7 @@ void cpu_core_loop_zx8081(void)
                         //printf ("%d\n",interlaced_numero_frame);
 
                         //Para calcular lo que se tarda en ejecutar todo un frame
-                        timer_stats_current_time(&core_cpu_timer_frame_antes);
+                        timer_get_elapsed_core_frame_pre();
 
                 }
 

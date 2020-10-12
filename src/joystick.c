@@ -73,6 +73,11 @@ int mouse_x=0,mouse_y=0;
 int mouse_pressed_close_window=0;
 int mouse_pressed_background_window=0;
 
+
+int mouse_pressed_hotkey_window=0;
+//y que tecla puslada
+int mouse_pressed_hotkey_window_key=0;
+
 //si esta activa la emulacion de kempston mouse
 z80_bit kempston_mouse_emulation;
 
@@ -235,7 +240,7 @@ int gunstick_view_white(void)
 
 //Si curses
 #ifdef COMPILE_CURSES
-	if (!strcmp(scr_driver_name,"curses")) {
+	if (!strcmp(scr_new_driver_name,"curses")) {
 		return (scrcurses_return_gunstick_view_white() );
 	}
 #endif

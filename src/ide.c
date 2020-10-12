@@ -461,6 +461,12 @@ void ide_footer_ide_operating(void)
 {
 
 	generic_footertext_print_operating("IDE");
+
+	//Y poner icono en inverso
+	if (!zxdesktop_icon_ide_inverse) {
+			zxdesktop_icon_ide_inverse=1;
+			menu_draw_ext_desktop();
+	}		
 }
 
 

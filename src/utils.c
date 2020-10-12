@@ -107,6 +107,10 @@
 #include "stats.h"
 #include "scl2trd.h"
 #include "zip.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "svi.h"
 
 //Archivo usado para entrada de teclas
 FILE *ptr_input_file_keyboard;
@@ -298,6 +302,99 @@ struct x_tabla_teclado cpc_tabla_teclado_letras[]={
         {&cpc_keyboard_table[8],128}
 };
 
+
+
+struct x_tabla_teclado msx_tabla_teclado_letras[]={
+	{&msx_keyboard_table[2],64}, //A
+	{&msx_keyboard_table[2],128},
+        {&msx_keyboard_table[3],1},
+        {&msx_keyboard_table[3],2}, //D
+        {&msx_keyboard_table[3],4},
+        {&msx_keyboard_table[3],8},
+        {&msx_keyboard_table[3],16},
+        {&msx_keyboard_table[3],32}, //H
+        {&msx_keyboard_table[3],64},
+        {&msx_keyboard_table[3],128},
+        {&msx_keyboard_table[4],1},
+        {&msx_keyboard_table[4],2}, //L
+        {&msx_keyboard_table[4],4},
+        {&msx_keyboard_table[4],8}, //N
+        {&msx_keyboard_table[4],16},
+        {&msx_keyboard_table[4],32}, //P
+        {&msx_keyboard_table[4],64},
+        {&msx_keyboard_table[4],128},
+        {&msx_keyboard_table[5],1},
+        {&msx_keyboard_table[5],2}, //T
+        {&msx_keyboard_table[5],4},
+        {&msx_keyboard_table[5],8},
+        {&msx_keyboard_table[5],16},
+        {&msx_keyboard_table[5],32}, //X
+        {&msx_keyboard_table[5],64},
+        {&msx_keyboard_table[5],128}
+};
+
+
+struct x_tabla_teclado msx_tabla_teclado_numeros[]={
+        {&msx_keyboard_table[0],1}, //0
+        {&msx_keyboard_table[0],2},
+        {&msx_keyboard_table[0],4},
+        {&msx_keyboard_table[0],8},
+        {&msx_keyboard_table[0],16},
+        {&msx_keyboard_table[0],32},     //5
+        {&msx_keyboard_table[0],64},
+        {&msx_keyboard_table[0],128},
+        {&msx_keyboard_table[1],1},
+        {&msx_keyboard_table[1],2}
+
+};
+
+
+
+struct x_tabla_teclado svi_tabla_teclado_letras[]={
+	{&svi_keyboard_table[2],2}, //A
+	{&svi_keyboard_table[2],4},
+        {&svi_keyboard_table[2],8},
+        {&svi_keyboard_table[2],16}, //D
+        {&svi_keyboard_table[2],32},
+        {&svi_keyboard_table[2],64},
+        {&svi_keyboard_table[2],128},
+        {&svi_keyboard_table[3],1}, //H
+        {&svi_keyboard_table[3],2},
+        {&svi_keyboard_table[3],4},
+        {&svi_keyboard_table[3],8},
+        {&svi_keyboard_table[3],16}, //L
+        {&svi_keyboard_table[3],32},
+        {&svi_keyboard_table[3],64}, //N
+        {&svi_keyboard_table[3],128},
+        {&svi_keyboard_table[4],1}, //P
+        {&svi_keyboard_table[4],2},
+        {&svi_keyboard_table[4],4},
+        {&svi_keyboard_table[4],8},
+        {&svi_keyboard_table[4],16}, //T
+        {&svi_keyboard_table[4],32},
+        {&svi_keyboard_table[4],64},
+        {&svi_keyboard_table[4],128},
+        {&svi_keyboard_table[5],1}, //X
+        {&svi_keyboard_table[5],2},
+        {&svi_keyboard_table[5],4}
+};
+
+
+struct x_tabla_teclado svi_tabla_teclado_numeros[]={
+        {&svi_keyboard_table[0],1}, //0
+        {&svi_keyboard_table[0],2},
+        {&svi_keyboard_table[0],4},
+        {&svi_keyboard_table[0],8},
+        {&svi_keyboard_table[0],16},
+        {&svi_keyboard_table[0],32},     //5
+        {&svi_keyboard_table[0],64},
+        {&svi_keyboard_table[0],128},
+        {&svi_keyboard_table[1],1},
+        {&svi_keyboard_table[1],2}
+
+};
+
+
 // ================================== matrix ============================
 //        0      1      2      3      4      5      6      7
 //  +-------------------------------------------------------
@@ -421,7 +518,11 @@ char *array_fabricantes[]={
         "NedoPC",
   "TS Labs",
 	"VTrucco/FB Labs",
-	"Jupiter Cantab"
+	"Jupiter Cantab",
+        "Ascii Corp",
+        "Coleco Industries",
+        "Sega",
+        "Spectravideo Intl"
         
 };
 
@@ -442,14 +543,19 @@ char *array_fabricantes_hotkey[]={
         "N~~edoPC",
         "TS ~~Labs",
         "~~VTrucco/FB Labs",
-        "J~~upiter Cantab"
+        "J~~upiter Cantab",
+        "Ascii C~~orp",
+        "Coleco In~~dustries",
+        "Sega",
+        "Spectravideo Intl"
         
 
 
 };
 
-//Si letra es espacio->no hay letra
-char array_fabricantes_hotkey_letra[]="nsatimbgpcrwzelvu";
+//Si letra es espacio->no hay letra. TODO: Repetida d final sega, porque no hay letras libres
+//Repetida spectravideo final
+char array_fabricantes_hotkey_letra[]="nsatimbgpcrwzelvuoddd";
 
 
 
@@ -473,6 +579,22 @@ int array_maquinas_investronica[]={
 
 int array_maquinas_microdigital_electronica[]={
 	3,4,5,255
+};
+
+int array_maquinas_ascii_corp[]={
+	MACHINE_ID_MSX1,255
+};
+
+int array_maquinas_spectravideo_international[]={
+	MACHINE_ID_SVI_318,MACHINE_ID_SVI_328,255
+};
+
+int array_maquinas_coleco_industries[]={
+	MACHINE_ID_COLECO,255
+};
+
+int array_maquinas_sega[]={
+	MACHINE_ID_SG1000,255
 };
 
 int array_maquinas_amstrad[]={
@@ -546,6 +668,22 @@ int *return_maquinas_fabricante(int fabricante)
 		case FABRICANTE_MICRODIGITAL_ELECTRONICA:
 			return array_maquinas_microdigital_electronica;
 		break;
+
+		case FABRICANTE_ASCII_CORP:
+			return array_maquinas_ascii_corp;
+		break;          
+
+		case FABRICANTE_SPECTRAVIDEO_INTERNATIONAL:
+			return array_maquinas_spectravideo_international;
+		break;                         
+
+		case FABRICANTE_COLECO_INDUSTRIES:
+			return array_maquinas_coleco_industries;
+		break;    
+
+		case FABRICANTE_SEGA:
+			return array_maquinas_sega;
+		break;                  
 
 		case FABRICANTE_AMSTRAD:
 			return array_maquinas_amstrad;
@@ -651,6 +789,23 @@ int return_fabricante_maquina(int maquina)
                 case MACHINE_ID_CPC_4128:
 			return FABRICANTE_AMSTRAD;
 		break;
+
+                case MACHINE_ID_COLECO:
+			return FABRICANTE_COLECO_INDUSTRIES;
+		break;      
+
+                case MACHINE_ID_SG1000:
+			return FABRICANTE_SEGA;
+		break;                                
+
+                case MACHINE_ID_MSX1:
+			return FABRICANTE_ASCII_CORP;
+		break;         
+
+                case MACHINE_ID_SVI_318:
+                case MACHINE_ID_SVI_328:
+			return FABRICANTE_SPECTRAVIDEO_INTERNATIONAL;
+		break;                         
 
 		case 122:
 			return FABRICANTE_JUPITER_CANTAB;
@@ -1204,6 +1359,25 @@ void ascii_to_keyboard_port_set_clear(unsigned tecla,int pressrelease)
 						}
 					}
 
+                                        //mayus para MSX
+					if (MACHINE_IS_MSX) {
+						if (pressrelease) {
+							msx_keyboard_table[6] &=255-1;
+						}
+						else {
+							msx_keyboard_table[6] |=1;
+						}
+					}           
+
+					if (MACHINE_IS_SVI) {
+						if (pressrelease) {
+							svi_keyboard_table[6] &=255-1;
+						}
+						else {
+							svi_keyboard_table[6] |=1;
+						}
+					}                                                                          
+
 					if (MACHINE_IS_CPC) {
 						if (pressrelease) {
 							cpc_keyboard_table[2] &=255-32;
@@ -1229,11 +1403,15 @@ void ascii_to_keyboard_port_set_clear(unsigned tecla,int pressrelease)
 						puerto_32766 &=255-1;
                                         	blink_kbd_a13 &= (255-64);
 						cpc_keyboard_table[5] &= (255-128);
+                                                msx_keyboard_table[8] &= (255-1);
+                                                svi_keyboard_table[8] &= (255-1);
 					}
 	                                else {
 						puerto_32766 |=1;
                                         	blink_kbd_a13 |= 64;
 						cpc_keyboard_table[5] |= 128;
+                                                msx_keyboard_table[8] |= 1;
+                                                svi_keyboard_table[8] |= 1;
 					}
 
         	                break;
@@ -1246,12 +1424,16 @@ void ascii_to_keyboard_port_set_clear(unsigned tecla,int pressrelease)
 						blink_kbd_a8 &= (255-64);
 						//Enter "grande" del cpc
 						cpc_keyboard_table[2] &= (255-4);
+                                                msx_keyboard_table[7] &= (255-128);
+                                                svi_keyboard_table[6] &= (255-64);
 					}
 
                 	                else {
 						puerto_49150 |=1;
 						blink_kbd_a8 |= 64;
 						cpc_keyboard_table[2] |= 4;
+                                                msx_keyboard_table[7] |= 128;
+                                                svi_keyboard_table[6] |= 64;
 					}
 
 
@@ -2802,6 +2984,12 @@ void reset_keyboard_ports(void)
 	int i=0;
 	for (i=0;i<16;i++) cpc_keyboard_table[i]=255;
 
+	//De MSX
+	for (i=0;i<16;i++) msx_keyboard_table[i]=255;        
+
+	//De Spectravideo
+	for (i=0;i<16;i++) svi_keyboard_table[i]=255;           
+
 	//De QL
 	for (i=0;i<8;i++) ql_keyboard_table[i]=255;
 
@@ -3165,12 +3353,21 @@ int util_write_configfile(void)
 
 
                                               ADD_STRING_CONFIG,"--zxdesktop-fill-type %d",menu_ext_desktop_fill);
-                                              ADD_STRING_CONFIG,"--zxdesktop-fill-solid-color %d",menu_ext_desktop_fill_solid_color);
+                                              ADD_STRING_CONFIG,"--zxdesktop-fill-primary-color %d",menu_ext_desktop_fill_first_color);
+                                              ADD_STRING_CONFIG,"--zxdesktop-fill-secondary-color %d",menu_ext_desktop_fill_second_color);
 				
 
 
                           
   if (screen_ext_desktop_place_menu)          ADD_STRING_CONFIG,"--zxdesktop-new-items");                   
+
+  if (menu_zxdesktop_buttons_enabled.v==0)    ADD_STRING_CONFIG,"--zxdesktop-disable-buttons");   
+
+
+  if (menu_ext_desktop_transparent_upper_icons.v)   ADD_STRING_CONFIG,"--zxdesktop-transparent-upper-buttons");
+
+  if (menu_ext_desktop_transparent_lower_icons.v)   ADD_STRING_CONFIG,"--zxdesktop-transparent-lower-buttons");
+
 
 
   if (autoframeskip.v==0)                     ADD_STRING_CONFIG,"--disable-autoframeskip");
@@ -3200,8 +3397,8 @@ int util_write_configfile(void)
   if (mem128_multiplicador!=1)                ADD_STRING_CONFIG,"--128kmem %d",mem128_multiplicador*128);
 
   if (simulate_screen_zx8081.v)               ADD_STRING_CONFIG,"--videozx8081 %d",umbral_simulate_screen_zx8081);
-                                              ADD_STRING_CONFIG,"--ao %s",audio_driver_name);
-                                              ADD_STRING_CONFIG,"--vo %s",scr_driver_name);
+                                              ADD_STRING_CONFIG,"--ao %s",audio_new_driver_name);
+                                              ADD_STRING_CONFIG,"--vo %s",scr_new_driver_name);
   if (noautoload.v)                           ADD_STRING_CONFIG,"--noautoload");
 
   if (fast_autoload.v)			      ADD_STRING_CONFIG,"--fastautoload");
@@ -3215,6 +3412,7 @@ int util_write_configfile(void)
   if (silence_detector_setting.v)	      ADD_STRING_CONFIG,"--enable-silencedetector");
   else 					      ADD_STRING_CONFIG,"--disable-silencedetector");
 
+                                              ADD_STRING_CONFIG,"--pcspeaker-wait-time %d",audiopcspeaker_tiempo_espera);
 
   if (border_enabled.v==0)                    ADD_STRING_CONFIG,"--disableborder");
   if (mouse_pointer_shown.v==0)               ADD_STRING_CONFIG,"--hidemousepointer");
@@ -3236,6 +3434,7 @@ int util_write_configfile(void)
   //if (screen_bw_no_multitask_menu.v==0)       ADD_STRING_CONFIG,"--disablebw-no-multitask");
 
   get_machine_config_name_by_number(buffer_temp,current_machine_type);
+
   if (buffer_temp[0]!=0) {
                                               ADD_STRING_CONFIG,"--machine %s",buffer_temp);
   }
@@ -3306,6 +3505,9 @@ int util_write_configfile(void)
   //TODO redefinekey
 
   if (recreated_zx_keyboard_support.v)	      ADD_STRING_CONFIG,"--recreatedzx");
+
+
+                                                ADD_STRING_CONFIG,"--keymap %d",z88_cpc_keymap_type);
 
   if (autoload_snapshot_on_start.v)           ADD_STRING_CONFIG,"--autoloadsnap");
   if (autosave_snapshot_on_exit.v)            ADD_STRING_CONFIG,"--autosavesnap");
@@ -3506,7 +3708,7 @@ int util_write_configfile(void)
   if (screen_show_cpu_usage.v==0)             ADD_STRING_CONFIG,"--no-cpu-usage");
   if (screen_show_cpu_temp.v==0)              ADD_STRING_CONFIG,"--no-cpu-temp");
   if (screen_show_fps.v==0)                   ADD_STRING_CONFIG,"--no-fps");  
-  if (opcion_no_splash.v)                     ADD_STRING_CONFIG,"--nowelcomemessage");
+  if (opcion_no_welcome_message.v)                     ADD_STRING_CONFIG,"--nowelcomemessage");
 
   if (menu_hide_vertical_percentaje_bar.v) ADD_STRING_CONFIG,"--hide-menu-percentage-bar");
 
@@ -3619,8 +3821,12 @@ int util_write_configfile(void)
  
   if (menu_limit_menu_open.v)                 ADD_STRING_CONFIG,"--limitopenmenu");
 
+  if (setting_machine_selection_by_name.v)    ADD_STRING_CONFIG,"--setmachinebyname");
+
   if (menu_filesel_hide_dirs.v)         ADD_STRING_CONFIG,"--hide-dirs");
 
+  if (menu_filesel_show_previews.v==0)         ADD_STRING_CONFIG,"--no-file-previews");
+			
   if (menu_desactivado.v)                     ADD_STRING_CONFIG,"--disablemenu");
 
   if (menu_desactivado_andexit.v)              ADD_STRING_CONFIG,"--disablemenuandexit");
@@ -3661,8 +3867,11 @@ int util_write_configfile(void)
   
   
 
-  if (stats_check_updates_enabled.v==0)        ADD_STRING_CONFIG,"--stats-disable-check-updates");
-		
+  if (stats_check_updates_enabled.v==0)                 ADD_STRING_CONFIG,"--stats-disable-check-updates");
+
+  if (stats_check_yesterday_users_enabled.v==0)         ADD_STRING_CONFIG,"--stats-disable-check-yesterday-users");
+
+	
 
 
   if (stats_last_remote_version[0]!=0)       ADD_STRING_CONFIG,"--stats-last-avail-version %s",stats_last_remote_version);
@@ -4184,21 +4393,37 @@ void convert_numeros_letras_puerto_teclado_continue_after_recreated(z80_byte tec
       else *puerto |=mascara;
 
 
-					if (MACHINE_IS_Z88) {
-						puerto=z88_tabla_teclado_letras[indice].puerto;
-						mascara=z88_tabla_teclado_letras[indice].mascara;
+        if (MACHINE_IS_Z88) {
+                puerto=z88_tabla_teclado_letras[indice].puerto;
+                mascara=z88_tabla_teclado_letras[indice].mascara;
 
-						if (pressrelease) *puerto &=255-mascara;
-						else *puerto |=mascara;
-					}
+                if (pressrelease) *puerto &=255-mascara;
+                else *puerto |=mascara;
+        }
 
-					if (MACHINE_IS_CPC) {
-						puerto=cpc_tabla_teclado_letras[indice].puerto;
-                                                mascara=cpc_tabla_teclado_letras[indice].mascara;
+        if (MACHINE_IS_CPC) {
+                puerto=cpc_tabla_teclado_letras[indice].puerto;
+                mascara=cpc_tabla_teclado_letras[indice].mascara;
 
-                                                if (pressrelease) *puerto &=255-mascara;
-                                                else *puerto |=mascara;
-          }
+                if (pressrelease) *puerto &=255-mascara;
+                else *puerto |=mascara;
+         }
+
+        if (MACHINE_IS_MSX) {
+                puerto=msx_tabla_teclado_letras[indice].puerto;
+                mascara=msx_tabla_teclado_letras[indice].mascara;
+
+                if (pressrelease) *puerto &=255-mascara;
+                else *puerto |=mascara;
+         }         
+
+        if (MACHINE_IS_SVI) {
+                puerto=svi_tabla_teclado_letras[indice].puerto;
+                mascara=svi_tabla_teclado_letras[indice].mascara;
+
+                if (pressrelease) *puerto &=255-mascara;
+                else *puerto |=mascara;
+         }             
 
           if (MACHINE_IS_QL) {
             puerto=ql_tabla_teclado_letras[indice].puerto;
@@ -4325,6 +4550,22 @@ void convert_numeros_letras_puerto_teclado_continue_after_recreated(z80_byte tec
                                                 else *puerto |=mascara;
   }
 
+	if (MACHINE_IS_MSX) {
+                                                puerto=msx_tabla_teclado_numeros[indice].puerto;
+                                                mascara=msx_tabla_teclado_numeros[indice].mascara;
+
+                                                if (pressrelease) *puerto &=255-mascara;
+                                                else *puerto |=mascara;
+  }  
+
+	if (MACHINE_IS_SVI) {
+                                                puerto=svi_tabla_teclado_numeros[indice].puerto;
+                                                mascara=svi_tabla_teclado_numeros[indice].mascara;
+
+                                                if (pressrelease) *puerto &=255-mascara;
+                                                else *puerto |=mascara;
+  }    
+
   if (MACHINE_IS_QL) {
                                           puerto=ql_tabla_teclado_numeros[indice].puerto;
                                           mascara=ql_tabla_teclado_numeros[indice].mascara;
@@ -4396,6 +4637,11 @@ int quickload_valid_extension(char *nombre) {
     || !util_compare_file_extension(nombre,"ay")
     || !util_compare_file_extension(nombre,"scr")
     || !util_compare_file_extension(nombre,"rzx")
+    || !util_compare_file_extension(nombre,"rom")
+    || !util_compare_file_extension(nombre,"col")
+    || !util_compare_file_extension(nombre,"sg")
+    || !util_compare_file_extension(nombre,"sc")
+    || !util_compare_file_extension(nombre,"cas")
 	) {
 		return 1;
 	}
@@ -4616,6 +4862,30 @@ int quickload_continue(char *nombre) {
                 return 0;
         }
 
+	//cintas de msx
+        else if (
+                   !util_compare_file_extension(nombre,"cas")
+              
+
+        ) {
+
+		//Aqui el autoload da igual. cambiamos siempre a msx si conviene
+                if (!MACHINE_IS_MSX && !MACHINE_IS_SVI) {
+			current_machine_type=MACHINE_ID_MSX1;
+                        set_machine(NULL);
+
+                                //establecer parametros por defecto. Incluido quitar slots de memoria
+                           set_machine_params();
+
+                          reset_cpu();
+                }                
+
+		insert_tape_cmdline(nombre);
+		tape_init();
+
+                return 0;
+        }        
+
 
 	//wav, smp y pzx suponemos real audio tape Spectrum
         else if (
@@ -4804,6 +5074,74 @@ int quickload_continue(char *nombre) {
                 return 0;
 
         }
+
+	//Cartuchos de MSX o SVI
+	else if (
+                !util_compare_file_extension(nombre,"rom")
+        ) {
+		//Aqui el autoload da igual. cambiamos siempre a msx si conviene
+                if (!MACHINE_IS_MSX && !MACHINE_IS_SVI) {
+			current_machine_type=MACHINE_ID_MSX1;
+                        set_machine(NULL);
+
+                                //establecer parametros por defecto. Incluido quitar slots de memoria
+                           set_machine_params();
+
+                          reset_cpu();
+                }
+
+                if (MACHINE_IS_MSX) msx_insert_rom_cartridge(nombre);
+                if (MACHINE_IS_SVI) svi_insert_rom_cartridge(nombre);
+
+
+                return 0;
+
+        }        
+
+	//Cartuchos de Coleco
+	else if (
+                !util_compare_file_extension(nombre,"col")
+        ) {
+		//Aqui el autoload da igual. cambiamos siempre a coleco si conviene
+                if (!MACHINE_IS_COLECO) {
+			current_machine_type=MACHINE_ID_COLECO;
+                        set_machine(NULL);
+
+                                //establecer parametros por defecto. Incluido quitar slots de memoria
+                           set_machine_params();
+
+                          reset_cpu();
+                }
+
+                coleco_insert_rom_cartridge(nombre);
+
+
+                return 0;
+
+        }           
+
+	//Cartuchos de SG1000
+	else if (
+                !util_compare_file_extension(nombre,"sg")
+             || !util_compare_file_extension(nombre,"sc")
+        ) {
+		//Aqui el autoload da igual. cambiamos siempre a sg1000 si conviene
+                if (!MACHINE_IS_SG1000) {
+			current_machine_type=MACHINE_ID_SG1000;
+                        set_machine(NULL);
+
+                                //establecer parametros por defecto. Incluido quitar slots de memoria
+                           set_machine_params();
+
+                          reset_cpu();
+                }
+
+                sg1000_insert_rom_cartridge(nombre);
+
+
+                return 0;
+
+        }              
 
 
 	//eprom cards de Z88
@@ -5142,6 +5480,23 @@ int lee_archivo(char *nombre,char *buffer,int max_longitud)
 
 }
 
+/*
+void util_set_reset_key_msx_keymap(enum util_teclas_msx_keymap tecla,int pressrelease)
+{
+        switch (tecla) {
+			case UTIL_KEY_MSX_MINUS:
+                                if (pressrelease) {
+                                        msx_keyboard_table[1] &=255-4;
+                                }
+                                else {
+                                        msx_keyboard_table[1] |=4;
+                                }
+                        break;
+        }
+
+}
+*/
+
 void util_set_reset_key_cpc_keymap(enum util_teclas_cpc_keymap tecla,int pressrelease)
 {
         switch (tecla) {
@@ -5367,11 +5722,15 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
                                 if (pressrelease) {
                                         puerto_teclado_sam_eff9 &= 255-32;
                                         ql_keyboard_table[5] &= 255-32;
+                                        msx_keyboard_table[1] &=255-4;
+                                        svi_keyboard_table[2] &=255-1;
                                         //printf ("tecla minus\n");
                                 }
                                 else {
                                         puerto_teclado_sam_eff9 |= 32;
                                         ql_keyboard_table[5] |= 32;
+                                        msx_keyboard_table[1] |=4;
+                                        svi_keyboard_table[2] |=1;
                                 }
                         break;
 
@@ -5379,10 +5738,14 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
                                 if (pressrelease) {
                                         puerto_teclado_sam_eff9 &= 255-64;
                                         ql_keyboard_table[3] &= 255-32;
+                                        msx_keyboard_table[1] &= 255-8;
+                                        svi_keyboard_table[1] &=255-32;
                                 }
                                 else {
                                         puerto_teclado_sam_eff9 |= 64;
                                         ql_keyboard_table[3] |= 32;
+                                        msx_keyboard_table[1] |=8;
+                                        svi_keyboard_table[1] |=32;
                                 }
                         break;
 
@@ -5390,9 +5753,13 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
                                 if (pressrelease) {
                                   // 6|   Ret   Left     Up    Esc  Right      \  Space   Down     ql_keyboard_table[1]
                                   ql_keyboard_table[1] &=255-32;
+                                  msx_keyboard_table[1] &= 255-16;
+                                  svi_keyboard_table[5] &= 255-16;
                                 }
                                 else {
                                   ql_keyboard_table[1] |=32;
+                                  msx_keyboard_table[1] |=16;
+                                  svi_keyboard_table[5] |= 16;
                                 }
                         break;
 
@@ -5403,10 +5770,14 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
 					                             puerto_teclado_sam_dff9 &= 255-32;
                                        //// 4|     [   Caps      k      s      f      =      g      ;     ql_keyboard_table[3]
                                        ql_keyboard_table[3] &=255-1;
+                                       msx_keyboard_table[1] &= 255-32;
+                                       svi_keyboard_table[5] &= 255-8;
                                 }
                                 else {
 					                             puerto_teclado_sam_dff9 |= 32;
                                        ql_keyboard_table[3] |=1;
+                                       msx_keyboard_table[1] |=32;
+                                       svi_keyboard_table[5] |= 8;
                                 }
                         break;
 
@@ -5416,10 +5787,14 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
 					                             puerto_teclado_sam_dff9 &= 255-64;
                                        // 5|     ]      z      .      c      b  Pound      m      '     ql_keyboard_table[2]
                                        ql_keyboard_table[2] &=255-1;
+                                       msx_keyboard_table[1] &= 255-64;
+                                       svi_keyboard_table[5] &= 255-32;
                                 }
                                 else {
                                         puerto_teclado_sam_dff9 |= 64;
                                         ql_keyboard_table[2] |=1;
+                                        msx_keyboard_table[1] |=64;
+                                        svi_keyboard_table[5] |= 32;
                                 }
                         break;
 
@@ -5427,9 +5802,13 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
                                 if (pressrelease) {
                                       // 4|     [   Caps      k      s      f      =      g      ;     ql_keyboard_table[3]
                                       ql_keyboard_table[3] &=255-128;
+                                      msx_keyboard_table[1] &= 255-128;
+                                      svi_keyboard_table[1] &= 255-4;
                                 }
                                 else {
                                       ql_keyboard_table[3] |=128;
+                                      msx_keyboard_table[1] |=128;
+                                      svi_keyboard_table[1] |= 4;
                                 }
                         break;
 
@@ -5438,10 +5817,14 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
                                         puerto_teclado_sam_bff9 &= 255-32;
                                         // 5|     ]      z      .      c      b  Pound      m      '     ql_keyboard_table[2]
                                         ql_keyboard_table[2] &=255-128;
+                                        msx_keyboard_table[2] &= 255-1;
+                                        svi_keyboard_table[1] &= 255-8;
                                 }
                                 else {
                                         puerto_teclado_sam_bff9 |= 32;
                                         ql_keyboard_table[2] |=128;
+                                         msx_keyboard_table[2] |= 1;
+                                        svi_keyboard_table[1] |= 8;
                                 }
                         break;
 
@@ -5450,10 +5833,12 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
                                         puerto_teclado_sam_bff9 &= 255-64;
                                         //// 5|     ]      z      .      c      b  Pound      m      '     ql_keyboard_table[2]
                                         ql_keyboard_table[2] &=255-32;
+                                        msx_keyboard_table[2] &= 255-2;
                                 }
                                 else {
                                         puerto_teclado_sam_bff9 |= 64;
                                         ql_keyboard_table[2] |=32;
+                                        msx_keyboard_table[2] |= 2;
                                 }
                         break;
 
@@ -5462,11 +5847,15 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
                                 if (pressrelease) {
 					                              puerto_teclado_sam_7ff9 &= 255-32;
                                         ql_keyboard_table[7] &=(255-128);
+                                        msx_keyboard_table[2] &= 255-4;
+                                        svi_keyboard_table[1] &= 255-16;
 
                                 }
                                 else {
 					                             puerto_teclado_sam_7ff9 |= 32;
                                        ql_keyboard_table[7] |=128;
+                                       msx_keyboard_table[2] |= 4;
+                                       svi_keyboard_table[1] |= 16;
                                 }
                         break;
 
@@ -5474,10 +5863,14 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
                                  if (pressrelease) {
 					                              puerto_teclado_sam_7ff9 &= 255-64;
                                         ql_keyboard_table[2] &=(255-4);
+                                        msx_keyboard_table[2] &= 255-8;
+                                        svi_keyboard_table[1] &= 255-64;
                                  }
                                  else {
 					                              puerto_teclado_sam_7ff9 |= 64;
                                         ql_keyboard_table[2] |=4;
+                                        msx_keyboard_table[2] |= 8;
+                                        svi_keyboard_table[1] |= 64;
                                  }
                         break;
 
@@ -5486,10 +5879,14 @@ void util_set_reset_key_common_keymap(enum util_teclas_common_keymap tecla,int p
 					                              puerto_teclado_sam_7ff9 &= 255-128;
                                         // 0| Shift   Ctrl    Alt      x      v      /      n      ,     ql_keyboard_table[7]
                                         ql_keyboard_table[7] &=255-32;
+                                        msx_keyboard_table[2] &= 255-16;
+                                        svi_keyboard_table[1] &= 255-128;
                                  }
                                  else {
 					                              puerto_teclado_sam_7ff9 |= 128;
                                         ql_keyboard_table[7] |=32;
+                                        msx_keyboard_table[2] |= 16;
+                                        svi_keyboard_table[1] |= 128;
                                  }
                         break;
 
@@ -5757,7 +6154,10 @@ void util_set_reset_mouse(enum util_mouse_buttons boton,int pressrelease)
         if (si_menu_mouse_activado() ) {
           //Si no esta menu abierto, hace accion de abrir menu, siempre que no este kempston
           if (menu_abierto==0) {
-                  if (kempston_mouse_emulation.v==0) menu_fire_event_open_menu();
+                  if (kempston_mouse_emulation.v==0) {
+                          menu_fire_event_open_menu();
+                          menu_was_open_by_left_mouse_button.v=1;
+                  }
           }
           else {
             //Si esta menu abierto, es como enviar enter, pero cuando no esta la ventana en background
@@ -5789,6 +6189,8 @@ void util_set_reset_mouse(enum util_mouse_buttons boton,int pressrelease)
         //puerto_especial1 |=1;
         mouse_pressed_close_window=0;
         mouse_pressed_background_window=0;
+        mouse_pressed_hotkey_window=0;
+        mouse_pressed_hotkey_window_key=0;
 
       }
     break;
@@ -5911,7 +6313,7 @@ void util_set_reset_key_convert_recreated_yesno(enum util_teclas tecla,int press
 				//Liberar todas teclas de puertos en caso de driver cocoa
 				//Esto sucede porque esto es tecla cmd y en cocoa,
 				//cuando se libera cmd, no se envian liberacion de otras teclas pulsadas
-				if (strcmp(scr_driver_name,"cocoa")==0) {
+				if (strcmp(scr_new_driver_name,"cocoa")==0) {
 					//printf ("Liberando todas teclas en driver cocoa\n");
 					chloe_keyboard_pressed_tecla=UTIL_KEY_NONE;
 					chloe_keyboard_pressed_tecla_ascii=0;
@@ -6372,14 +6774,18 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                 if (pressrelease) {
                                         puerto_32766 &=255-1;
                                         blink_kbd_a13 &= (255-64);
-					                              cpc_keyboard_table[5] &= (255-128);
+				        cpc_keyboard_table[5] &= (255-128);
                                         ql_keyboard_table[1] &= (255-64);
+                                        msx_keyboard_table[8] &= (255-1);
+                                        svi_keyboard_table[8] &= (255-1);
                                 }
                                 else {
                                         puerto_32766 |=1;
                                         blink_kbd_a13 |= 64;
 					                              cpc_keyboard_table[5] |= 128;
                                         ql_keyboard_table[1] |= 64;
+                                        msx_keyboard_table[8] |= 1;
+                                        svi_keyboard_table[8] |= 1;
                                 }
                         break;
 
@@ -6389,6 +6795,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         blink_kbd_a8 &= (255-64);
 					                              cpc_keyboard_table[0] &= (255-64);
                                         ql_keyboard_table[1] &= (255-1);
+                                        msx_keyboard_table[7] &= (255-128);
+                                        svi_keyboard_table[6] &= (255-64);
 
 					//Avisar de envio enter especial para rutinas de speech, para que envien sonido
 					textspeech_send_new_line();
@@ -6400,6 +6808,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         blink_kbd_a8 |=64;
 					                              cpc_keyboard_table[0] |= 64;
                                         ql_keyboard_table[1] |= 1;
+                                        msx_keyboard_table[7] |= 128;
+                                        svi_keyboard_table[6] |= 64;
                                 }
 
 
@@ -6425,12 +6835,16 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         blink_kbd_a14 &= (255-64);
 					                              cpc_keyboard_table[2] &=255-32;
                                         ql_keyboard_table[7] &= (255-1);
+                                        msx_keyboard_table[6] &=(255-1);
+                                        svi_keyboard_table[6] &=(255-1);
                                 }
                                 else  {
                                         puerto_65278 |=1;
                                         blink_kbd_a14 |= 64;
                                         ql_keyboard_table[7] |= 1;
 					cpc_keyboard_table[2] |=32;
+                                        msx_keyboard_table[6] |=1;
+                                        svi_keyboard_table[6] |=1;
                                 }
                         break;
 
@@ -6443,12 +6857,16 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         blink_kbd_a15 &= (255-128);
 					                              cpc_keyboard_table[2] &=255-32;
                                         ql_keyboard_table[7] &= (255-1);
+                                        msx_keyboard_table[6] &=(255-1);
+                                        svi_keyboard_table[6] &=(255-1);
                                 }
                                 else  {
                                         puerto_65278 |=1;
                                         blink_kbd_a15 |= 128;
 					                              cpc_keyboard_table[2] |=32;
                                         ql_keyboard_table[7] |= 1;
+                                        msx_keyboard_table[6] |=1;
+                                        svi_keyboard_table[6] |=1;
                                 }
                         break;
 
@@ -6476,6 +6894,10 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
 						//ALT en CPC es CLR
 						cpc_keyboard_table[2] &=(255-1);
                                                 ql_keyboard_table[7] &= (255-4);
+
+                                                //ALT en MSX es stop
+                                                msx_keyboard_table[7] &= (255-16);
+                                                svi_keyboard_table[6] &= (255-32);
                                         }
 
 
@@ -6486,6 +6908,10 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
 						//ALT en CPC es CLR
 						cpc_keyboard_table[2] |=1;
                                                 ql_keyboard_table[7] |= 4;
+
+                                                //ALT en MSX es stop
+                                                msx_keyboard_table[7] |= 16;
+                                                svi_keyboard_table[6] |= 32;
                                         }
                                 }
                         break;
@@ -6568,6 +6994,7 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                                 puerto_32766  &=255-2;
                                                 blink_kbd_a14 &= (255-16);
 						cpc_keyboard_table[2] &=(255-128);
+                                                msx_keyboard_table[6] &=(255-2);
                                                 ql_keyboard_table[7] &= (255-2);
 
 
@@ -6578,6 +7005,7 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                                 puerto_32766 |=2;
                                                 blink_kbd_a14 |= 16;
 						cpc_keyboard_table[2] |=128;
+                                                msx_keyboard_table[6] |=2;
                                                 ql_keyboard_table[7] |= 2;
 
                                         }
@@ -6600,6 +7028,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                 	                        puerto_61438 &=255-1;
                         	                blink_kbd_a8 &= (255-128);
 						                              cpc_keyboard_table[9] &=(255-128);
+                                                msx_keyboard_table[7] &=(255-32);
+                                                svi_keyboard_table[5] &=(255-64);
                                           ql_pressed_backspace=1;
 
 	                                }
@@ -6608,6 +7038,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                         	                puerto_61438 |=1;
                                 	        blink_kbd_a8 |= 128;
 						                              cpc_keyboard_table[9] |=128;
+                                                msx_keyboard_table[7] |=32;
+                                                svi_keyboard_table[5] |=64;
                                           ql_pressed_backspace=0;
 	                                }
 				}
@@ -6636,6 +7068,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         joystick_set_left(1);
                                         blink_kbd_a12 &= (255-64);
 					cpc_keyboard_table[1] &=(255-1);
+                                        msx_keyboard_table[8] &=(255-16);
+                                        svi_keyboard_table[6] &=(255-128);
 
           // 1|   Ret   Left     Up    Esc  Right      \  Space   Down
                                         ql_keyboard_table[1] &= (255-2);
@@ -6646,6 +7080,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         joystick_release_left(1);
                                         blink_kbd_a12 |= 64;
 					                              cpc_keyboard_table[1] |=1;
+                                        msx_keyboard_table[8] |=16;
+                                        svi_keyboard_table[6] |=128;
                                         ql_keyboard_table[1] |= 2;
                                 }
                         break;
@@ -6656,6 +7092,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         joystick_set_right(1);
                                         blink_kbd_a11 &= (255-64);
 					                              cpc_keyboard_table[0] &=(255-2);
+                                        msx_keyboard_table[8] &=(255-128);
+                                        svi_keyboard_table[8] &=(255-128);
                                         ql_keyboard_table[1] &= (255-16);
                                 }
                                 else {
@@ -6664,7 +7102,9 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         joystick_release_right(1);
                                         blink_kbd_a11 |= 64;
                                         cpc_keyboard_table[0] |=2;
-                                        ql_keyboard_table[1] |= 16;
+                                        msx_keyboard_table[8] |=128;
+                                        svi_keyboard_table[8] |=128;
+                                        ql_keyboard_table[1] |= 16;                                      
                                 }
                         break;
 
@@ -6676,6 +7116,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
 
                                         blink_kbd_a10 &= (255-64);
 					cpc_keyboard_table[0] &=(255-4);
+                                        msx_keyboard_table[8] &=(255-64);
+                                        svi_keyboard_table[7] &=(255-128);
                                         ql_keyboard_table[1] &= (255-128);
 
                                 }
@@ -6686,6 +7128,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
 
                                         blink_kbd_a10 |= 64;
 					cpc_keyboard_table[0] |=4;
+                                        msx_keyboard_table[8] |=64;
+                                        svi_keyboard_table[7] |=128;
                                         ql_keyboard_table[1] |= 128;
                                 }
                         break;
@@ -6697,6 +7141,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         joystick_set_up(1);
                                         blink_kbd_a9 &= (255-64);
 					cpc_keyboard_table[0] &=(255-1);
+                                        msx_keyboard_table[8] &=(255-32);
+                                        svi_keyboard_table[5] &=(255-128);
                                         ql_keyboard_table[1] &= (255-4);
                                 }
                                 else {
@@ -6705,6 +7151,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                         joystick_release_up(1);
                                         blink_kbd_a9 |= 64;
 					cpc_keyboard_table[0] |=1;
+                                        msx_keyboard_table[8] |=32;
+                                        svi_keyboard_table[5] |=128;
                                         ql_keyboard_table[1] |=4;
                                 }
                         break;
@@ -6817,6 +7265,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                         	                blink_kbd_a14 &= (255-32);
 						                              cpc_keyboard_table[8]&= (255-16);
                                           // 2|     9      w      i    Tab      r      -      y      o     ql_keyboard_table[5]
+
+                                          msx_keyboard_table[7] &=(255-8);
                                           ql_keyboard_table[5] &=(255-8);
         	                        }
 
@@ -6827,6 +7277,7 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                         	                puerto_32766 |=2;
                 	                        blink_kbd_a14 |= 32;
 						                              cpc_keyboard_table[8]|= 16;
+                                        msx_keyboard_table[7] |=8;
                                           ql_keyboard_table[5] |=8;
 	                                }
 				}
@@ -6844,16 +7295,20 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
         	                                puerto_65278 &=255-1;
                 	                        puerto_63486 &=255-2;
                         	                blink_kbd_a15 &= (255-8);
-						                              cpc_keyboard_table[8] &=(255-64);
-                                          // 4|     [   Caps      k      s      f      =      g      ;     ql_keyboard_table[3]
-                                          ql_keyboard_table[3] &=(255-2);
+                                                cpc_keyboard_table[8] &=(255-64);
+                                                // 4|     [   Caps      k      s      f      =      g      ;     ql_keyboard_table[3]
+                                                msx_keyboard_table[6] &=(255-8);
+                                                svi_keyboard_table[8] &=(255-8);
+                                                ql_keyboard_table[3] &=(255-2);
 	                                }
         	                        else {
                 	                        puerto_65278 |=1;
                         	                puerto_63486 |=2;
                                 	        blink_kbd_a15 |= 8;
-						                              cpc_keyboard_table[8] |=64;
-                                          ql_keyboard_table[3] |=2;
+                                                cpc_keyboard_table[8] |=64;
+                                                msx_keyboard_table[6] |=8;
+                                                svi_keyboard_table[8] |=8;
+                                                ql_keyboard_table[3] |=2;
 	                                }
 				}
                         break;
@@ -6975,10 +7430,14 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                 if (pressrelease) {
                                         blink_kbd_a14 &= (255-128);
                                         ql_keyboard_table[0] &= (255-2);
+                                        msx_keyboard_table[6] &= (255-32);
+                                        svi_keyboard_table[7] &=(255-1);
                                 }
                                 else {
                                         blink_kbd_a14 |= 128;
                                         ql_keyboard_table[0] |= 2;
+                                        msx_keyboard_table[6] |= 32;
+                                        svi_keyboard_table[7] |=1;
                                 }
                         break;
 
@@ -6988,10 +7447,14 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                 if (pressrelease) {
                                         blink_kbd_a15 &= (255-16);
                                         ql_keyboard_table[0] &= (255-8);
+                                        msx_keyboard_table[6] &= (255-64);
+                                        svi_keyboard_table[7] &=(255-2);
                                 }
                                 else {
                                         blink_kbd_a15 |= 16;
                                         ql_keyboard_table[0] |= 8;
+                                        msx_keyboard_table[6] |= 64;
+                                        svi_keyboard_table[7] |=2;
                                 }
                         break;
 
@@ -7002,10 +7465,14 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                 if (pressrelease) {
                                         blink_kbd_a14 &= (255-8);
                                         ql_keyboard_table[0] &= (255-16);
+                                        msx_keyboard_table[6] &= (255-128);
+                                        svi_keyboard_table[7] &=(255-4);
                                 }
                                 else {
                                         blink_kbd_a14 |= 8;
                                         ql_keyboard_table[0] |= 16;
+                                        msx_keyboard_table[6] |= 128;
+                                        svi_keyboard_table[7] |=4;
                                 }
                         break;
 
@@ -7013,11 +7480,16 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
 			case UTIL_KEY_F4:
 			if (pressrelease) {
                                    if (!menu_abierto) textspeech_enviar_speech_pantalla();
+
                                    ql_keyboard_table[0] &= (255-1);
+                                   msx_keyboard_table[7] &= (255-1);
+                                   svi_keyboard_table[7] &=(255-8);
                                  }
 
                                  else {
                                    ql_keyboard_table[0] |= 1;
+                                   msx_keyboard_table[7] |= 1;
+                                   svi_keyboard_table[7] |=8;
                                  }
 		        break;
 
@@ -7027,9 +7499,14 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
                                 if (pressrelease) {
 					if (util_if_open_just_menu() )  menu_fire_event_open_menu();
                                         ql_keyboard_table[0] &= (255-32); //Caso especial F5 y QL
+
+                                        msx_keyboard_table[7] &= (255-2);
+                                        svi_keyboard_table[7] &=(255-16);
                                 }
                                 else {
                                         ql_keyboard_table[0] |= 32;
+                                        msx_keyboard_table[7] |= 2;
+                                        svi_keyboard_table[7] |=16;
                                 }
                         break;
 
@@ -7167,6 +7644,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
 					blink_kbd_a15 &= (255-32);
 					puerto_especial1 &=255-1;
 					cpc_keyboard_table[8] &=(255-4);
+                                        msx_keyboard_table[7] &=(255-4);
+                                        svi_keyboard_table[6] &= (255-16);
 					puerto_teclado_sam_f7f9 &= (255-32);
           // 6|   Ret   Left     Up    Esc  Right      \  Space   Down     ql_keyboard_table[1]
           ql_keyboard_table[1] &= (255-8);
@@ -7179,6 +7658,8 @@ void util_set_reset_key_continue_after_zeng(enum util_teclas tecla,int pressrele
 					blink_kbd_a15 |=32;
 					puerto_especial1 |=1;
 					cpc_keyboard_table[8] |=4;
+                                        msx_keyboard_table[7] |=4;
+                                        svi_keyboard_table[6] |= 16;
 					puerto_teclado_sam_f7f9 |= 32;
                                         ql_keyboard_table[1] |= 8;
 				}
@@ -9625,57 +10106,86 @@ void customconfig_help(void)
 	);
 }
 
+//Nombres cortos de maquinas y sus id
+struct s_machines_short_names_id {
+        char machine_name[32];
+        int machine_id;
+};
+
+//Finaliza con machine_id -1
+struct s_machines_short_names_id machines_short_names_id[]={
+   {"16k",0},
+   {"48k",1},
+   {"48ks",20},
+   {"Inves",2},
+   {"TK90X",3},
+   {"TK90XS",4},
+   {"TK95",5},
+   {"128k",6},
+   {"128ks",7},
+   {"P2",8},
+   {"P2F",9},
+   {"P2S",10},
+
+   {"P2A40",11},
+   {"P2A41",12},
+   {"P2AS",13},
+   {"ZXUNO",14},
+   {"Chloe140",15},
+   {"Chloe280",16},
+   {"TS2068",17},
+   {"Prism",18},
+   {"TBBlue",19},
+
+   {"Pentagon",21},
+   {"Chrome",MACHINE_ID_CHROME},
+   {"BaseConf",MACHINE_ID_BASECONF},
+   {"TSConf",MACHINE_ID_TSCONF},
+   {"P340",MACHINE_ID_SPECTRUM_P3_40},
+   {"P341",MACHINE_ID_SPECTRUM_P3_41},
+   {"P3S",MACHINE_ID_SPECTRUM_P3_SPA},
+   {"ZX80",120},
+   {"ZX81",121},
+   {"ACE",122},
+
+   {"Z88",130},
+   {"CPC464",MACHINE_ID_CPC_464},
+   {"CPC4128",MACHINE_ID_CPC_4128},
+   {"SAM",150},
+   {"QL",160},
+   {"MK14",MACHINE_ID_MK14_STANDARD},
+
+   {"MSX1",MACHINE_ID_MSX1},
+   {"COLECO",MACHINE_ID_COLECO},
+   {"SG1000",MACHINE_ID_SG1000},
+   {"SVI318",MACHINE_ID_SVI_318},
+   {"SVI328",MACHINE_ID_SVI_328},
+
+   //Fin
+   {"",-1}
+};
+
+
 //Devuelve -1 si desconocida
 int get_machine_id_by_name(char *machine_name)
 {
 
-  int return_machine;
-                                if (!strcmp(machine_name,"16k")) return_machine=0;
-                                else if (!strcasecmp(machine_name,"48k")) return_machine=1;
-                                else if (!strcasecmp(machine_name,"48ks")) return_machine=20;
-                                else if (!strcasecmp(machine_name,"Inves")) return_machine=2;
-                                else if (!strcasecmp(machine_name,"TK90X")) return_machine=3;
-                                else if (!strcasecmp(machine_name,"TK90XS")) return_machine=4;
-                                else if (!strcasecmp(machine_name,"TK95")) return_machine=5;
-                                else if (!strcasecmp(machine_name,"128k")) return_machine=6;
-                                else if (!strcasecmp(machine_name,"128ks")) return_machine=7;
-                                else if (!strcasecmp(machine_name,"P2")) return_machine=8;
-                                else if (!strcasecmp(machine_name,"P2F")) return_machine=9;
-                                else if (!strcasecmp(machine_name,"P2S")) return_machine=10;
-                                else if (!strcasecmp(machine_name,"P2A40")) return_machine=11;
-                                else if (!strcasecmp(machine_name,"P2A41")) return_machine=12;
-                                else if (!strcasecmp(machine_name,"P2AS")) return_machine=13;
-                                else if (!strcasecmp(machine_name,"ZXUNO")) return_machine=14;
-                                else if (!strcasecmp(machine_name,"Chloe140")) return_machine=15;
-                                else if (!strcasecmp(machine_name,"Chloe280")) return_machine=16;
-                                else if (!strcasecmp(machine_name,"TS2068")) return_machine=17;
-                                else if (!strcasecmp(machine_name,"Prism")) return_machine=18;
-                                else if (!strcasecmp(machine_name,"TBBlue")) return_machine=19;
-                                else if (!strcasecmp(machine_name,"Pentagon")) return_machine=21;
-                                else if (!strcasecmp(machine_name,"Chrome")) return_machine=MACHINE_ID_CHROME;
-                                else if (!strcasecmp(machine_name,"BaseConf")) return_machine=MACHINE_ID_BASECONF;
-                                else if (!strcasecmp(machine_name,"TSConf")) return_machine=MACHINE_ID_TSCONF;
-                                else if (!strcasecmp(machine_name,"P340")) return_machine=MACHINE_ID_SPECTRUM_P3_40;
-                                else if (!strcasecmp(machine_name,"P341")) return_machine=MACHINE_ID_SPECTRUM_P3_41;
-                                else if (!strcasecmp(machine_name,"P3S")) return_machine=MACHINE_ID_SPECTRUM_P3_SPA;
-                                else if (!strcasecmp(machine_name,"ZX80")) return_machine=120;
-                                else if (!strcasecmp(machine_name,"ZX81")) return_machine=121;
-                                else if (!strcasecmp(machine_name,"ACE")) return_machine=122;
-                                else if (!strcasecmp(machine_name,"Z88")) return_machine=130;
-                                else if (!strcasecmp(machine_name,"CPC464")) return_machine=MACHINE_ID_CPC_464;
-                                else if (!strcasecmp(machine_name,"CPC4128")) return_machine=MACHINE_ID_CPC_4128;
-                                else if (!strcasecmp(machine_name,"SAM")) return_machine=150;
-                                else if (!strcasecmp(machine_name,"QL")) return_machine=160;
-                                else if (!strcasecmp(machine_name,"MK14")) return_machine=MACHINE_ID_MK14_STANDARD;
-                                else {
-                                        debug_printf (VERBOSE_ERR,"Unknown machine %s",machine_name);
-                                        return_machine=-1;
-                                }
+        int i=0;
 
-	return return_machine;
+        while (machines_short_names_id[i].machine_id>=0) {
+
+                if (!strcasecmp(machines_short_names_id[i].machine_name,machine_name)) {
+                        return machines_short_names_id[i].machine_id;
+                }
+
+                i++;
+        }
+
+        //no encontrado
+        debug_printf (VERBOSE_ERR,"Unknown machine %s",machine_name);
+        return -1;
+
 }
-
-
 
 //Devuelve 0 si ok
 int set_machine_type_by_name(char *machine_name)
@@ -9690,168 +10200,26 @@ int set_machine_type_by_name(char *machine_name)
 	return 0;
 }
 
-
 //Esta es la funcion inversa de la anterior. Devuelve "" si no se sabe numero de maquina
 void get_machine_config_name_by_number(char *machine_name,int machine_number)
 {
 
-switch (machine_number) {
-case 0:
-strcpy(machine_name,"16k");
-break;
+        int i=0;
 
-case 1:
-strcpy(machine_name,"48k");
-break;
+        while (machines_short_names_id[i].machine_id>=0) {
 
-case 20:
-strcpy(machine_name,"48ks");
-break;
+                if (machine_number==machines_short_names_id[i].machine_id) {
+                        strcpy(machine_name,machines_short_names_id[i].machine_name);
+                        return;
+                }
 
-case 2:
-strcpy(machine_name,"Inves");
-break;
+                i++;
+        }
 
-case 3:
-strcpy(machine_name,"TK90X");
-break;
-
-case 4:
-strcpy(machine_name,"TK90XS");
-break;
-
-case 5:
-strcpy(machine_name,"TK95");
-break;
-
-case 6:
-strcpy(machine_name,"128k");
-break;
-
-case 7:
-strcpy(machine_name,"128ks");
-break;
-
-case 8:
-strcpy(machine_name,"P2");
-break;
-
-case 9:
-strcpy(machine_name,"P2F");
-break;
-
-case 10:
-strcpy(machine_name,"P2S");
-break;
-
-case 11:
-strcpy(machine_name,"P2A40");
-break;
-
-case 12:
-strcpy(machine_name,"P2A41");
-break;
-
-case 13:
-strcpy(machine_name,"P2AS");
-break;
-
-case 14:
-strcpy(machine_name,"ZXUNO");
-break;
-
-case 15:
-strcpy(machine_name,"Chloe140");
-break;
-
-case 16:
-strcpy(machine_name,"Chloe280");
-break;
-
-case 17:
-strcpy(machine_name,"TS2068");
-break;
-
-case 18:
-strcpy(machine_name,"Prism");
-break;
-
-case 19:
-strcpy(machine_name,"TBBlue");
-break;
-
-case 21:
-strcpy(machine_name,"Pentagon");
-break;
-
-case MACHINE_ID_CHROME:
-strcpy(machine_name,"Chrome");
-break;
-
-case MACHINE_ID_TSCONF:
-strcpy(machine_name,"TSConf");
-break;
-
-case MACHINE_ID_BASECONF:
-strcpy(machine_name,"BaseConf");
-break;
-
-case MACHINE_ID_SPECTRUM_P3_40:
-strcpy(machine_name,"P340");
-break;
-
-case MACHINE_ID_SPECTRUM_P3_41:
-strcpy(machine_name,"P341");
-break;
-
-case MACHINE_ID_SPECTRUM_P3_SPA:
-strcpy(machine_name,"P3S");
-break;
-
-case 120:
-strcpy(machine_name,"ZX80");
-break;
-
-case 121:
-strcpy(machine_name,"ZX81");
-break;
-
-case 122:
-strcpy(machine_name,"ACE");
-break;
-
-case 130:
-strcpy(machine_name,"Z88");
-break;
-
-case MACHINE_ID_CPC_464:
-strcpy(machine_name,"CPC464");
-break;
-
-case MACHINE_ID_CPC_4128:
-strcpy(machine_name,"CPC4128");
-break;
-
-case 150:
-strcpy(machine_name,"SAM");
-break;
-
-case 160:
-strcpy(machine_name,"QL");
-break;
-
-case MACHINE_ID_MK14_STANDARD:
-strcpy(machine_name,"MK14");
-break;
-
-default:
-machine_name[0]=0;
-break;
-
+        //no encontrado
+        machine_name[0]=0;
 }
 
-
-}
 
 
 //Alternativa a scandir para sistemas Mingw, que no implementan dicha funcion
@@ -10030,17 +10398,27 @@ int get_file_type(int d_type, char *nombre)
 
 */
 
-
+#ifdef HAIKU_OS
+	
+#else
 	debug_printf (VERBOSE_DEBUG,"Name: %s type: %d constants: DT_DIR: %d DT_REG: %d DT_LNK: %d",
 			nombre,d_type,DT_DIR,DT_REG,DT_LNK);
+#endif
+
 
 #ifndef MINGW
 
+#ifdef HAIKU_OS
+	return 1; //Asumimos siempre tipo archivo regular
+#else
 
 	if (d_type == DT_DIR) return 2;
 	if (d_type == DT_REG || d_type == DT_LNK) return 1;
 
 	return 0;
+#endif
+
+
 #else
 /*
 24 puede significar 16+8:
@@ -10219,7 +10597,13 @@ z80_byte valor_orig;
 
 	//int indice_accion=0;
 
-	char *lineas[MAX_LINEAS_POK_FILE];
+	//char *lineas[MAX_LINEAS_POK_FILE];
+
+        char **lineas;
+
+        lineas=malloc(sizeof(char *) * MAX_LINEAS_POK_FILE);
+
+        if (lineas==NULL) cpu_panic("Can not allocate memory for pok file reading");
 
 	char ultimo_nombre_poke[MAX_LENGTH_LINE_POKE_FILE+1]="";
 
@@ -10306,6 +10690,7 @@ z80_byte valor_orig;
 		//printf ("\n");
 	}
 
+        free(lineas);
 
 	//return lineas_leidas;
 	return destino;
@@ -10318,7 +10703,15 @@ int util_parse_pok_file(char *file,struct s_pokfile **tabla_pokes)
 {
 	char *mem;
 
-	mem=malloc(65536);
+        int max_size=(MAX_LINEAS_POK_FILE*MAX_LENGTH_LINE_POKE_FILE)-1; //1 para el 0 del final 
+        
+
+        if (get_file_size(file) > max_size) {
+                debug_printf (VERBOSE_ERR,"File too large");
+                return 0;    
+        }
+
+	mem=malloc(max_size);
 
 
                 FILE *ptr_pok;
@@ -10330,7 +10723,7 @@ int util_parse_pok_file(char *file,struct s_pokfile **tabla_pokes)
                 }
 
 
-                int leidos=fread(mem,1,65535,ptr_pok);
+                int leidos=fread(mem,1,max_size,ptr_pok);
 
 		//Fin de texto
 		mem[leidos]=0;
@@ -10356,7 +10749,7 @@ int util_poke(z80_byte banco,z80_int direccion,z80_byte valor)
 	//Si estamos en maquina 48k
 	if (MACHINE_IS_SPECTRUM_16_48) {
 		if (banco<8) {
-			debug_printf (VERBOSE_ERR,"This poke is for a 128k machine and we are not in 128k machine");
+			debug_printf (VERBOSE_ERR,"This poke is for a 128k machine and we are not in 128k machine (poke bank: %d)",banco);
 			return -1;
 		}
 
@@ -10747,7 +11140,10 @@ int util_tape_tap_get_info(z80_byte *tape,char *texto)
 z80_byte peek_byte_z80_moto(unsigned int address)
 {
   address=adjust_address_space_cpu(address);
-  if (MACHINE_IS_QL) return ql_readbyte_no_ports(address);
+
+  //if (MACHINE_IS_QL) return ql_readbyte_no_ports(address);
+  if (MACHINE_IS_QL) return ql_readbyte_no_ports_function(address);
+
   else return peek_byte_no_time(address);
 }
 
@@ -11148,7 +11544,14 @@ unsigned int machine_get_memory_zone_attrib(int zone, int *readwrite)
       if (MACHINE_IS_Z88) {
       	size=0; //Solo zona memoria de 4 mb en caso de z88
       }
+
+      if (MACHINE_IS_MSX) {
+      	size=0; //Mostrar zona de memoria de 256kb en caso de msx
+      }      
  
+       if (MACHINE_IS_SVI) {
+      	size=0; //Mostrar zona de memoria de 256kb en caso de msx
+      }     
 
     break;
 
@@ -11205,6 +11608,13 @@ unsigned int machine_get_memory_zone_attrib(int zone, int *readwrite)
       if (MACHINE_IS_SAM) {
 	size=32768;
       }
+
+      if (MACHINE_IS_MSX) {
+	size=32768;
+      }      
+      if (MACHINE_IS_SVI) {
+	size=32768;
+      }   
 
       if (MACHINE_IS_Z88) {
       	size=0; //Solo zona memoria de 4 mb en caso de z88
@@ -11400,7 +11810,53 @@ unsigned int machine_get_memory_zone_attrib(int zone, int *readwrite)
           *readwrite=1;      
 	  size=IFROM_SIZE;
 	}
-    break;        
+    break;       
+
+
+    case MEMORY_ZONE_MSX_VRAM:
+        if (MACHINE_IS_MSX) {
+              *readwrite=1; 
+              size=16384;  
+        }
+    break;
+
+    case MEMORY_ZONE_MSX_ALL_MEM:
+        if (MACHINE_IS_MSX) {
+              *readwrite=1; 
+              size=256*1024;  //Zona entera de los 256kb
+        }
+    break;  
+
+
+    case MEMORY_ZONE_SVI_VRAM:
+        if (MACHINE_IS_SVI) {
+              *readwrite=1; 
+              size=16384;  
+        }
+    break;
+
+    case MEMORY_ZONE_SVI_ALL_MEM:
+        if (MACHINE_IS_SVI) {
+              *readwrite=1; 
+              size=256*1024;  //Zona entera de los 256kb
+        }
+    break;      
+
+    case MEMORY_ZONE_COLECO_VRAM:
+        if (MACHINE_IS_COLECO) {
+              *readwrite=1; 
+              size=16384;  
+        }
+    break;
+    
+
+    case MEMORY_ZONE_SG1000_VRAM:
+        if (MACHINE_IS_SG1000) {
+              *readwrite=1; 
+              size=16384;  
+        }
+    break;
+
 
   }
 
@@ -11705,8 +12161,46 @@ z80_byte *machine_get_memory_zone_pointer(int zone, int address)
         if (ifrom_enabled.v) {
 	p=&ifrom_memory_pointer[address];
       }
-    break;            
+    break;   
 
+
+    case MEMORY_ZONE_MSX_VRAM:
+        if (MACHINE_IS_MSX) {
+                p=&msx_vram_memory[address];
+        }        
+    break;
+
+    case MEMORY_ZONE_MSX_ALL_MEM:
+        if (MACHINE_IS_MSX) {
+                p=&memoria_spectrum[address];
+        }        
+    break;
+
+
+    case MEMORY_ZONE_SVI_VRAM:
+        if (MACHINE_IS_SVI) {
+                p=&svi_vram_memory[address];
+        }        
+    break;
+
+    case MEMORY_ZONE_SVI_ALL_MEM:
+        if (MACHINE_IS_SVI) {
+                p=&memoria_spectrum[address];
+        }        
+    break;
+
+
+    case MEMORY_ZONE_COLECO_VRAM:
+        if (MACHINE_IS_COLECO) {
+                p=&coleco_vram_memory[address];
+        }        
+    break;
+
+    case MEMORY_ZONE_SG1000_VRAM:
+        if (MACHINE_IS_SG1000) {
+                p=&sg1000_vram_memory[address];
+        }        
+    break;    
 
   }
 
@@ -12039,8 +12533,48 @@ void machine_get_memory_zone_name(int zone, char *name)
 		           //123456789012345
 		strcpy(name,"iFrom rom");
 	}
-    break;        
+    break;       
 
+
+    case MEMORY_ZONE_MSX_VRAM:
+        if (MACHINE_IS_MSX) {
+               strcpy(name,"MSX VRAM"); 
+        }
+    break;
+
+
+    case MEMORY_ZONE_MSX_ALL_MEM:
+        if (MACHINE_IS_MSX) {
+                          //123456789012345
+               strcpy(name,"MSX All Mem"); 
+        }
+    break;
+
+   case MEMORY_ZONE_SVI_VRAM:
+        if (MACHINE_IS_SVI) {
+               strcpy(name,"SVI VRAM"); 
+        }
+    break;
+
+
+    case MEMORY_ZONE_SVI_ALL_MEM:
+        if (MACHINE_IS_SVI) {
+                          //123456789012345
+               strcpy(name,"SVI All Mem"); 
+        }
+    break;    
+
+    case MEMORY_ZONE_COLECO_VRAM:
+        if (MACHINE_IS_COLECO) {
+               strcpy(name,"Coleco VRAM"); 
+        }
+    break;    
+
+    case MEMORY_ZONE_SG1000_VRAM:
+        if (MACHINE_IS_SG1000) {
+               strcpy(name,"SG1000 VRAM"); 
+        }
+    break;     
 
   }
 
@@ -12905,6 +13439,15 @@ int util_extract_tap(char *filename,char *tempdir,char *tzxfile)
 	while(total_mem>0) {
 		z80_byte *copia_puntero=puntero_lectura;
 		longitud_bloque=util_tape_tap_get_info(puntero_lectura,buffer_texto);
+                //printf("longitud bloque: %d\n",longitud_bloque);
+                //printf("nombre: %s\n",buffer_texto);
+
+                //Eliminar posibles / del nombre
+                int i;
+                for (i=0;buffer_texto[i];i++) {
+                        if (buffer_texto[i]=='/') buffer_texto[i]=' ';
+                }
+
 		total_mem-=longitud_bloque;
 		puntero_lectura +=longitud_bloque;
 		//debug_printf (VERBOSE_DEBUG,"Tape browser. Block: %s",buffer_texto);
@@ -12915,74 +13458,96 @@ int util_extract_tap(char *filename,char *tempdir,char *tzxfile)
 		char buffer_temp_file[PATH_MAX];
 		int longitud_final=longitud_bloque-2-2; //Saltar los dos de cabecera, el de flag y el crc
 
-		z80_byte tipo_bloque=255;
+                if (longitud_final>=0) {
 
-		//Si bloque de flag 0 y longitud 17 o longitud 34 (sped)
-		z80_byte flag=copia_puntero[2];
+                        z80_byte tipo_bloque=255;
 
-		//printf ("flag %d previo_flag %d previolong %d longitud_final %d\n",flag,previo_flag,previo_longitud_segun_cabecera,longitud_final);
+                        //Si bloque de flag 0 y longitud 17 o longitud 34 (sped)
+                        z80_byte flag=copia_puntero[2];
 
-		int longitud_segun_cabecera=-1;
+                        //printf ("flag %d previo_flag %d previolong %d longitud_final %d\n",flag,previo_flag,previo_longitud_segun_cabecera,longitud_final);
 
-		if (flag==0 && (longitud_final==17 || longitud_final==34) ) {
-			if (tzxfile==NULL) sprintf (buffer_temp_file,"%s/%02d-header-%s",tempdir,filenumber,buffer_texto);
+                        int longitud_segun_cabecera=-1;
 
-			tipo_bloque=copia_puntero[3]; //0, program, 3 bytes etc
+                        if (flag==0 && (longitud_final==17 || longitud_final==34) ) {
+                                if (tzxfile==NULL) sprintf (buffer_temp_file,"%s/%02d-header-%s",tempdir,filenumber,buffer_texto);
 
-			//printf ("%s : tipo %d\n",buffer_temp_file,tipo_bloque);
+                                tipo_bloque=copia_puntero[3]; //0, program, 3 bytes etc
 
-			//Longitud segun cabecera
-			longitud_segun_cabecera=value_8_to_16(copia_puntero[15],copia_puntero[14]);
-		
-		}
-		else {
-			char extension_agregar[10];
-			extension_agregar[0]=0; //Por defecto
+                                //printf ("%s : tipo %d\n",buffer_temp_file,tipo_bloque);
 
-			//Si bloque de flag 255, ver si corresponde al bloque anterior de flag 0	
-			if (flag==255 && previo_flag==0 && previo_longitud_segun_cabecera==longitud_final) {
-				//Corresponde. Agregar extensiones bas o scr segun el caso
-				if (previo_tipo_bloque==0) {
-					//Basic
-					strcpy(extension_agregar,".bas");
-				}
+                                //Longitud segun cabecera
+                                longitud_segun_cabecera=value_8_to_16(copia_puntero[15],copia_puntero[14]);
+                        
+                        }
+                        else {
+                                char extension_agregar[10];
+                                extension_agregar[0]=0; //Por defecto
 
-				if (previo_tipo_bloque==3 && longitud_final==6912) {
-					//Screen
-                                        strcpy(extension_agregar,".scr");
+                                int era_pantalla=0;
+
+                                //Si bloque de flag 255, ver si corresponde al bloque anterior de flag 0	
+                                if (flag==255 && previo_flag==0 && previo_longitud_segun_cabecera==longitud_final) {
+                                        //Corresponde. Agregar extensiones bas o scr segun el caso
+                                        if (previo_tipo_bloque==0) {
+                                                //Basic
+                                                strcpy(extension_agregar,".bas");
+                                        }
+
+                                        if (previo_tipo_bloque==3 && longitud_final==6912) {
+                                                //Screen
+                                                strcpy(extension_agregar,".scr");
+
+                                                
+                                        }
                                 }
-			}
 
-			if (tzxfile==NULL) sprintf (buffer_temp_file,"%s/%02d-data-%d%s",tempdir,filenumber,longitud_final,extension_agregar);
-		}
+                                if (longitud_final==6912) era_pantalla=1;
+
+                                if (tzxfile==NULL) {
+                                        sprintf (buffer_temp_file,"%s/%02d-data-%d%s",tempdir,filenumber,longitud_final,extension_agregar);
+
+                                        if (era_pantalla) {
+                                                //Indicar con un archivo en la propia carpeta cual es el archivo de pantalla
+                                                //usado en los previews
+                                                char buff_preview_scr[PATH_MAX];
+                                                sprintf(buff_preview_scr,"%s/%s",tempdir,MENU_SCR_INFO_FILE_NAME);
+
+                                                //Meter en archivo MENU_SCR_INFO_FILE_NAME la ruta al archivo de pantalla
+                                                util_save_file((z80_byte *)buffer_temp_file,strlen(buffer_temp_file)+1,buff_preview_scr);
+                                        }                                
+                                }
+                        }
 
 
-                if (tzxfile==NULL) {
-		        //Generar bloque con datos, saltando los dos de cabecera y el flag
-		        util_save_file(copia_puntero+3,longitud_final,buffer_temp_file);
+                        if (tzxfile==NULL) {
+                                //Generar bloque con datos, saltando los dos de cabecera y el flag
+                                util_save_file(copia_puntero+3,longitud_final,buffer_temp_file);
+                        }
+
+                        //Convertir a tzx
+                        else {
+                                //Generar bloque con datos. TZX ID 10h, word pausa de 500ms, longitud
+                                z80_byte buffer_tzx[5];
+                                buffer_tzx[0]=0x10;
+                                buffer_tzx[1]=244;
+                                buffer_tzx[2]=1;
+
+                                fwrite(buffer_tzx,1,3,ptr_tzxfile);
+
+                                //Meter datos tal cual de tap: longitud, flag, datos, crc
+                                fwrite(copia_puntero,1,longitud_bloque,ptr_tzxfile);
+
+
+                        }                
+
+                        filenumber++;
+
+                        previo_flag=flag;
+                        previo_longitud_segun_cabecera=longitud_segun_cabecera;
+                        previo_tipo_bloque=tipo_bloque;
+
                 }
-
-                //Convertir a tzx
-                else {
-                        //Generar bloque con datos. TZX ID 10h, word pausa de 500ms, longitud
-                        z80_byte buffer_tzx[5];
-                        buffer_tzx[0]=0x10;
-                        buffer_tzx[1]=244;
-                        buffer_tzx[2]=1;
-
-                        fwrite(buffer_tzx,1,3,ptr_tzxfile);
-
-                        //Meter datos tal cual de tap: longitud, flag, datos, crc
-                        fwrite(copia_puntero,1,longitud_bloque,ptr_tzxfile);
-
-
-                }                
-
-		filenumber++;
-
-		previo_flag=flag;
-		previo_longitud_segun_cabecera=longitud_segun_cabecera;
-		previo_tipo_bloque=tipo_bloque;
 	}
 
 
@@ -13135,6 +13700,8 @@ int util_extract_tzx(char *filename,char *tempdirectory,char *tapfile)
 			char extension_agregar[10];
 			extension_agregar[0]=0; //Por defecto
 
+                        int era_pantalla=0;
+
 			//Si bloque de flag 255, ver si corresponde al bloque anterior de flag 0	
 			if (flag==255 && previo_flag==0 && previo_longitud_segun_cabecera==longitud_final) {
 				//Corresponde. Agregar extensiones bas o scr segun el caso
@@ -13146,10 +13713,26 @@ int util_extract_tzx(char *filename,char *tempdirectory,char *tapfile)
 				if (previo_tipo_bloque==3 && longitud_final==6912) {
 					//Screen
                                         strcpy(extension_agregar,".scr");
+
+
                                 }
 			}
 
-			if (tapfile==NULL) sprintf (buffer_temp_file,"%s/%02d-data-%d%s",tempdirectory,filenumber,longitud_final,extension_agregar);
+                        if (longitud_final==6912) era_pantalla=1;
+
+			if (tapfile==NULL) {
+                                sprintf (buffer_temp_file,"%s/%02d-data-%d%s",tempdirectory,filenumber,longitud_final,extension_agregar);
+
+                                if (era_pantalla) {
+                                        //Indicar con un archivo en la propia carpeta cual es el archivo de pantalla
+                                        //usado en los previews
+                                        char buff_preview_scr[PATH_MAX];
+                                        sprintf(buff_preview_scr,"%s/%s",tempdirectory,MENU_SCR_INFO_FILE_NAME);
+
+                                        //Meter en archivo MENU_SCR_INFO_FILE_NAME la ruta al archivo de pantalla 
+                                        util_save_file((z80_byte *)buffer_temp_file,strlen(buffer_temp_file)+1,buff_preview_scr);
+                                }
+                        }
 		}
 
 
@@ -13515,6 +14098,8 @@ z80_byte *memoria;
                                 char extension_agregar[10];
                                 extension_agregar[0]=0; //Por defecto
 
+                                int era_pantalla=0;
+
                                 //Si bloque de flag 255, ver si corresponde al bloque anterior de flag 0
                                 if (flag==255 && previo_flag==0 && previo_longitud_segun_cabecera==longitud_final) {
                                         //Corresponde. Agregar extensiones bas o scr segun el caso
@@ -13529,7 +14114,22 @@ z80_byte *memoria;
                                         }
                                 }
 
-                                if (tapfile==NULL) sprintf (buffer_temp_file,"%s/%02d-data-%d%s",tempdirectory,filenumber,longitud_final,extension_agregar);
+                                if (longitud_final==6912) era_pantalla=1;
+
+                                if (tapfile==NULL) {
+                                        sprintf (buffer_temp_file,"%s/%02d-data-%d%s",tempdirectory,filenumber,longitud_final,extension_agregar);
+
+                                        if (era_pantalla) {
+                                                //Indicar con un archivo en la propia carpeta cual es el archivo de pantalla
+                                                //usado en los previews
+                                                char buff_preview_scr[PATH_MAX];
+                                                sprintf(buff_preview_scr,"%s/%s",tempdirectory,MENU_SCR_INFO_FILE_NAME);
+
+                                                //Meter en archivo MENU_SCR_INFO_FILE_NAME la ruta al archivo de pantalla
+                                                util_save_file((z80_byte *)buffer_temp_file,strlen(buffer_temp_file)+1,buff_preview_scr);
+                                        }
+
+                                }
                         }
 
 
@@ -13594,6 +14194,60 @@ z80_byte *memoria;
 
 }
 
+int util_convert_sna_to_scr(char *filename,char *archivo_destino)
+{
+        //snapshot a SCR
+
+
+        z80_byte sna_48k_header[SNA_48K_HEADER_SIZE];
+
+
+        FILE *ptr_snafile;
+
+        int filesize=get_file_size(filename);
+
+       		
+
+        if (filesize==49179 || filesize==131103 || filesize==147487) {
+
+                int leidos;
+
+                //Load File
+                ptr_snafile=fopen(filename,"rb");
+                if (ptr_snafile==NULL) {
+                        debug_printf(VERBOSE_ERR,"Error opening %s",filename);
+                        return 1;
+                }
+
+                //48k y 128k tienen misma cabecera al principio
+                leidos=fread(sna_48k_header,1,SNA_48K_HEADER_SIZE,ptr_snafile);
+                
+
+
+                //Leer byte a byte y pasarlo a archivo destino
+
+                FILE *ptr_destination_file;
+                ptr_destination_file=fopen(archivo_destino,"wb");
+
+                        if (!ptr_destination_file) {
+                                debug_printf (VERBOSE_ERR,"Can not open %s",archivo_destino);
+                                return 1;
+                }      
+
+                int i;
+
+                for (i=0;i<6912;i++) {
+                        z80_byte byte_leido;
+                        fread(&byte_leido,1,1,ptr_snafile);
+                        fwrite(&byte_leido,1,1,ptr_destination_file);
+                }   
+
+                fclose(ptr_snafile);
+                fclose(ptr_destination_file);
+        }
+
+        return 0; 
+}
 
 //Realmente lo que hacemos es copiar el .p en .baszx81 con un offset , saltando datos iniciales para situarnos en el programa basic
 int util_extract_p(char *filename,char *tempdir)
@@ -13823,6 +14477,16 @@ int util_extract_trd(char *filename,char *tempdir)
 
                         //grabar archivo
                         sprintf (buffer_temp_file,"%s/%s",tempdir,buffer_texto);
+
+                        if (longitud_final==6912) {
+                                //Indicar con un archivo en la propia carpeta cual es el archivo de pantalla
+                                //usado en los previews
+                                char buff_preview_scr[PATH_MAX];
+                                sprintf(buff_preview_scr,"%s/%s",tempdir,MENU_SCR_INFO_FILE_NAME);
+
+                                //Meter en archivo MENU_SCR_INFO_FILE_NAME la ruta al archivo de pantalla
+                                util_save_file((z80_byte *)buffer_temp_file,strlen(buffer_temp_file)+1,buff_preview_scr);
+                        }
 		
            
                         util_save_file(&trd_file_memory[offset],longitud_final,buffer_temp_file);
@@ -13862,6 +14526,8 @@ int util_extract_dsk(char *filename,char *tempdir)  {
 		debug_printf(VERBOSE_ERR,"Unable to assign memory");
 		return 0;
 	}
+
+        int longitud_dsk=bytes_to_load;
 	
 	//Leemos archivo dsk
         FILE *ptr_file_dsk_browser;
@@ -13980,6 +14646,9 @@ Me encuentro con algunos discos en que empiezan en pista 1 y otros en pista 0 ??
 TODO. supuestamente entradas del directorio pueden ocupar 4 sectores. Actualmente solo hago 1
 */
 
+        //printf("puntero: %d\n",puntero);
+
+
 	if (puntero==-1) {
 		//printf ("Filesystem track/sector 0/0 not found. Guessing it\n");
 		//no encontrado. probar con lo habitual
@@ -13991,9 +14660,9 @@ TODO. supuestamente entradas del directorio pueden ocupar 4 sectores. Actualment
 			//printf ("Filesystem doesnt seem to be at track 0. Trying with track 1\n");
                         int total_pistas=bytes_to_load/4864;
 
-                        puntero=menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,1,0);
+                        puntero=menu_dsk_getoff_track_sector(dsk_file_memory,total_pistas,1,0,longitud_dsk);
 
-			//printf ("puntero: %d\n",puntero);
+			//printf ("puntero after menu_dsk_getoff_track_sector: %d\n",puntero);
 
 			if (puntero==-1) {
 		                //printf ("Filesystem track/sector 1/0 not found. Guessing it\n");
@@ -14025,8 +14694,12 @@ en que empieza en 1300H. Porque??
 
 	for (i=0;i<max_entradas_dsk;i++) {
 
+                //printf("entrada %d\n",i);
+
                 z80_byte file_is_deleted=dsk_file_memory[puntero-1];
 		menu_file_mmc_browser_show_file(&dsk_file_memory[puntero],buffer_texto,1,11);
+
+                //printf("after menu_file_mmc_browser_show_file\n");
 
 		if (buffer_texto[0]!='?') {
                 if (file_is_deleted==0xE5) debug_printf (VERBOSE_DEBUG,"File %s is deleted. Skipping",buffer_texto);
@@ -14034,6 +14707,8 @@ en que empieza en 1300H. Porque??
 			//indice_buffer +=util_add_string_newline(&texto_browser[indice_buffer],buffer_texto);
 
 			debug_printf (VERBOSE_DEBUG,"File %s",buffer_texto);
+
+                        //printf("puntero: %d\n",puntero);
 
 			z80_byte continuation_marker=dsk_file_memory[puntero+12-1]; //-1 porque empezamos el puntero en primera posicion
 
@@ -14043,6 +14718,8 @@ en que empieza en 1300H. Porque??
 			int bloque;
 
 			bloque=dsk_file_memory[puntero+15];
+
+                        //printf("after dsk_file_memory[puntero+15];\n");
 
 			//Este bloque indica el primer bloque de 1k del archivo. Esta ubicado en el principio de cada entrada de archivo+16
 			//(aqui hay 15 porque ya empezamos desplazados en 1 - 0x201)
@@ -14060,7 +14737,16 @@ en que empieza en 1300H. Porque??
 			do {
 			
 				int offset1,offset2;
+
+                                //printf("before menu_dsk_getoff_block\n");
 				menu_dsk_getoff_block(dsk_file_memory,bytes_to_load,bloque,&offset1,&offset2);
+
+                                //printf("offset1 %d offset2 %d\n",offset1,offset2);
+
+                                if (offset1<0 || offset2<0) {
+                                        debug_printf(VERBOSE_DEBUG,"Error reading dsk offset block");
+                                        return 0; //TODO: O retornar error? 
+                                }
 
 				//Sacar longitud real, de cabecera plus3dos. Solo el primer sector contiene cabecera plus3dos y la primera entrada del archivo,
 				//por tanto el primer sector contiene 512-128=384 datos, mientras que los siguientes,
@@ -14077,7 +14763,11 @@ en que empieza en 1300H. Porque??
 					memcpy(&buffer_temp[destino_en_buffer_temp],&dsk_file_memory[offset2],512);
 					//printf ("Escribiendo sector 2\n");
 
+                                        //printf("destino_en_buffer_temp 1 %d\n",destino_en_buffer_temp);
+
 					destino_en_buffer_temp +=512;
+
+                                        //printf("after memcpy 1\n");
 
 
 				}
@@ -14085,11 +14775,15 @@ en que empieza en 1300H. Porque??
 				else {
 
 					//Los dos sectores
+                                        //printf("destino_en_buffer_temp 2 %d\n",destino_en_buffer_temp);
+
 					memcpy(&buffer_temp[destino_en_buffer_temp],&dsk_file_memory[offset1],512);
 					destino_en_buffer_temp +=512;
 
 					memcpy(&buffer_temp[destino_en_buffer_temp],&dsk_file_memory[offset2],512);
 					destino_en_buffer_temp +=512;
+
+                                        //printf("after memcpy 2\n");
 				}
 
 			
@@ -14127,11 +14821,24 @@ Byte 12
 			if (continuation_marker==0) {
                                 int longitud_final=longitud_en_bloques;
 
+                                //printf("longitud_final: %d\n",longitud_final);
+
                                 //En este caso, se ha grabado el archivo inicial y se sabe la longitud real segun cabecera plus3dos
                                 //si resulta que la longitud en bloques a guardar ahora es mayor que la cabecera, reducir
                                 if (longitud_final>longitud_real_archivo) longitud_final=longitud_real_archivo;
 				debug_printf (VERBOSE_DEBUG,"File entry is the first. Saving %d bytes on file",longitud_final);
 				util_save_file(buffer_temp,longitud_final,buffer_nombre_destino);
+
+
+                                if (longitud_final==6912) {
+                                        //Indicar con un archivo en la propia carpeta cual es el archivo de pantalla
+                                        //usado en los previews
+                                        char buff_preview_scr[PATH_MAX];
+                                        sprintf(buff_preview_scr,"%s/%s",tempdir,MENU_SCR_INFO_FILE_NAME);
+
+                                        //Meter en archivo MENU_SCR_INFO_FILE_NAME la ruta al archivo de pantalla
+                                        util_save_file((z80_byte *)buffer_nombre_destino,strlen(buffer_nombre_destino)+1,buff_preview_scr);
+                                }                                
 			}
 			
 			else {
@@ -17007,7 +17714,7 @@ int util_download_file(char *hostname,char *url,char *archivo,int use_ssl,int es
 
                 //El redirect sucede con las url a archive.org
 
-                retorno=zsock_http(nuevo_host,nueva_url,&http_code,&mem,&total_leidos,&mem_after_headers,1,"",use_ssl,redirect_url,0);
+                retorno=zsock_http(nuevo_host,nueva_url,&http_code,&mem,&total_leidos,&mem_after_headers,1,"",use_ssl,redirect_url,estimated_maximum_size);
 
 	}
 
@@ -17052,7 +17759,9 @@ int util_download_file(char *hostname,char *url,char *archivo,int use_ssl,int es
                         return retorno;
                 }
                 else {
-                        debug_printf(VERBOSE_ERR,"Error downloading file. Return code: %d",http_code);
+                        //No hacemos VERBOSE_ERR porque sera responsabilidad del que llame a la funcion util_download_file
+                        //de mostrar mensaje en ventana
+                        debug_printf(VERBOSE_DEBUG,"Error downloading file. Return code: %d",http_code);
                 }
         }	        
 
@@ -17375,6 +18084,7 @@ void util_bmp_putpixel(z80_byte *puntero,int x,int y,int r,int g,int b)
 
         int tamanyo_linea=ancho*3;
         int offset_x=x*3;
+//TODO: determinados anchos de imagen parece que el offset de linea no siempre es este        
         int offset=(yfinal*tamanyo_linea)+offset_x+UTIL_BMP_HEADER_SIZE;
 
         //Each 3-byte triplet in the bitmap array represents the relative intensities of blue, green, and red, respectively, for a pixel.
@@ -17497,3 +18207,133 @@ reserved	1 byte	 	unused (=0)
 			indice_paleta +=4;
 		}
 }
+
+
+
+void util_rotate_file(char *filename,int archivos)
+{
+
+	//Borrar el ultimo
+	char buffer_last_file[PATH_MAX];
+
+	sprintf(buffer_last_file,"%s.%d",filename,archivos);
+
+	debug_printf (VERBOSE_DEBUG,"Erasing oldest file %s",buffer_last_file);
+
+	util_delete(buffer_last_file);
+
+	//Y renombrar, el penultimo al ultimo, el antepenultimo al penultimo, etc
+	//con 10 archivos:
+	//ren file.9 file.10
+	//ren file.8 file.9
+	//ren file.7 file.8
+	//...
+	//ren file.1 file.2
+	//ren file file.1 esto a mano
+	int i;
+
+	for (i=archivos-1;i>=0;i--) {
+		char buffer_file_orig[PATH_MAX];
+		char buffer_file_dest[PATH_MAX];
+
+		//Caso especial ultimo (seria el .0)
+		if (i==0) {
+			strcpy(buffer_file_orig,filename);
+		}
+		else {
+			sprintf(buffer_file_orig,"%s.%d",filename,i);
+		}
+
+		sprintf(buffer_file_dest,"%s.%d",filename,i+1);
+
+		debug_printf (VERBOSE_DEBUG,"Renaming log file %s -> %s",buffer_file_orig,buffer_file_dest);
+		rename(buffer_file_orig,buffer_file_dest);
+	}
+
+
+}
+
+
+
+//Convertir una string de origen a caracteres charset, sustituyendo graficos en cirilicos 
+int util_convert_utf_charset(char *origen,z80_byte *final,int longitud_texto)
+{
+        int longitud_final=0;
+
+        int era_utf=0;
+
+        z80_byte letra;
+
+        while (longitud_texto>0) {
+
+                letra=*origen;
+                origen++;
+
+            if (era_utf) {
+                letra=menu_escribe_texto_convert_utf(era_utf,letra);
+                era_utf=0;
+
+                //Caracter final utf
+                *final=letra;
+
+            }
+
+
+            //Si no, ver si entra un prefijo utf
+            else {
+                //printf ("letra: %02XH\n",letra);
+                //Prefijo utf
+                            if (menu_es_prefijo_utf(letra)) {
+                                    era_utf=letra;
+                    //printf ("activado utf\n");
+                            }
+
+                else {
+                    //Caracter normal
+                *final=letra;
+
+                }
+            }
+
+
+        
+
+        //if (x>=32) {
+        //  printf ("Escribiendo caracter [%c] en x: %d\n",letra,x);
+        //}
+
+
+        if (!era_utf) {
+                                final++;
+
+                longitud_final++;
+
+        }
+
+
+        longitud_texto--;
+
+        }
+
+
+        return longitud_final;
+}
+
+const char *spectrum_colour_names[16]={
+        "Black",
+        "Blue",
+        "Red",
+        "Magenta",
+        "Green",
+        "Cyan",
+        "Yellow",
+        "White",
+        "Black",
+        "BrightBlue",
+        "BrightRed",
+        "BrightMagenta",
+        "BrightGreen",
+        "BrightCyan",
+        "BrightYellow",
+        "BrightWhite",        
+};

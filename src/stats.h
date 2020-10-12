@@ -34,16 +34,24 @@ extern int stats_get_current_total_minutes_use(void);
 #define REMOTE_ZESARUX_SERVER "51.83.33.13"
 #define STATS_URL_UPDATE_STABLE_VERSION "/check_updates/stable.txt"
 #define STATS_URL_UPDATE_SNAPSHOT_VERSION "/check_updates/snapshot.txt"
+#define STATS_URL_YESTERDAY_USERS "/zesarux_yesterday_users.txt"
 
 #define MAX_UPDATE_VERSION_STRING 1024
+#define MAX_YESTERDAY_USERS_STRING 99
+
 extern char stats_last_remote_version[];
 extern z80_bit stats_check_updates_enabled;
+extern z80_bit stats_check_yesterday_users_enabled;
+
 extern void stats_check_updates(void);
 extern void stats_ask_if_enable(void);
 extern void stats_enable(void);
 extern void stats_disable(void);
 
+extern void stats_check_yesterday_users(void);
+
 extern int stats_total_speccy_browser_queries;
 extern int stats_total_zx81_browser_queries;
+extern char stats_last_yesterday_users[];
 
 #endif

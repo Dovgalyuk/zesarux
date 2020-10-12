@@ -122,7 +122,7 @@ if(fcntl(ptr_audiodsp,F_SETFL,flags)==-1)
 
 
 		//Esto debe estar al final, para que funcione correctamente desde menu, cuando se selecciona un driver, y no va, que pueda volver al anterior
-		audio_driver_name="dsp";
+		audio_set_driver_name("dsp");
 
 		return 0;
 

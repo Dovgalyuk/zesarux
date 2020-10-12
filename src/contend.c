@@ -919,6 +919,245 @@ void ula_contend_port_late_mk14( z80_int port  GCC_UNUSED)
 
 }
 
+void contend_read_svi(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+
+#endif
+
+	//Y sumamos estados normales
+	t_estados += time;
+
+}
+
+void contend_read_no_mreq_svi(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+
+#endif
+
+        //Y sumamos estados normales
+        t_estados += time;
+
+}
+
+void contend_write_no_mreq_svi(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+   
+#endif
+
+        //Y sumamos estados normales
+        t_estados += time;
+
+}
+
+
+void ula_contend_port_early_svi( z80_int port GCC_UNUSED )
+{
+#ifdef EMULATE_CONTEND
+
+
+#endif
+
+	t_estados++;
+}
+
+void ula_contend_port_late_svi( z80_int port GCC_UNUSED)
+{
+#ifdef EMULATE_CONTEND
+ 
+        t_estados += 2;
+#else
+	t_estados += 2;
+#endif
+
+}
+
+
+
+
+void contend_read_msx1(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+
+#endif
+
+	//Y sumamos estados normales
+	t_estados += time;
+
+}
+
+void contend_read_no_mreq_msx1(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+
+#endif
+
+        //Y sumamos estados normales
+        t_estados += time;
+
+}
+
+void contend_write_no_mreq_msx1(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+   
+#endif
+
+        //Y sumamos estados normales
+        t_estados += time;
+
+}
+
+
+void ula_contend_port_early_msx1( z80_int port GCC_UNUSED )
+{
+#ifdef EMULATE_CONTEND
+
+
+#endif
+
+	t_estados++;
+}
+
+void ula_contend_port_late_msx1( z80_int port GCC_UNUSED)
+{
+#ifdef EMULATE_CONTEND
+ 
+        t_estados += 2;
+#else
+	t_estados += 2;
+#endif
+
+}
+
+
+void contend_read_coleco(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+
+#endif
+
+	//Y sumamos estados normales
+	t_estados += time;
+
+}
+
+void contend_read_no_mreq_coleco(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+
+#endif
+
+        //Y sumamos estados normales
+        t_estados += time;
+
+}
+
+void contend_write_no_mreq_coleco(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+   
+#endif
+
+        //Y sumamos estados normales
+        t_estados += time;
+
+}
+
+
+void ula_contend_port_early_coleco( z80_int port GCC_UNUSED)
+{
+#ifdef EMULATE_CONTEND
+
+
+#endif
+
+	t_estados++;
+}
+
+void ula_contend_port_late_coleco( z80_int port GCC_UNUSED)
+{
+#ifdef EMULATE_CONTEND
+ 
+        t_estados += 2;
+#else
+	t_estados += 2;
+#endif
+
+}
+
+
+
+void contend_read_sg1000(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+
+#endif
+
+	//Y sumamos estados normales
+	t_estados += time;
+
+}
+
+void contend_read_no_mreq_sg1000(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+
+#endif
+
+        //Y sumamos estados normales
+        t_estados += time;
+
+}
+
+void contend_write_no_mreq_sg1000(z80_int direccion GCC_UNUSED,int time)
+{
+
+#ifdef EMULATE_CONTEND
+   
+#endif
+
+        //Y sumamos estados normales
+        t_estados += time;
+
+}
+
+
+void ula_contend_port_early_sg1000( z80_int port GCC_UNUSED)
+{
+#ifdef EMULATE_CONTEND
+
+
+#endif
+
+	t_estados++;
+}
+
+void ula_contend_port_late_sg1000( z80_int port GCC_UNUSED)
+{
+#ifdef EMULATE_CONTEND
+ 
+        t_estados += 2;
+#else
+	t_estados += 2;
+#endif
+
+}
+
+
 
 //prism. No tiene memoria contended
 void contend_read_prism(z80_int direccion GCC_UNUSED,int time)
@@ -1162,21 +1401,11 @@ z80_byte *contend_table_no_mreq;
 
 
   }
-
+ 
 
   if (MACHINE_IS_TSCONF) {
                 //no tiene memoria contended
                 return;
-/*
-    //128k
-                timings=contend_patron_65432100;
-
-    //Empieza en 14365 con 65432100, esto poniendo offset_time=-1
-                //offset_time=-1;
-
-    offset_time=3; //6,5,4,3,2,1,0,0 pattern starts at 14361 segun http://www.worldofspectrum.org/faq/reference/128kreference.htm
-                offset_patron=-1;*/
-
 
   }
 
@@ -1184,6 +1413,44 @@ z80_byte *contend_table_no_mreq;
                 //no tiene memoria contended
                 return;
     }
+    
+    if (MACHINE_IS_MK14) {
+                //no tiene memoria contended
+                return;
+    }
+    
+	if (MACHINE_IS_PRISM) {
+		//no tiene memoria contended
+		return;
+        }    
+
+	//TODO cpc464. de momento sin contend y no inicializamos tabla porque sino se sale de testados y se sale de la tabla
+	if (MACHINE_IS_CPC_464 || MACHINE_IS_CPC_4128) {
+		return;
+
+        }
+
+	//TODO msx, coleco y sg1000. de momento sin contend y no inicializamos tabla porque sino se sale de testados y se sale de la tabla
+	if (MACHINE_IS_MSX || MACHINE_IS_COLECO || MACHINE_IS_SG1000 || MACHINE_IS_SVI) {
+
+		return;
+
+        }
+
+//TODO sam coupe. de momento sin contend y no inicializamos tabla porque sino se sale de testados y se sale de la tabla
+	if (MACHINE_IS_SAM) {
+
+		return;
+
+        }
+
+
+        //TODO QL. de momento sin contend y no inicializamos tabla porque sino se sale de testados y se sale de la tabla
+        if (MACHINE_IS_QL) {
+
+          return;
+
+              }        
 
         if (MACHINE_IS_CHLOE) {
                 //Como 48k
@@ -1193,10 +1460,7 @@ z80_byte *contend_table_no_mreq;
                 //Empieza en 14335 con 65432100
         }
 
-	if (MACHINE_IS_PRISM) {
-		//no tiene memoria contended
-		return;
-        }
+
 
 	if (MACHINE_IS_TBBLUE) {
 		//Timings de 48k o 128k
@@ -1278,42 +1542,7 @@ z80_byte *contend_table_no_mreq;
                 //Empieza en 14335 con 65432100
         }
 
-	//TODO cpc464. de momento sin contend y no inicializamos tabla porque sino se sale de testados y se sale de la tabla
-	if (MACHINE_IS_CPC_464 || MACHINE_IS_CPC_4128) {
-                timings=contend_patron_no_contend;
-                offset_time=0;
-                offset_patron=0;
 
-                //printf ("timings: %d [0]: %d\n",timings,timings[0]);
-
-		return;
-
-        }
-
-	//TODO sam coupe. de momento sin contend y no inicializamos tabla porque sino se sale de testados y se sale de la tabla
-	if (MACHINE_IS_SAM) {
-                timings=contend_patron_no_contend;
-                offset_time=0;
-                offset_patron=0;
-
-                //printf ("timings: %d [0]: %d\n",timings,timings[0]);
-
-		return;
-
-        }
-
-
-        //TODO QL. de momento sin contend y no inicializamos tabla porque sino se sale de testados y se sale de la tabla
-        if (MACHINE_IS_QL) {
-                      timings=contend_patron_no_contend;
-                      offset_time=0;
-                      offset_patron=0;
-
-                      //printf ("timings: %d [0]: %d\n",timings,timings[0]);
-
-          return;
-
-              }
 
 
 	int final_tabla=screen_testados_total+100;

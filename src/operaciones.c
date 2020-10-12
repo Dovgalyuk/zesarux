@@ -74,6 +74,12 @@
 #include "saa_simul.h"
 #include "datagear.h"
 #include "hilow.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "sn76489an.h"
+#include "svi.h"
+#include "vdp_9918a.h"
 
 
 void (*poke_byte)(z80_int dir,z80_byte valor);
@@ -1090,6 +1096,48 @@ z80_byte fetch_opcode_sam(void)
 }
 
 
+z80_byte fetch_opcode_coleco(void)
+{
+#ifdef EMULATE_VISUALMEM
+	set_visualmemopcodebuffer(reg_pc);
+#endif
+
+	return peek_byte_no_time (reg_pc);
+}
+
+
+z80_byte fetch_opcode_sg1000(void)
+{
+#ifdef EMULATE_VISUALMEM
+	set_visualmemopcodebuffer(reg_pc);
+#endif
+
+	return peek_byte_no_time (reg_pc);
+}
+
+z80_byte fetch_opcode_msx(void)
+{
+#ifdef EMULATE_VISUALMEM
+	set_visualmemopcodebuffer(reg_pc);
+#endif
+
+	//sumar 1 t-estado, por wait en M1
+	t_estados ++;
+
+	return peek_byte_no_time (reg_pc);
+}
+
+z80_byte fetch_opcode_svi(void)
+{
+#ifdef EMULATE_VISUALMEM
+	set_visualmemopcodebuffer(reg_pc);
+#endif
+
+	//sumar 1 t-estado, por wait en M1
+	t_estados ++;
+
+	return peek_byte_no_time (reg_pc);
+}
 
 z80_byte fetch_opcode_zx81(void)
 {
@@ -1661,6 +1709,376 @@ z80_byte peek_byte_zxuno(z80_int dir)
 	return peek_byte_no_time_zxuno(dir);
 
 }
+
+
+
+void poke_byte_no_time_msx1(z80_int dir,z80_byte valor)
+{
+
+
+	z80_byte *puntero_memoria;
+	int tipo;
+
+	puntero_memoria=msx_return_segment_address(dir,&tipo);
+
+	//Si esta vacio o es ROM, no hacer nada. O sea, si no es RAM
+	if (tipo!=MSX_SLOT_MEMORY_TYPE_RAM) return;
+
+	else {
+			
+#ifdef EMULATE_VISUALMEM
+
+		set_visualmembuffer(dir);
+
+#endif
+
+		*puntero_memoria=valor;	
+
+	}
+
+
+}
+
+void poke_byte_msx1(z80_int dir,z80_byte valor)
+{
+/*
+#ifdef EMULATE_CONTEND
+        if ( (dir&49152)==16384) {
+                t_estados += contend_table[ t_estados ];
+        }
+#endif
+*/
+
+	//Y sumamos estados normales
+	t_estados += 3;
+
+
+	poke_byte_no_time_msx1(dir,valor);
+}
+
+
+
+
+z80_byte peek_byte_no_time_msx1(z80_int dir)
+{
+#ifdef EMULATE_VISUALMEM
+	set_visualmemreadbuffer(dir);
+#endif
+
+		//z80_byte *msx_return_segment_address(z80_int direccion,int *tipo)
+
+		z80_byte *puntero_memoria;
+		int tipo;
+
+		puntero_memoria=msx_return_segment_address(dir,&tipo);
+
+		//Si esta vacio, retornar 0 o 255???
+		if (tipo==MSX_SLOT_MEMORY_TYPE_EMPTY) return 255;
+
+        else return *puntero_memoria;
+}
+
+
+z80_byte peek_byte_msx1(z80_int dir)
+{
+
+/*
+#ifdef EMULATE_CONTEND
+        if ( (dir&49152)==16384) {
+		//printf ("%d\n",t_estados);
+                t_estados += contend_table[ t_estados ];
+        }
+#endif
+*/
+
+        t_estados +=3;
+
+
+
+
+
+	return peek_byte_no_time_msx1(dir);
+
+}
+
+
+
+void poke_byte_no_time_svi(z80_int dir,z80_byte valor)
+{
+
+
+	z80_byte *puntero_memoria;
+	int tipo;
+
+	puntero_memoria=svi_return_segment_address(dir,&tipo);
+
+	//Si esta vacio o es ROM, no hacer nada. O sea, si no es RAM
+	if (tipo!=SVI_SLOT_MEMORY_TYPE_RAM) return;
+
+	else {
+			
+#ifdef EMULATE_VISUALMEM
+
+		set_visualmembuffer(dir);
+
+#endif
+
+		*puntero_memoria=valor;	
+
+	}
+
+
+}
+
+void poke_byte_svi(z80_int dir,z80_byte valor)
+{
+/*
+#ifdef EMULATE_CONTEND
+        if ( (dir&49152)==16384) {
+                t_estados += contend_table[ t_estados ];
+        }
+#endif
+*/
+
+	//Y sumamos estados normales
+	t_estados += 3;
+
+
+	poke_byte_no_time_svi(dir,valor);
+}
+
+
+
+
+z80_byte peek_byte_no_time_svi(z80_int dir)
+{
+#ifdef EMULATE_VISUALMEM
+	set_visualmemreadbuffer(dir);
+#endif
+
+		//z80_byte *svi_return_segment_address(z80_int direccion,int *tipo)
+
+		z80_byte *puntero_memoria;
+		int tipo;
+
+		puntero_memoria=svi_return_segment_address(dir,&tipo);
+
+		//Si esta vacio, retornar 0 o 255???
+		if (tipo==SVI_SLOT_MEMORY_TYPE_EMPTY) return 255;
+
+        else return *puntero_memoria;
+}
+
+
+z80_byte peek_byte_svi(z80_int dir)
+{
+
+/*
+#ifdef EMULATE_CONTEND
+        if ( (dir&49152)==16384) {
+		//printf ("%d\n",t_estados);
+                t_estados += contend_table[ t_estados ];
+        }
+#endif
+*/
+
+        t_estados +=3;
+
+
+
+
+
+	return peek_byte_no_time_svi(dir);
+
+}
+
+
+
+
+
+
+
+void poke_byte_no_time_coleco(z80_int dir,z80_byte valor)
+{
+
+
+	z80_byte *puntero_memoria;
+	int tipo;
+
+	puntero_memoria=coleco_return_segment_address(dir,&tipo);
+
+	//Si esta vacio o es ROM, no hacer nada. O sea, si no es RAM
+	if (tipo!=COLECO_SLOT_MEMORY_TYPE_RAM) return;
+
+	else {
+			
+#ifdef EMULATE_VISUALMEM
+
+		set_visualmembuffer(dir);
+
+#endif
+
+		*puntero_memoria=valor;	
+
+	}
+
+
+}
+
+void poke_byte_coleco(z80_int dir,z80_byte valor)
+{
+/*
+#ifdef EMULATE_CONTEND
+        if ( (dir&49152)==16384) {
+                t_estados += contend_table[ t_estados ];
+        }
+#endif
+*/
+
+	//Y sumamos estados normales
+	t_estados += 3;
+
+
+	poke_byte_no_time_coleco(dir,valor);
+}
+
+
+
+
+z80_byte peek_byte_no_time_coleco(z80_int dir)
+{
+#ifdef EMULATE_VISUALMEM
+	set_visualmemreadbuffer(dir);
+#endif
+
+		//z80_byte *coleco_return_segment_address(z80_int direccion,int *tipo)
+
+		z80_byte *puntero_memoria;
+		int tipo;
+
+		puntero_memoria=coleco_return_segment_address(dir,&tipo);
+
+		//Si esta vacio, retornar 0 o 255???
+		if (tipo==COLECO_SLOT_MEMORY_TYPE_EMPTY) return 255;
+
+        else return *puntero_memoria;
+}
+
+
+z80_byte peek_byte_coleco(z80_int dir)
+{
+
+/*
+#ifdef EMULATE_CONTEND
+        if ( (dir&49152)==16384) {
+		//printf ("%d\n",t_estados);
+                t_estados += contend_table[ t_estados ];
+        }
+#endif
+*/
+
+        t_estados +=3;
+
+
+
+
+
+	return peek_byte_no_time_coleco(dir);
+
+}
+
+
+
+void poke_byte_no_time_sg1000(z80_int dir,z80_byte valor)
+{
+
+
+	z80_byte *puntero_memoria;
+	int tipo;
+
+	puntero_memoria=sg1000_return_segment_address(dir,&tipo);
+
+	//Si esta vacio o es ROM, no hacer nada. O sea, si no es RAM
+	if (tipo!=SG1000_SLOT_MEMORY_TYPE_RAM) return;
+
+	else {
+			
+#ifdef EMULATE_VISUALMEM
+
+		set_visualmembuffer(dir);
+
+#endif
+
+		*puntero_memoria=valor;	
+
+	}
+
+
+}
+
+void poke_byte_sg1000(z80_int dir,z80_byte valor)
+{
+/*
+#ifdef EMULATE_CONTEND
+        if ( (dir&49152)==16384) {
+                t_estados += contend_table[ t_estados ];
+        }
+#endif
+*/
+
+	//Y sumamos estados normales
+	t_estados += 3;
+
+
+	poke_byte_no_time_sg1000(dir,valor);
+}
+
+
+
+
+z80_byte peek_byte_no_time_sg1000(z80_int dir)
+{
+#ifdef EMULATE_VISUALMEM
+	set_visualmemreadbuffer(dir);
+#endif
+
+		//z80_byte *sg1000_return_segment_address(z80_int direccion,int *tipo)
+
+		z80_byte *puntero_memoria;
+		int tipo;
+
+		puntero_memoria=sg1000_return_segment_address(dir,&tipo);
+
+		//Si esta vacio, retornar 0 o 255???
+		if (tipo==SG1000_SLOT_MEMORY_TYPE_EMPTY) return 255;
+
+        else return *puntero_memoria;
+}
+
+
+z80_byte peek_byte_sg1000(z80_int dir)
+{
+
+/*
+#ifdef EMULATE_CONTEND
+        if ( (dir&49152)==16384) {
+		//printf ("%d\n",t_estados);
+                t_estados += contend_table[ t_estados ];
+        }
+#endif
+*/
+
+        t_estados +=3;
+
+
+
+
+
+	return peek_byte_no_time_sg1000(dir);
+
+}
+
+
 
 
 
@@ -6515,6 +6933,12 @@ if (MACHINE_IS_SPECTRUM_128_P2)
 
 
 
+
+
+
+
+
+
 void cpi_cpd_common(void)
 {
 
@@ -6788,6 +7212,634 @@ void out_port_zx81_no_time(z80_int puerto,z80_byte value)
 }
 
 
+
+void out_port_msx1_no_time(z80_int puerto,z80_byte value)
+{
+
+	debug_fired_out=1;
+        //Los OUTS los capturan los diferentes interfaces que haya conectados, por tanto no hacer return en ninguno, para que se vayan comprobando
+        //uno despues de otro
+	z80_byte puerto_l=puerto&255;
+	//z80_byte puerto_h=(puerto>>8)&0xFF;
+
+	//printf ("Out msx port: %04XH value: %02XH char: %c PC=%04XH\n",puerto,value,
+	//  (value>=32 && value<=126 ? value : '?'),reg_pc );
+
+
+/*
+	printf ("Out msx port: %04XH value: %02XH char: %c\n",puerto,value,
+	  (value>=32 && value<=126 ? value : '?') );
+
+	if (puerto_l==0xA8) printf ("Puerto PPI Port R/W Port A\n");
+	if (puerto_l==0x98) printf ("VDP Video Ram Data\n");
+	if (puerto_l==0x99) printf ("VDP Command and status register\n");*/
+
+
+	//if (puerto_l==0x98) printf ("%c",
+	//  (value>=32 && value<=126 ? value : '?') );
+
+	if (puerto_l==0x98) {
+		//printf ("VDP Video Ram Data\n");
+		msx_out_port_vdp_data(value);
+	}
+
+	if (puerto_l==0x99) {
+		//printf ("VDP Command and status register\n");	
+		msx_out_port_vdp_command_status(value);  
+	}
+
+	if (puerto_l>=0x9A && puerto_l<0xA0) {
+		//printf ("Out port possibly vdp. Port %04XH value %02XH\n",puerto,value);
+	}
+
+	if (puerto_l>=0xA0 && puerto_l<=0xA7) {
+		msx_out_port_psg(puerto_l,value);
+	}	
+
+	if (puerto_l>=0xA8 && puerto_l<=0xAB) {
+		msx_out_port_ppi(puerto_l,value);
+	}
+
+}
+
+void out_port_msx1(z80_int puerto,z80_byte value)
+{
+  ula_contend_port_early( puerto );
+  out_port_msx1_no_time(puerto,value);
+  ula_contend_port_late( puerto ); t_estados++;
+}
+
+
+int temp_conta_lee_puerto_msx1_no_time;
+
+//Devuelve valor puerto para maquinas MSX1
+z80_byte lee_puerto_msx1_no_time(z80_byte puerto_h GCC_UNUSED,z80_byte puerto_l)
+{
+
+	debug_fired_in=1;
+	//extern z80_byte in_port_ay(z80_int puerto);
+	//65533 o 49149
+	//FFFDh (65533), BFFDh (49149)
+
+	//z80_int puerto=value_8_to_16(puerto_h,puerto_l);
+
+
+	//printf ("Lee puerto msx %04XH PC=%04XH\n",puerto,reg_pc);
+
+	//if (puerto_l==0x98) printf ("VDP Video Ram Data\n");
+	//if (puerto_l==0x99) printf ("VDP Command and status register\n");	
+
+
+	//A8. 
+	//if (puerto==0xa8) return 0x50; //temporal
+
+	if (puerto_l==0x98) {
+		//printf ("VDP Video Ram Data IN\n");
+		return msx_in_port_vdp_data();
+	}	
+
+	if (puerto_l==0x99) {
+		//printf ("VDP Status IN\n");
+		return msx_in_port_vdp_status();
+	}		
+
+	if (puerto_l>=0xA8 && puerto_l<=0xAB) {
+		return msx_in_port_ppi(puerto_l);
+	}
+
+
+	//if (puerto_l==0xA0 && ay_3_8912_registro_sel[0]==14) { 
+	if (puerto_l==0xA2) {
+		//printf ("reading from psg\n");
+		
+			
+		if ( (ay_3_8912_registro_sel[ay_chip_selected] & 15) ==14) { 				
+			//printf ("read tape\n");
+			//sleep(1);
+
+			//Bit 7 cinta
+			/*
+PSG I/O port A (r#14) – read-only
+Bit	Description	Comment
+0	Input joystick pin 1	0 = up
+1	Input joystick pin 2	0 = down
+2	Input joystick pin 3	0 = left
+3	Input joystick pin 4	0 = right
+4	Input joystick pin 6	0 = trigger A
+5	Input joystick pin 7	0 = trigger B
+6	Japanese keyboard layout bit	1 = JIS, 0 = ANSI/AIUEO/50on
+7	Cassette input signal				
+			*/
+			z80_byte valor=255;
+			if (realtape_inserted.v && realtape_playing.v) {
+				//printf ("(%d) ",realtape_last_value);
+
+					//margen de ceros. Reduccion ruido
+					if (msx_loading_noise_reduction.v) {
+						if (realtape_last_value>=-1 && realtape_last_value<=1) realtape_last_value=-1;
+					}
+
+					//Cambiar color border si conviene
+					z80_byte border_reg=vdp_9918a_registers[7]; 
+
+					border_reg &=0xF0;
+
+					if (realtape_last_value>=realtape_volumen) { 
+							valor=valor|128;
+							//printf ("1 ");
+							//valor=255;
+
+
+							//Cambiar color border
+							border_reg |=4; //azul
+
+
+
+					}
+					else {
+							valor=(valor & (255-128));
+							//printf ("0 ");
+							//valor=0;
+
+							//Cambiar color border
+							border_reg |=8; //naranja
+
+					}
+
+					if (msx_loading_stripes.v) vdp_9918a_registers[7]=border_reg;
+
+					//temp_conta_lee_puerto_msx1_no_time++; if ((temp_conta_lee_puerto_msx1_no_time % 1000)==0) printf ("\n");
+			}	
+			//printf ("%02XH ",valor);
+			return valor;
+		}
+
+		//Registro 15 nada de momento
+		/*
+PSG I/O port B (r#15) – write/read
+Bit	Description	Comment
+0	Output joystick port 1, pin 6	Set to 1 to allow input
+1	Output joystick port 1, pin 7	Set to 1 to allow input
+2	Output joystick port 2, pin 6	Set to 1 to allow input
+3	Output joystick port 2, pin 7	Set to 1 to allow input
+4	Output joystick port 1, pin 8	
+5	Output joystick port 2, pin 8	
+6	Joystick input selection, for r#14 inputs	1 = port 2
+7	Kana led control	1 = off		
+		*/
+		else if ( (ay_3_8912_registro_sel[ay_chip_selected] & 15) ==15) { 		
+			return 255;
+		}
+
+		else {
+			return in_port_ay(0xFF);
+		}
+	}
+
+
+	return 255;
+ 
+	
+}
+
+z80_byte lee_puerto_msx1(z80_byte puerto_h,z80_byte puerto_l)
+{
+  //z80_int port=value_8_to_16(puerto_h,puerto_l);
+  //ula_contend_port_early( port );
+  //ula_contend_port_late( port );
+  z80_byte valor = lee_puerto_msx1_no_time( puerto_h, puerto_l );
+
+  t_estados++;
+
+  return valor;
+
+}
+
+
+
+void out_port_svi_no_time(z80_int puerto,z80_byte value)
+{
+
+	debug_fired_out=1;
+        //Los OUTS los capturan los diferentes interfaces que haya conectados, por tanto no hacer return en ninguno, para que se vayan comprobando
+        //uno despues de otro
+	z80_byte puerto_l=puerto&255;
+	//z80_byte puerto_h=(puerto>>8)&0xFF;
+
+	//printf ("Out svi port: %04XH value: %02XH char: %c PC=%04XH\n",puerto,value,
+	//  (value>=32 && value<=126 ? value : '?'),reg_pc );
+
+
+/*
+	printf ("Out svi port: %04XH value: %02XH char: %c\n",puerto,value,
+	  (value>=32 && value<=126 ? value : '?') );
+
+	if (puerto_l==0xA8) printf ("Puerto PPI Port R/W Port A\n");
+	if (puerto_l==0x98) printf ("VDP Video Ram Data\n");
+	if (puerto_l==0x99) printf ("VDP Command and status register\n");*/
+
+
+	//if (puerto_l==0x98) printf ("%c",
+	//  (value>=32 && value<=126 ? value : '?') );
+
+	if (puerto_l==0x80) {
+		//printf ("VDP Video Ram Data\n");
+		svi_out_port_vdp_data(value);
+	}
+
+	if (puerto_l==0x81) {
+		//printf ("VDP Command and status register\n");	
+		svi_out_port_vdp_command_status(value);  
+	}
+
+	if (puerto_l>=0x9A && puerto_l<0xA0) {
+		//printf ("Out port possibly vdp. Port %04XH value %02XH\n",puerto,value);
+	}
+
+	if (puerto_l==0x88 || puerto_l==0x8c) {
+		svi_out_port_psg(puerto_l,value);
+	}	
+
+	if (puerto_l>=0x96 && puerto_l<=0x99) {
+		svi_out_port_ppi(puerto_l,value);
+	}
+
+}
+
+void out_port_svi(z80_int puerto,z80_byte value)
+{
+  ula_contend_port_early( puerto );
+  out_port_svi_no_time(puerto,value);
+  ula_contend_port_late( puerto ); t_estados++;
+}
+
+
+//Devuelve valor puerto para maquinas SVI1
+z80_byte lee_puerto_svi_no_time(z80_byte puerto_h GCC_UNUSED,z80_byte puerto_l)
+{
+
+	debug_fired_in=1;
+	//extern z80_byte in_port_ay(z80_int puerto);
+	//65533 o 49149
+	//FFFDh (65533), BFFDh (49149)
+
+	//z80_int puerto=value_8_to_16(puerto_h,puerto_l);
+
+
+	//printf ("Lee puerto svi %04XH PC=%04XH\n",puerto,reg_pc);
+
+	//if (puerto_l==0x98) printf ("VDP Video Ram Data\n");
+	//if (puerto_l==0x99) printf ("VDP Command and status register\n");	
+
+
+	//A8. 
+	//if (puerto==0xa8) return 0x50; //temporal
+
+	if (puerto_l==0x84) {
+		//printf ("VDP Video Ram Data IN\n");
+		return svi_in_port_vdp_data();
+	}	
+
+	if (puerto_l==0x81) {
+		//printf ("VDP Status IN\n");
+		return svi_in_port_vdp_status();
+	}		
+
+	if (puerto_l==0x96 || puerto_l==0x98 || puerto_l==0x99 || puerto_l==0x9a) {
+		return svi_in_port_ppi(puerto_l);
+	}
+
+
+	//if (puerto_l==0xA0 && ay_3_8912_registro_sel[0]==14) { 
+	if (puerto_l==0x90) {
+		//printf ("reading from psg\n");
+		//14 o 15? cual? en teoria el 14
+		//if (ay_3_8912_registro_sel[0]==15 || ay_3_8912_registro_sel[0]==14) { 	
+		if ( (ay_3_8912_registro_sel[ay_chip_selected] & 15) ==14) { 				
+			//printf ("read tape\n");
+			//sleep(1);
+			z80_byte valor=255;
+			if (realtape_inserted.v && realtape_playing.v) {
+				//printf ("%d ",realtape_last_value);
+					if (realtape_last_value>=realtape_volumen) { //-50
+							valor=valor|128;
+							//printf ("1 \n");
+							//valor=255;
+					}
+					else {
+							valor=(valor & (255-128));
+							//printf ("0 \n");
+							//valor=0;
+					}
+			}	
+			//printf ("%d \n",valor);
+			return valor;
+		}
+
+		//Registro 15 nada de momento
+		/*else if ( (ay_3_8912_registro_sel[ay_chip_selected] & 15) ==15) { 		
+			return 255;
+		}*/
+
+		else {
+			return in_port_ay(0xFF);
+		}
+	}
+
+
+	return 255;
+ 
+	
+}
+
+z80_byte lee_puerto_svi(z80_byte puerto_h,z80_byte puerto_l)
+{
+  //z80_int port=value_8_to_16(puerto_h,puerto_l);
+  //ula_contend_port_early( port );
+  //ula_contend_port_late( port );
+  z80_byte valor = lee_puerto_svi_no_time( puerto_h, puerto_l );
+
+  t_estados++;
+
+  return valor;
+
+}
+
+
+
+void out_port_coleco_no_time(z80_int puerto,z80_byte value)
+{
+
+	debug_fired_out=1;
+        //Los OUTS los capturan los diferentes interfaces que haya conectados, por tanto no hacer return en ninguno, para que se vayan comprobando
+        //uno despues de otro
+	z80_byte puerto_l=puerto&255;
+	//z80_byte puerto_h=(puerto>>8)&0xFF;
+
+	//if (puerto_l!=0xBE && puerto_l!=0xBF) {
+	//	printf ("Out coleco port: %04XH value: %02XH char: %c PC=%04XH\n",puerto,value,(value>=32 && value<=126 ? value : '?'),reg_pc );
+	//}
+
+
+
+
+/*
+	printf ("Out coleco port: %04XH value: %02XH char: %c\n",puerto,value,
+	  (value>=32 && value<=126 ? value : '?') );
+
+	if (puerto_l==0xA8) printf ("Puerto PPI Port R/W Port A\n");
+	if (puerto_l==0x98) printf ("VDP Video Ram Data\n");
+	if (puerto_l==0x99) printf ("VDP Command and status register\n");*/
+
+
+	//if (puerto_l==0x98) printf ("%c",
+	//  (value>=32 && value<=126 ? value : '?') );
+
+   
+       if (puerto_l==0xBE) {
+              //printf ("VDP Video Ram Data\n");
+               coleco_out_port_vdp_data(value);
+       }
+
+       if (puerto_l==0xBF) {
+               //printf ("VDP Command and status register\n");
+               coleco_out_port_vdp_command_status(value);
+       }
+
+	   if (puerto_l>=0xE0 && puerto_l<=0xFF) {
+		   //printf ("Puerto sonido %04XH valor %02XH\n",puerto,value);
+		   sn_out_port_sound(value);
+	   }
+
+	if (puerto_l >=0x80 && puerto_l <=0x9F) {
+		//printf ("Out coleco port: Controls _ Set to keypad mode %04XH value: %02XH char: %c\n",puerto,value,(value>=32 && value<=126 ? value : '?') );	 
+
+		coleco_set_keypad_mode();  
+	}	   
+
+	if (puerto_l >=0xC0 && puerto_l <=0xDF) {
+		//printf ("Out coleco port: Controls _ Set to joystick mode %04XH value: %02XH char: %c\n",puerto,value,(value>=32 && value<=126 ? value : '?') );	 
+
+		coleco_set_joystick_mode();   
+	}
+
+}
+
+void out_port_coleco(z80_int puerto,z80_byte value)
+{
+  ula_contend_port_early( puerto );
+  out_port_coleco_no_time(puerto,value);
+  ula_contend_port_late( puerto ); t_estados++;
+}
+
+
+//Devuelve valor puerto para maquinas Coleco
+z80_byte lee_puerto_coleco_no_time(z80_byte puerto_h GCC_UNUSED,z80_byte puerto_l)
+{
+
+	debug_fired_in=1;
+	//extern z80_byte in_port_ay(z80_int puerto);
+	//65533 o 49149
+	//FFFDh (65533), BFFDh (49149)
+
+	//z80_int puerto=value_8_to_16(puerto_h,puerto_l);
+
+
+	//printf ("Lee puerto coleco %04XH PC=%04XH\n",puerto,reg_pc);
+
+	//if (puerto_l==0x98) printf ("VDP Video Ram Data\n");
+	//if (puerto_l==0x99) printf ("VDP Command and status register\n");	
+
+
+	//A8. 
+	//if (puerto==0xa8) return 0x50; //temporal
+
+       //temp coleco
+       //printf ("In port : %04XH\n",puerto);
+       if (puerto_l==0xBE) {
+               //printf ("VDP Video Ram Data IN\n");
+               return coleco_in_port_vdp_data();
+       }
+
+       if (puerto_l==0xBF) {
+               //printf ("VDP Status IN\n");
+               return coleco_in_port_vdp_status();
+       }
+
+
+       //FC- Reading this port gives the status of controller #1. (farthest from front)
+	   //Temporal fila de teclas
+       if (puerto_l==0xFC) {
+		   //printf ("In coleco controller A\n");
+               return coleco_get_controller_a();
+       }
+
+//FF- Reading this one gives the status of controller #2. (closest to front)	   
+       if (puerto_l==0xFF) {
+		   //printf ("In coleco controller B\n");
+               return coleco_get_controller_b();
+       }
+
+//printf ("In port : %04XH\n",puerto);
+
+	return 255;
+ 
+	
+}
+
+z80_byte lee_puerto_coleco(z80_byte puerto_h,z80_byte puerto_l)
+{
+  //z80_int port=value_8_to_16(puerto_h,puerto_l);
+  //ula_contend_port_early( port );
+  //ula_contend_port_late( port );
+  z80_byte valor = lee_puerto_coleco_no_time( puerto_h, puerto_l );
+
+  t_estados++;
+
+  return valor;
+
+}
+
+
+
+
+void out_port_sg1000_no_time(z80_int puerto,z80_byte value)
+{
+
+	debug_fired_out=1;
+        //Los OUTS los capturan los diferentes interfaces que haya conectados, por tanto no hacer return en ninguno, para que se vayan comprobando
+        //uno despues de otro
+	z80_byte puerto_l=puerto&255;
+	//z80_byte puerto_h=(puerto>>8)&0xFF;
+
+
+
+	//if (puerto_l==0x98) printf ("%c",
+	//  (value>=32 && value<=126 ? value : '?') );
+
+	//sg1000 sound
+		   if (puerto_l==0x7F) {
+		   //printf ("Puerto sonido %04XH valor %02XH\n",puerto,value);
+		   sn_out_port_sound(value);
+	   }    
+
+   
+       if (puerto_l==0xBE) {
+              //printf ("VDP Video Ram Data\n");
+               sg1000_out_port_vdp_data(value);
+       }
+
+       if (puerto_l==0xBF) {
+               //printf ("VDP Command and status register\n");
+               sg1000_out_port_vdp_command_status(value);
+       }
+
+
+
+}
+
+void out_port_sg1000(z80_int puerto,z80_byte value)
+{
+  ula_contend_port_early( puerto );
+  out_port_sg1000_no_time(puerto,value);
+  ula_contend_port_late( puerto ); t_estados++;
+}
+
+
+//Devuelve valor puerto para maquinas SG1000
+z80_byte lee_puerto_sg1000_no_time(z80_byte puerto_h GCC_UNUSED,z80_byte puerto_l)
+{
+
+	debug_fired_in=1;
+	//extern z80_byte in_port_ay(z80_int puerto);
+	//65533 o 49149
+	//FFFDh (65533), BFFDh (49149)
+
+	//z80_int puerto=value_8_to_16(puerto_h,puerto_l);
+
+
+	//printf ("Lee puerto sg1000 %04XH PC=%04XH\n",puerto,reg_pc);
+
+	//if (puerto_l==0x98) printf ("VDP Video Ram Data\n");
+	//if (puerto_l==0x99) printf ("VDP Command and status register\n");	
+
+
+	//A8. 
+	//if (puerto==0xa8) return 0x50; //temporal
+
+       
+       //printf ("In port : %04XH\n",puerto);
+       if (puerto_l==0xBE) {
+               //printf ("VDP Video Ram Data IN\n");
+               return sg1000_in_port_vdp_data();
+       }
+
+       if (puerto_l==0xBF) {
+               //printf ("VDP Status IN\n");
+               return sg1000_in_port_vdp_status();
+       }
+
+
+       //FC- Reading this port gives the status of controller #1. (farthest from front)
+	   //Temporal fila de teclas
+       /*if (puerto_l==0xFC) {
+
+//puerto_63486    db              255  ; 5    4    3    2    1     ;3
+//puerto_61438    db              255  ; 6    7    8    9    0     ;4
+
+				//345 67890
+               return (puerto_61438 & 31) | ((puerto_63486<<3) & (128+64+32) );
+             
+       }*/
+	   /*
+	   Lee puerto sg1000 04DCH PC=1D7AH
+
+
+Lee puerto sg1000 03DDH PC=1D7DH
+Lee puerto sg1000 02DEH PC=1DBFH
+*/
+
+		//tipicamente DC
+       if ((puerto_l & 193) == 192 ) {
+		   return sg1000_get_joypad_a();
+
+             
+       }
+
+
+		//tipicamente DD
+       if ((puerto_l & 193) == 193) {
+		   return sg1000_get_joypad_b();
+
+             
+       }	   
+
+
+
+
+	//printf ("Lee puerto sg1000 %04XH PC=%04XH\n",puerto,reg_pc);
+
+
+	return 255;
+ 
+	
+}
+
+z80_byte lee_puerto_sg1000(z80_byte puerto_h,z80_byte puerto_l)
+{
+  //z80_int port=value_8_to_16(puerto_h,puerto_l);
+  //ula_contend_port_early( port );
+  //ula_contend_port_late( port );
+  z80_byte valor = lee_puerto_sg1000_no_time( puerto_h, puerto_l );
+
+  t_estados++;
+
+  return valor;
+
+}
+
+
+
 //Extracted from Fuse emulator
 void set_value_beeper (int v)
 {
@@ -6811,22 +7863,22 @@ void set_value_beeper (int v)
   //rutina load: 1374
   //rutina beep: 995
   if (reg_pc>1200 && reg_pc<1350 && output_beep_filter_on_rom_save.v) {
-	//Estamos en save.
-	//printf ("valor beeper: %d\n",v);
-	value_beeper=( v ? AMPLITUD_TAPE*2 : -AMPLITUD_TAPE*2);
+		//Estamos en save.
+		//printf ("valor beeper: %d\n",v);
+		value_beeper=( v ? AMPLITUD_TAPE*2 : -AMPLITUD_TAPE*2);
 
-	//Si activamos modo alteracion beeper. Ideal para que se escuche mas alto y poder enviar a inves
-	/*
-	En audacity, despues de exportar con valor 122 de beeper, aplicar reduccion de ruido:
-	db 3, sensibilidad 0, suavidad 150 hz, ataque 0.15
-	Tambien se puede aplicar reduccion de agudos -5
-	Luego reproducir con volumen del pc al maximo
-	*/
+		//Si activamos modo alteracion beeper. Ideal para que se escuche mas alto y poder enviar a inves
+		/*
+		En audacity, despues de exportar con valor 122 de beeper, aplicar reduccion de ruido:
+		db 3, sensibilidad 0, suavidad 150 hz, ataque 0.15
+		Tambien se puede aplicar reduccion de agudos -5
+		Luego reproducir con volumen del pc al maximo
+		*/
 
-	if (output_beep_filter_alter_volume.v) {
-		//value_beeper=( v ? 122 : -122);
-		value_beeper=( v ? output_beep_filter_volume : -output_beep_filter_volume);
-	}
+		if (output_beep_filter_alter_volume.v) {
+			//value_beeper=( v ? 122 : -122);
+			value_beeper=( v ? output_beep_filter_volume : -output_beep_filter_volume);
+		}
 
 	
 
@@ -6835,20 +7887,17 @@ void set_value_beeper (int v)
   else {
 
 
-  //Por defecto el sonido se genera en negativo y de ahi oscila
 
-  //temp normal en fuse
-  value_beeper = -beeper_ampl[3] + beeper_ampl[v]*2;
+	//Por defecto el sonido se genera en negativo y de ahi oscila
 
-	//int pp;
-	//pp=value_beeper = -beeper_ampl[3] + beeper_ampl[v]*2;
-	//if (pp<50 || pp>50) printf ("%d\n",pp);
+	//temp normal en fuse
+	value_beeper = -beeper_ampl[3] + beeper_ampl[v]*2;
+
+	
 
   }
 
 
-  //temp prueba para que sonido en grabacion no sea negativo
-  //value_beeper = beeper_ampl[v]*2;
 
 }
 

@@ -271,11 +271,22 @@ void pd765_disable(void)
         pd765_enabled.v=0;
 }
 
+void pd765_show_activity(void)
+{
+	generic_footertext_print_operating("DISK");
+
+	//Y poner icono en inverso
+	if (!zxdesktop_icon_plus3_inverse) {
+			zxdesktop_icon_plus3_inverse=1;
+			menu_draw_ext_desktop();
+	}	
+}
+
 
 void pd765_motor_on(void)
 {
 	if (pd765_motor.v==0) {
-		generic_footertext_print_operating("DISK");
+		pd765_show_activity();
 		pd765_motor.v=1;
 	}
 }
@@ -1556,7 +1567,7 @@ ENTRY CONDITIONS
 	HL = Address of buffer
 	IX = Address of XDPB
 	*/		
-					generic_footertext_print_operating("DISK"); //Aunque ya lo hace al encender motor, pero por si acaso
+					pd765_show_activity(); //Aunque ya lo hace al encender motor, pero por si acaso
 					traps_plus3dos_read_sector();
 								
 				break;
@@ -1607,7 +1618,7 @@ ENTRY CONDITIONS
 		                 case 0x212b:
                 		        debug_printf(VERBOSE_DEBUG,"-----DD_L_ON_MOTOR");
 					debug_printf(VERBOSE_DEBUG,"reg_pc=%d %04xH",reg_pc,reg_pc);
-                		        generic_footertext_print_operating("DISK");
+                		        pd765_show_activity();
 					traps_plus3dos_return_ok();
 				break;
                  		
@@ -1649,7 +1660,7 @@ ENTRY CONDITIONS
 					debug_printf(VERBOSE_DEBUG,"-----DD_WRITE_SECTOR");
 					debug_printf(VERBOSE_DEBUG,"reg_pc=%d %04xH",reg_pc,reg_pc);
 					
-					generic_footertext_print_operating("DISK"); //Aunque ya lo hace al encender motor, pero por si acaso
+					pd765_show_activity(); //Aunque ya lo hace al encender motor, pero por si acaso
 					traps_plus3dos_write_sector();
 				break;
 
@@ -1668,7 +1679,7 @@ ENTRY CONDITIONS
 				case 0x1c24:
 					debug_printf(VERBOSE_DEBUG,"-----DD_FORMAT");
 					debug_printf(VERBOSE_DEBUG,"reg_pc=%d %04xH",reg_pc,reg_pc);
-					generic_footertext_print_operating("DISK"); //Aunque ya lo hace al encender motor, pero por si acaso
+					pd765_show_activity(); //Aunque ya lo hace al encender motor, pero por si acaso
 					traps_plus3dos_return_ok(); 
 				break;
 

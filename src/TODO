@@ -1,4 +1,4 @@
-    
+
 --- expression parser
 
 
@@ -93,6 +93,7 @@ Aunque esto comprime muy poco, solo se ahorra 1 byte por cada espacio, pero algo
 
 --- ESXDOS handler ---
 
+-chdir en esxdos handler acaba cambiando directorio realmente para emulador??
 
 -soporte LFN para esxdos handler. quiza acortar archivos al listar con "dir" y similares. que hacer si hacen fopen de archivo largo?
 acortar archivo... pero habra que acortar tambien ruta subdirectorios....
@@ -145,6 +146,7 @@ ver que hace zxpand aqui....
 Otros TODO menos prioritarios, de aqui hasta el final del archivo:
 
 
+-Programa de descompresión zip para esxdos. Luego browser wos/zx info/spec computing para esxdos: ya hay un unzip para Next
 
 -cpuid ("zxid") según especificación de mcleod
 
@@ -416,9 +418,7 @@ http://gafz.enterpriseforever.com/Dokumentacio/Konyvek/EXOS_2.1_technikal_inform
 Muchos modos de video diferentes. En un mismo frame se permiten varios modos
 
 
-Colecovision
--chip de sprites
--muchos juegos
+
 
 https://en.m.wikipedia.org/wiki/Exidy_Sorcerer
 
@@ -442,8 +442,7 @@ https://en.m.wikipedia.org/wiki/Philips_P2000
 
 Master system
 
-Msx
-http://map.grauw.nl/resources/system/msxtech.pdf
+
 
 
 

@@ -84,7 +84,7 @@ int audiosdl_init(void)
 	}
 
 	//Esto debe estar al final, para que funcione correctamente desde menu, cuando se selecciona un driver, y no va, que pueda volver al anterior
-	audio_driver_name="sdl";
+	audio_set_driver_name("sdl");
 
 	return 0;
 

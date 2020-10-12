@@ -78,6 +78,8 @@ extern int screen_get_ext_desktop_width_zoom(void);
 extern void screen_init_ext_desktop(void);
 extern int screen_ext_desktop_place_menu;
 
+extern int screen_get_ext_desktop_start_x(void);
+
 extern void scr_return_margenxy_rainbow(int *margenx_izq,int *margeny_arr);
 
 extern void (*scr_putpixel_zoom) (int x,int y,unsigned color);
@@ -132,6 +134,7 @@ extern void scr_putchar_menu_comun_zoom(z80_byte caracter,int x,int y,z80_bit in
 extern void scr_putchar_footer_comun_zoom(z80_byte caracter,int x,int y,z80_bit inverse,int tinta,int papel);
 
 extern void scr_putpixel_gui_zoom(int x,int y,int color,int zoom_level);
+extern void scr_putpixel_gui_no_zoom(int x,int y,int color,int zoom_level);
 
 extern int scr_tiene_colores;
 
@@ -150,7 +153,9 @@ extern z80_bit ocr_settings_not_look_23606;
 #define WINDOW_FOOTER_PAPER (ESTILO_GUI_PAPEL_NORMAL)
 #define WINDOW_FOOTER_INK (ESTILO_GUI_TINTA_NORMAL)
 
-extern char *scr_driver_name;
+extern char scr_new_driver_name[];
+
+extern void scr_set_driver_name(char *nombre);
 
 extern z80_bit texto_artistico;
 extern int umbral_arttext;
@@ -568,9 +573,15 @@ extern void screen_switch_rainbow_buffer(void);
 #define BMP_INDEX_FIRST_COLOR (SOLARIZED_INDEX_FIRST_COLOR+SOLARIZED_TOTAL_PALETTE_COLOURS)
 #define BMP_TOTAL_PALETTE_COLOURS 256
 
+
+//Paleta para chip vdp de MSX
+#define VDP_9918_INDEX_FIRST_COLOR (BMP_INDEX_FIRST_COLOR+BMP_TOTAL_PALETTE_COLOURS)
+#define VDP_9918_TOTAL_PALETTE_COLOURS 16
+
+
 //16 colores normales spectrum, 16 grises de modo scanline, 256 de gigascreen, 4 de z88, 16 de spectrum 17/48/+ real, 256 de ulaplus, 64 de spectra, 32 de CPC, 4096 de Prism, 128 de SAM, 256 de RGB8, 32768 de TSCONF, 16 de solarized
 //actualizar aqui y tambien estructura de total_palette_colours_array y #define TOTAL_PALETAS_COLORES 
-#define EMULATOR_TOTAL_PALETTE_COLOURS (SPECCY_TOTAL_PALETTE_COLOURS+SPECCY_GREY_SCANLINE_TOTAL_PALETTE_COLOURS+GIGASCREEN_TOTAL_PALETTE_COLOURS+Z88_TOTAL_PALETTE_COLOURS+ULAPLUS_TOTAL_PALETTE_COLOURS+SPECTRA_TOTAL_PALETTE_COLOURS+CPC_TOTAL_PALETTE_COLOURS+PRISM_TOTAL_PALETTE_COLOURS+SAM_TOTAL_PALETTE_COLOURS+RGB9_TOTAL_PALETTE_COLOURS+TSCONF_TOTAL_PALETTE_COLOURS+HEATMAP_TOTAL_PALETTE_COLOURS+SOLARIZED_TOTAL_PALETTE_COLOURS+BMP_TOTAL_PALETTE_COLOURS)
+#define EMULATOR_TOTAL_PALETTE_COLOURS (SPECCY_TOTAL_PALETTE_COLOURS+SPECCY_GREY_SCANLINE_TOTAL_PALETTE_COLOURS+GIGASCREEN_TOTAL_PALETTE_COLOURS+Z88_TOTAL_PALETTE_COLOURS+ULAPLUS_TOTAL_PALETTE_COLOURS+SPECTRA_TOTAL_PALETTE_COLOURS+CPC_TOTAL_PALETTE_COLOURS+PRISM_TOTAL_PALETTE_COLOURS+SAM_TOTAL_PALETTE_COLOURS+RGB9_TOTAL_PALETTE_COLOURS+TSCONF_TOTAL_PALETTE_COLOURS+HEATMAP_TOTAL_PALETTE_COLOURS+SOLARIZED_TOTAL_PALETTE_COLOURS+BMP_TOTAL_PALETTE_COLOURS+VDP_9918_TOTAL_PALETTE_COLOURS)
 
 
 struct s_total_palette_colours {
@@ -583,7 +594,7 @@ struct s_total_palette_colours {
 typedef struct s_total_palette_colours total_palette_colours;
 
 //Esto usado en menu display->ver paleta total
-#define TOTAL_PALETAS_COLORES 10
+#define TOTAL_PALETAS_COLORES 11
 
 extern total_palette_colours total_palette_colours_array[];
 
@@ -799,7 +810,7 @@ extern int screen_watermark_position;
 extern z80_bit screen_watermark_enabled;
 
 extern void screen_put_watermark_generic(z80_int *destino,int x,int y,int ancho, void (*putpixel) (z80_int *destino,int x,int y,int ancho,int color) );
-extern void screen_put_asciibitmap_generic(char **origen,z80_int *destino,int x,int y,int ancho_orig, int alto_orig, int ancho_destino, void (*putpixel) (z80_int *destino,int x,int y,int ancho_destino,int color) );
+extern void screen_put_asciibitmap_generic(char **origen,z80_int *destino,int x,int y,int ancho_orig, int alto_orig, int ancho_destino, void (*putpixel) (z80_int *destino,int x,int y,int ancho_destino,int color),int zoom,int inverso );
 
 #define ZESARUX_WATERMARK_LOGO_MARGIN 4
 
@@ -861,6 +872,7 @@ extern int sem_screen_refresh_reallocate_layers;
 
 extern void screen_end_pantalla_save_overlay(void (**previous_function)(void),int *menu_antes );
 extern void screen_restart_pantalla_restore_overlay(void (*previous_function)(void),int menu_antes);
+extern void screen_render_bmpfile(z80_byte *mem,int indice_paleta_color,zxvision_window *ventana);
 
 #define SCREEN_LAYER_TRANSPARENT_MENU 65535
 

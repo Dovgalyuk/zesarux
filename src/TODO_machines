@@ -1,7 +1,6 @@
 
 --- QL ---
 
-QL: lectura de bloques basic no siempre funciona
 *cpu stats: quiza no porque hay mas instrucciones que z80....
 -Soporte microdrive / floppy QL
 -Que QL, cuando busque un archivo, lo haga todo en minusculas y tambien todo en mayusculas
@@ -9,25 +8,47 @@ QL: lectura de bloques basic no siempre funciona
 http://www.rwapadventures.com/ql_wiki/index.php?title=Sinclair%20QL%20Home%20Computer&lang=en
 -Mirar uqlx a ver cómo hace el load 
 
--QL:
-parece que los fallos de lectura en sentencias basic no son del archivo original sino que es algún tipo de error del emulador.
-No sera culpa de esa suma de punteros a1+a6 que no siempre se produce, y que depende de… lo de los traps que me dijeron en el foro
+-interrupciones de timer. Ver como lo hace uqlx:
 
--Intento interceptar funciones de lectura de sectores de microdrive. MD.READ. aparentemente tiene que saltar desde la direccion 525CH pero ahi no parece saltar nunca,
+"
+Q: How do you manage the 50 hz interrupt of the 8049 and the Keyboard interrupt?
+
+A: First: I don't emulate the keyboard interrupt. Anyway the keyboard is polled by QDOS every 50th of second via the IPC commands 1 (test IPC status) and 8 (read characters from the IPC keyboard buffer). As for the 50Hz interrupt, I have a timer which sets some variables every 20ms. These variables cause an interrupt 2 exception: pendingInterrupt=2; *((uw8*)theROM+0x280a0l)=16; extraFlag=true; nInst2=nInst; nInst=0; Before this, however, the routine checks if interrupt are enabled and if so set the interrupt mask (=8). It also disables further 50Hz interrupts. When the QDOS I2 handler is called, it reads from an hw register the interrupt mask and the value 8 tells it that the cause of the interrupt was the 50hz interrupt. When the QDOS handler has completed, it reenables the interrupts by writing to an hardware register.
+"
+
+Ver funcion de uqlx:
+
+void FrameInt(void)
+{
+  if((intReg&8)!=0) /* controlla che sia abilitato */
+    {
+      theInt=8;
+      intReg^=8;
+      pendingInterrupt=2;
+      *((uw8*)theROM+0x280a0l)=16;
+      extraFlag=true;
+      nInst2=nInst;
+      nInst=0;
+    }
+}
+
+De momento yo he hecho una chapucilla para hacer parpadear el cursor, 
+aunque genero trap 2, que es la que supuestamente llama el timer de 50 Hz, pero solo con eso no parpadearia el cursor
+
+
+-Intento interceptar funciones de lectura de sectores de microdrive. MD.READ. aparentemente tiene que saltar desde la direccion
+525CH pero ahi no parece saltar nunca,
 si desactivo todo trap de rom de ql, se queda colgado despues del menu inicial, seguramente intentando detectar microdrive
-si no desactivo traps, no parece llegar tampoco ahi, aunque esto me ha llevado a interceptar el trap FS.MDINF, que se usa en dir mdv1_,
-cosa que ahora consigo mostrar sectores libres/usados aunque no aparece el nombre del microdrive (registro A1 donde hay que guardar eso contiene direccion 100H !)
+si no desactivo traps, no parece llegar tampoco ahi, aunque esto me ha llevado a interceptar el trap FS.MDINF, 
+que se usa en dir mdv1_,
+cosa que ahora consigo mostrar sectores libres/usados aunque no aparece el nombre del microdrive 
+(registro A1 donde hay que guardar eso contiene direccion 100H !)
 
 -teniendo desactivada la emulacion de microdrive , igualmente consulta cosas al root path
 Debug: Source path: MDV1_BOOT Device: mdv1 File: boot
 Paranoid: File /Users/chernandezba/Documents/ZEsarUX/zesarux/extras/media/ql/spacepods/boot not found
 
 
-
-Ejemplo:
-demos/cueshell.zip 
-
-Linea 70, la lee mal hacia el final. pero no siempre lo hace… :(
 
 -solo cambiar en la ruta de archivos de ql, la primera _ empezando por la derecha es un ".", sin tener en cuenta logicamente el mdv1_
 Necesario?? si se pone ruta entre comillas no hay que cambiar los . en el basic por _
@@ -38,7 +59,10 @@ archivo se llama spacepods.bas y hace lbytes mdv1_spacepods_bas -> lo normal
 -tema mayusculas/ minusculas en ql solo funciona directo en mac... que pasa con windows? y mac?
 
 
--implementar exec_mdv1_... mismo ejemplo con cueshell, va a   Returning header for file on address 00100H y ahi peta
+-implementar exec_mdv1_... mismo ejemplo con cueshell, va a   Returning header for file on address 00100H y ahi peta.
+Problema que en esos archivos objetos se ha perdido la cabecera de 64 bytes (en los zip viene incluida pero al descomprimir se pierde)
+
+
 
 
 
@@ -206,8 +230,6 @@ Solo afecta a chloe
 
 -output save filter
 Activado de rainbow, timex y ulaplus de chloe genera algún error si se arranca con chloe desde línea de comandos?
--revisar chloe keymap en windows y otros
-pasa lo mismo en Z88 y windows
 -Chloe y curses, con Chloe keyboard, da problemas en menu (no lee letras)
 
 -------------
@@ -336,14 +358,20 @@ This strange thing "CASHE MEMORY"
 --- TBBlue ---
 
 -Activar el kempston mouse entra en conflicto con el editor de basic. 
-Al mover raton hace cosas raras. Tambien en el menu de tbblue
+Al mover raton hace cosas raras. Tambien en el menu de tbblue: probablemente eso sea error de NextOS tal cual, 
+o bien que están limitando a puerto 1f y 3f el kempston joystick y el mouse entra en conflicto
+Quiza deberia leer el kempston solo por 1f o 3f??
 
--tools/tile editor: no se ve bien?
 
 Refresco de Tbblue para curses , stdout y simpletext en caso de:
 -rainbow y modos tiles etc habilitados. O simplemente modo rainbow  
 
+-Multiface: Nextreg 0x0A selects multiface version from 1, 128 v87.12, 128 v87.2 or +3
 
+-Salir de CP/M deja el modo tiles activo
+
+-cambiar de maquina no tbblue a tbblue provoca que no funcione divmmc
+porque?
 
 TBBLUE: 
 *eliminar puerto 55h. Corregir demo tosprram para que use 5bh en vez de 55h
@@ -377,8 +405,6 @@ El parchecillo va en core_spectrum.c , aqui:
 +					//int i;
 +					//for (i=0;i<AUDIO_BUFFER_SIZE*2;i++) audio_buffer[i]=0;
 +				}
-
--parece que no aparece correctamente el salvapantallas de NextOS
 
 
 -Agregar turbo spool setting en tbblue -> va relacionado con la funcion de peek_byte turbo que se ve alterada al cambiar 
@@ -420,14 +446,13 @@ https://specnext.dev/wiki/Next_Memory_Bank_Select
 
 
 
--aatributos extendidos sprites (quinto byte) zoom, composite etc
+-atributos extendidos sprites (quinto byte): unified sprites
 
-
+-Soporte ulaplus en Next
 	
 
 -reloj deberia salir en nextos, ya que implementa el chip de reloj. Aparece pero con valor 000
 -probar que pasa cuando llega a mas de MAX_SPRITES_PER_LINE (100) sprites en linea tbblue
--Sincronizar bits de joystick de puerto config2
 -no dejar aumentar memoria divmmc mas de 128kb, pues tbblue no tiene mas que eso. sino, se accederia a memoria mas alla del divmmc
 
 -para emulacion de +3e, la sd se utiliza la sd secundaria. emular segunda SD????
@@ -448,8 +473,6 @@ Ver registro 2:
 -PIXELUP/DN quiza pueda ir mas alla de coordenada 191
 https://www.specnext.com/forum/viewtopic.php?p=8226#p8226
 
-
--sistema altrom esta reemplazado en siguientes versiones del core fpga por otro metodo!
 
 
 -tbblue: considerar mejor prioridades de capas de memoria, por ejemplo al escribir altrom esta comprobando aparte si esta diviface habilitdo
@@ -572,7 +595,6 @@ http://velesoft.speccy.cz/sam_zx128.htm
 --machine cpc464 en aa,caca en consola de texto real da segmentation fault
 -dibujado de border cuando pantalla es menor de lo habitual, temporal, no va bien en casos como paperboy. Esto seria mejor para solucionarlo implementar realvideo
 -debug i/o ports
--teclas cpc y keymap para otros drivers. ahora solo esta para cocoa y xwindows y sdl y fbdev
 -Que pasa con keymap y otras teclas de cpc en drivers que no soportan keymap
 -Hardware scroll no va fino
 -Paginación de memoria cpc en la función por defecto array que tenga: 0,1,2,3
@@ -823,3 +845,37 @@ Segun MESS:
 -Puerto joystick tk en puerto no estándar?
 
 **
+
+
+-------------
+
+
+--- MSX ---
+
+- Msx games browser desde planetemu. Mismo sirve para coleco y sg1000. Problema: quiza planetemu no admite peticiones http simple. 
+Probado con curl y no parece funcionar
+
+-Contención en hacer out e in a vram?
+-msx timings accesos a vram write/read y depende de modo
+-config slots memoria?
+Como ejemplo, el Toshiba HX-10 (un modelo de 64KB) tiene esta configuración de memoria:
+* 		ROM en las páginas 0 y 1 del slot 0.
+* 		RAM en las páginas 0 a 3 del slot 2.
+* 		Slots 1 y 3 están conectados a las ranuras de cartucho.
+* 		Páginas 2 y 3 del slot 0 no se usan.
+
+-teclas que falten por emular.  cuales mas?
+
+
+
+
+-------------
+
+
+--- Spectravideo ---
+
+-Quizá para 16kb svi 318 hacer que si direccion > 16kb, retorne tipo vacío y así no escribe ni lee nada 
+O quizá esa rom es del 328 en vez del 318
+-muchas cintas .cas no cargan o cargan mal el juego
+
+-teclas que falten por emular.  cuales mas?

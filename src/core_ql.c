@@ -59,6 +59,39 @@ extern unsigned char ql_pc_intr;
 
 int refresca=0;
 
+int temporal_parpadeo_ql;
+
+
+void ql_chapuza_parpadeo_cursor(void)
+{
+
+        if (ql_simular_parpadeo_cursor.v==0) return;
+
+                                //SV_FSTAT $AA word flashing cursor status
+                                              
+                        z80_byte parpadeo=peek_byte_z80_moto(0x280aa);
+                        z80_byte parpadeo2=peek_byte_z80_moto(0x280ab);
+                        //printf("parpadeo: %02X%02XH\n",parpadeo,parpadeo2);
+                        
+                        temporal_parpadeo_ql++;
+                        if ((temporal_parpadeo_ql % 16)==0) {
+
+                                //Solo lo hago en estos casos y no siempre,
+                                //para que no cambie cuando esta el boot y el test ram
+                                //porque entonces el test ram fallaria
+                                if (parpadeo==0 && parpadeo2==0x0C) {
+                                        //printf("invertir parpadeo\n");
+                                        parpadeo2=0x00;
+                                }
+                                else if (parpadeo==0 && parpadeo2==0x00) {
+                                        //printf("invertir parpadeo\n");
+                                        parpadeo2=0x0C;
+                                }
+                                //parpadeo ^=0x4E;
+                                //poke_byte_z80_moto(0x280aa,parpadeo);
+                                poke_byte_z80_moto(0x280ab,parpadeo2);
+                        }
+}
 
 //bucle principal de ejecucion de la cpu de jupiter ace
 void cpu_core_loop_ql(void)
@@ -133,6 +166,31 @@ void cpu_core_loop_ql(void)
                 // 100000 is usually a good value to start at, then work from there.
 
                 // Note that I am not emulating the correct clock speed!
+                z80_byte byte_primero=peek_byte_z80_moto(get_pc_register());
+                z80_byte byte_segundo=peek_byte_z80_moto(get_pc_register()+1);
+
+                if (byte_primero==0x4E && ((byte_segundo & 0xF0)==0x40) ) {
+                        z80_byte trap_number=byte_segundo & 0xF;
+                        //printf("Trap %d en %x\n",trap_number,get_pc_register());
+
+                        if (ql_last_trap==4) {
+                                ql_previous_trap_was_4=1;
+                        }
+                        else {
+                                ql_previous_trap_was_4=0;
+                        }
+
+                        ql_last_trap=trap_number;
+                }
+
+                //if (get_pc_register()==0x79ca) {
+                //        printf ("%x %x\n",byte_primero,byte_segundo);
+                //}
+
+		//	if (REG_IR==0x4E44) {
+		//		printf("Possible Trap 4 en %x\n",get_pc_register());
+		//	}
+
                 m68k_execute(1);
 
 
@@ -203,6 +261,9 @@ void cpu_core_loop_ql(void)
 
 				t_scanline=0;
 
+				timer_get_elapsed_core_frame_post();
+
+
                                 //Parche para maquinas que no generan 312 lineas, porque si enviamos menos sonido se escuchara un click al final
                                 //Es necesario que cada frame de pantalla contenga 312 bytes de sonido
 				//Igualmente en la rutina de envio_audio se vuelve a comprobar que todo el sonido a enviar
@@ -266,8 +327,19 @@ pc_intr equ     $18021  bits 4..0 set as pending level 2 interrupts
 
       //Sirve para algo esto????
 			ql_pc_intr |=31;
+
+                        //No estoy seguro si esto son las interrupciones que genera el timer o no
+                        //Esto acaba generando llamadas a leer PC_INTR		Interrupt register
 			m68k_set_irq(2);
-			//Esto acaba generando llamadas a leer PC_INTR		Interrupt register
+			
+
+                        //Chapuza para hacer parpadear el cursor
+                        //Se supone que el trap 2 que llamamos justo antes deberia hacer parpadear el cursor
+                        //pero no lo hace, a saber por que...
+                        ql_chapuza_parpadeo_cursor();
+                        
+                       
+
 
 
                                 //Final de instrucciones ejecutadas en un frame de pantalla
@@ -310,6 +382,9 @@ pc_intr equ     $18021  bits 4..0 set as pending level 2 interrupts
                         esperando_tiempo_final_t_estados.v=0;
                         interlaced_numero_frame++;
                         //printf ("%d\n",interlaced_numero_frame);
+
+			//Para calcular lo que se tarda en ejecutar todo un frame
+			timer_get_elapsed_core_frame_pre();
                 }
 
 

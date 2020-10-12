@@ -644,7 +644,7 @@ void timer_check_interrupt(void)
 
 
                                 //resetear texto splash
-                                reset_splash_text();
+                                reset_welcome_message();
 
 			
 
@@ -844,3 +844,22 @@ void timer_toggle_top_speed_timer(void)
 	top_speed_timer.v ^=1;
 }
 
+
+
+void timer_get_elapsed_core_frame_pre(void)
+{
+	//Para calcular lo que se tarda en ejecutar todo un frame
+	timer_stats_current_time(&core_cpu_timer_frame_antes);       
+}
+
+
+
+void timer_get_elapsed_core_frame_post(void)
+{
+	core_cpu_timer_frame_difftime=timer_stats_diference_time(&core_cpu_timer_frame_antes,&core_cpu_timer_frame_despues);
+
+	//printf ("tiempo transcurrido: %ld microsec\n",tiempo_timer_difftime);
+	//media de tiempo
+	core_cpu_timer_frame_media=(core_cpu_timer_frame_media+core_cpu_timer_frame_difftime)/2;
+	//printf ("tiempo medio transcurrido: %ld microsec\n",core_cpu_timer_frame_media);	
+}

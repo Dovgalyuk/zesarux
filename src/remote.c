@@ -70,7 +70,7 @@ z80_bit remote_calling_end_emulator={0};
 
 
 
-#ifdef USE_PTHREADS
+#ifndef NETWORKING_DISABLED
 
 #include <pthread.h>
 #include <sys/types.h>
@@ -2484,8 +2484,8 @@ void easter_scanline_putchar_front(z80_byte caracter,int x,int y,int scanline,z8
     byte_leido=*puntero_caracter;
 
     //Hacemos bold
-    z80_byte byte_bold=byte_leido<<1;
-    byte_leido |=byte_bold;
+    //z80_byte byte_bold=byte_leido<<1;
+    //byte_leido |=byte_bold;
 
 
     int bit;
@@ -2567,11 +2567,26 @@ void easter_egg_scroll_horizontal_continuo_front(void)
 
 void easter_egg_star_wars_write_line(char *texto,int longitud_texto,int x,int y,int scanline, z80_int color)
 {
-  for (;longitud_texto;longitud_texto--) {
-    easter_scanline_putchar_front(*texto,x,y,scanline,color);
+
+	//Convertir buffer inicial a caracteres finales para conversión de cirílicos
+
+	z80_byte buffer_final[MAX_ANCHO_LINEAS_GENERIC_MESSAGE];
+
+	int longitud_final=util_convert_utf_charset(texto,buffer_final,longitud_texto);
+	//Al final el texto convertido desde utf ocupara menos en pantalla en caso de haber caracteres de mas de 1 byte
+	//y como formatea el texto antes por cada linea, habran lineas bastante vacias cuando haya caracteres utf
+
+  //for (;longitud_texto;longitud_texto--) {
+	  int i=0;
+  for (;longitud_final;longitud_final--) {	  
+	  //printf ("%d ",buffer_final[i]);
+    easter_scanline_putchar_front(buffer_final[i],x,y,scanline,color);
     x+=8;
-    texto++;
+    //texto++;
+	i++;
   }
+
+  //printf ("\n");
 }
 
 
@@ -4602,7 +4617,7 @@ void interpreta_comando(char *comando,int misocket)
 
 
 	else if (!strcmp(comando_sin_parametros,"get-video-driver")) {
-                escribir_socket (misocket,scr_driver_name);
+                escribir_socket (misocket,scr_new_driver_name);
 	}
 
 #ifdef EMULATE_VISUALMEM

@@ -77,4 +77,7 @@ extern int timer_on_screen_adv_key;
 
 extern void timer_toggle_top_speed_timer(void);
 
+extern void timer_get_elapsed_core_frame_pre(void);
+extern void timer_get_elapsed_core_frame_post(void);
+
 #endif

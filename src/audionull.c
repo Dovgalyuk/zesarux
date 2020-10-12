@@ -37,7 +37,7 @@ int audionull_init(void)
 
 	debug_printf (VERBOSE_INFO,"Init Null Audio Driver");
 
-	audio_driver_name="null";
+	audio_set_driver_name("null");
 	return 0;
 }
 

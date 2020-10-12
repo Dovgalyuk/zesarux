@@ -418,7 +418,8 @@ snd_pcm_uframes_t buffer_size_max;
     }
 
 	//Esto debe estar al final, para que funcione correctamente desde menu, cuando se selecciona un driver, y no va, que pueda volver al anterior
-	audio_driver_name="alsa";
+	audio_set_driver_name("alsa");
+
 
 
 

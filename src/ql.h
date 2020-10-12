@@ -39,6 +39,9 @@ extern char ql_mdv1_root_dir[];
 extern char ql_mdv2_root_dir[];
 extern char ql_flp1_root_dir[];
 
+extern unsigned char (*ql_readbyte_no_ports_function)(unsigned int Address);
+extern unsigned char ql_readbyte_no_ports_vacio(unsigned int Address);
+
 
 //En principio no hay border. ponemos solo de ejemplo
 #define QL_LEFT_BORDER_NO_ZOOM 8
@@ -97,6 +100,9 @@ extern void qltraps_init_fopen_files_array(void);
 
 extern void motorola_get_flags_string(char *texto);
 
+extern z80_byte ql_last_trap;
+
+extern int ql_previous_trap_was_4;
 
 #define QLTRAPS_MAX_OPEN_FILES 3
 #define QLTRAPS_START_FILE_NUMBER 32
@@ -104,6 +110,10 @@ extern void motorola_get_flags_string(char *texto);
 
 //operation not complete
 #define QDOS_ERROR_CODE_NC -1
+
+
+//buffer overflow
+#define QDOS_ERROR_CODE_BO -5
 
 //channel not open
 #define QDOS_ERROR_CODE_NO -6

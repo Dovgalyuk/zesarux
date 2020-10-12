@@ -367,6 +367,14 @@ enum util_teclas_cpc_keymap
 };
 
 
+/*
+enum util_teclas_msx_keymap
+{
+        UTIL_KEY_MSX_MINUS
+
+};
+*/
+
 enum util_teclas_chloe_keymap
 {
         UTIL_KEY_CHLOE_MINUS,
@@ -456,7 +464,9 @@ extern char external_tool_unrar[];
 
 extern void convert_relative_to_absolute(char *relative_path,char *final_path);
 
-#define MAX_LINEAS_POK_FILE 100
+//Mas de 48kb de pokes no tiene sentido
+#define MAX_LINEAS_POK_FILE 49152
+
 #define MAX_LENGTH_LINE_POKE_FILE 90
 
 struct s_pokfile
@@ -500,7 +510,7 @@ Pentagon
 Mario Prato
 */
 
-#define TOTAL_FABRICANTES 17
+#define TOTAL_FABRICANTES 21
 #define FABRICANTE_SCIENCE_OF_CAMBRIDGE 0
 #define FABRICANTE_SINCLAIR 1
 #define FABRICANTE_AMSTRAD 2
@@ -520,7 +530,10 @@ Mario Prato
 #define FABRICANTE_TSLABS 14
 #define FABRICANTE_TBBLUE 15
 #define FABRICANTE_JUPITER_CANTAB 16
-
+#define FABRICANTE_ASCII_CORP 17
+#define FABRICANTE_COLECO_INDUSTRIES 18
+#define FABRICANTE_SEGA 19
+#define FABRICANTE_SPECTRAVIDEO_INTERNATIONAL 20
 
 
 
@@ -716,6 +729,8 @@ extern unsigned int util_if_open_just_menu_counter;
 extern unsigned int util_if_open_just_menu_initial_counter;
 extern void util_convert_scr_sprite(z80_byte *origen,z80_byte *destino);
 
+extern int util_convert_sna_to_scr(char *filename,char *archivo_destino);
+
 extern int util_get_absolute(int valor);
 
 extern int util_get_sign(int valor);
@@ -832,6 +847,13 @@ extern z80_int util_paws_get_pc_parser(void);
 #define MEMORY_ZONE_NUM_PAWS_CONDACTS 21
 #define MEMORY_ZONE_DEBUG 22
 #define MEMORY_ZONE_IFROM 23
+#define MEMORY_ZONE_MSX_VRAM 24
+#define MEMORY_ZONE_MSX_ALL_MEM 25
+#define MEMORY_ZONE_COLECO_VRAM 26
+#define MEMORY_ZONE_SG1000_VRAM 27
+
+#define MEMORY_ZONE_SVI_VRAM 28
+#define MEMORY_ZONE_SVI_ALL_MEM 29
 
 #define DAAD_PARSER_BREAKPOINT_PC_SPECTRUM 0x617c
 
@@ -884,5 +906,13 @@ extern z80_int util_get_value_little_endian(z80_byte *origin);
 extern void util_get_home_dir(char *homedir);
 
 extern void util_write_screen_bmp(char *archivo);
+
+extern void util_bmp_load_palette(z80_byte *mem,int indice_inicio_color);
+
+extern void util_rotate_file(char *filename,int archivos);
+
+extern int util_convert_utf_charset(char *origen,z80_byte *final,int longitud_texto);
+
+extern const char *spectrum_colour_names[];
 
 #endif

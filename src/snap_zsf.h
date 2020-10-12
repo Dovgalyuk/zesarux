@@ -22,6 +22,42 @@
 #ifndef SNAP_ZSF_H
 #define SNAP_ZSF_H
 
+
+#define ZSF_NOOP_ID 0
+#define ZSF_MACHINEID 1
+#define ZSF_Z80_REGS_ID 2
+#define ZSF_MOTO_REGS_ID 3
+#define ZSF_RAMBLOCK 4
+#define ZSF_SPEC128_MEMCONF 5
+#define ZSF_SPEC128_RAMBLOCK 6
+#define ZSF_AYCHIP 7
+#define ZSF_ULA 8
+#define ZSF_ULAPLUS 9
+#define ZSF_ZXUNO_RAMBLOCK 10
+#define ZSF_ZXUNO_CONF 11
+#define ZSF_ZX8081_CONF 12
+#define ZSF_ZXEVO_NVRAM 13
+#define ZSF_TSCONF_RAMBLOCK 14
+#define ZSF_TSCONF_CONF 15
+#define ZSF_DIVIFACE_CONF 16
+#define ZSF_DIVIFACE_MEM 17
+#define ZSF_CPC_RAMBLOCK 18
+#define ZSF_CPC_CONF 19
+#define ZSF_PENTAGON_CONF 20
+#define ZSF_TBBLUE_RAMBLOCK 21
+#define ZSF_TBBLUE_CONF 22
+#define ZSF_TBBLUE_PALETTES 23
+#define ZSF_TBBLUE_SPRITES 24
+#define ZSF_TIMEX 25
+#define ZSF_MSX_MEMBLOCK 26
+#define ZSF_MSX_CONF 27
+#define ZSF_MSX_VRAM 28
+#define ZSF_GENERIC_LINEAR_MEM 29
+#define ZSF_VDP_9918A_CONF 30
+#define ZSF_SNCHIP 31
+#define ZSF_SVI_CONF 32
+#define ZSF_DATETIME 33
+
 extern void load_zsf_snapshot(char *filename);
 extern void save_zsf_snapshot(char *filename);
 

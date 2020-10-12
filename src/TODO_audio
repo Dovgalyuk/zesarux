@@ -55,6 +55,9 @@ Otros TODO menos prioritarios, de aqui hasta el final del archivo:
 
 *** Audio ***
 
+-Ay a midi y sn a midi. Tanto mid como midi device
+
+-comandos reset midi no hace nada?? Solo van en windows. Quiza enviar mejor un noteoff
 
 -revisar mezclado ay+beeper . posiblemente set_value_beeper acaba sacando algun valor beeper 50*2 y se sale todo de rango?
 o bien el mezclado de chip ay. Con que juegos se observa esto? O quiza con el test de 6/9 canales turbosound?
@@ -77,7 +80,8 @@ ver de momento workaround audio_using_sdl2
 
 -agregar otro detector silencio, en este caso para specdrum. tiene sentido? total no altera mucho la onda de salida cuando lo activo y no se envia sonido 
 
--Futuro filtro conversor de real audio a Puerto fe, que sea capaz de saber cuando es 1 (onda arriba) y cuando 0 (onda abajo)
+-Futuro filtro conversor de real audio a Puerto fe, que sea capaz de saber cuando es 1 (onda arriba) y cuando 0 (onda abajo):
+utilizar mismo método que el resample a 1 bit: si valor es menor que anterior, es 0. Si es mayor, es 1
 
 -pulse audio sin pthreads se oye chasquido a cada envio. esto creo que es dificil de evitar
 

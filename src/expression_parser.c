@@ -117,6 +117,7 @@ token_parser_textos_indices tpti_funciones[]={
 
 	{TPI_F_PEEK,"PEEK("},
 	{TPI_F_PEEKW,"PEEKW("},
+	{TPI_F_IN,"IN("},
 	{TPI_F_NOT,"NOT("},
 
 	{TPI_F_ABS,"ABS("},
@@ -1578,6 +1579,48 @@ int exp_par_calculate_funcion(int valor,enum token_parser_tipo tipo,enum token_p
 
                     case TPI_F_PEEKW:
         				return peek_byte_z80_moto(valor)+256*peek_byte_z80_moto(valor+1);
+                    break;
+                    
+                    case TPI_F_IN:
+                    if (MACHINE_IS_SPECTRUM) {
+                        return lee_puerto_spectrum_no_time(value_16_to_8h(valor),value_16_to_8l(valor));
+                    }
+                    //zx80,81 no conviene pues la lectura de puerto genera vsync
+
+
+                    else if (MACHINE_IS_Z88) {
+                        return lee_puerto_z88_no_time(value_16_to_8h(valor),value_16_to_8l(valor));
+                    }
+
+                    else if (MACHINE_IS_ACE) {
+                        return lee_puerto_ace_no_time(value_16_to_8h(valor),value_16_to_8l(valor));
+                    }
+
+                    else if (MACHINE_IS_CPC) {
+                        return lee_puerto_cpc_no_time(value_16_to_8h(valor),value_16_to_8l(valor));
+                    }
+
+                    else if (MACHINE_IS_SAM) {
+                        return lee_puerto_sam_no_time(value_16_to_8h(valor),value_16_to_8l(valor));
+                    }                                                            
+
+                    else if (MACHINE_IS_MSX) {
+                        return lee_puerto_msx1_no_time(value_16_to_8h(valor),value_16_to_8l(valor));
+                    }
+
+                    else if (MACHINE_IS_COLECO) {
+                        return lee_puerto_coleco_no_time(value_16_to_8h(valor),value_16_to_8l(valor));
+                    }
+
+                    else if (MACHINE_IS_SG1000) {
+                        return lee_puerto_sg1000_no_time(value_16_to_8h(valor),value_16_to_8l(valor));
+                    }
+
+                    else if (MACHINE_IS_SVI) {
+                        return lee_puerto_svi_no_time(value_16_to_8h(valor),value_16_to_8l(valor));
+                    }                                                            
+
+                    else return 255;
                     break;
 
 

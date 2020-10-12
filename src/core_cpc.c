@@ -255,6 +255,8 @@ void cpu_core_loop_cpc(void)
 
 		                t_scanline=0;
 
+						timer_get_elapsed_core_frame_post();						
+
 		                //printf ("final scan lines. total: %d\n",screen_scanlines);
                 		        //printf ("reset no inves\n");
 					set_t_scanline_draw_zero();
@@ -373,6 +375,9 @@ void cpu_core_loop_cpc(void)
                         esperando_tiempo_final_t_estados.v=0;
                         interlaced_numero_frame++;
                         //printf ("%d\n",interlaced_numero_frame);
+
+					//Para calcular lo que se tarda en ejecutar todo un frame
+					timer_get_elapsed_core_frame_pre();									
                 }
 
 

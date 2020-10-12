@@ -209,6 +209,37 @@ The recommended way to start the emulator is using the following settings:
 --disableborder --zoom 1 --fullscreen --vo fbdev --ao sdl --no-detect-realvideo
 
 
+Note for Haiku
+--------------
+
+You should not use the default gcc (2.97) as it should not compile.
+
+Before running configure script, please set:
+
+export CFLAGS=-DHAIKU_OS
+
+You need to run configure with setting (at least): --disable-networking
+(because it doesn't find some network functions)
+
+If you want to compile ZEsarUX on Haiku with SDL support:
+
+Install SDL lib with:
+
+pkgman install libsdl_devel
+
+Before running configure, set:
+
+export LDFLAGS=-L/boot/system/develop/lib/
+
+When running ZEsarUX with SDL, you probably need to set before:
+
+export LIBRARY_PATH=/boot/system/lib/:$LIBRARY_PATH
+
+
+By the way, on File selector menus, all files are treated as regular files (so no directories). This is a known bug
+Please don't ask me about Haiku help, I'm not an expert on this OS ;)
+
+
 Utilities
 ---------
 

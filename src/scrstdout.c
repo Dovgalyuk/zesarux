@@ -53,6 +53,10 @@
 #include "textspeech.h"
 #include "tsconf.h"
 #include "settings.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "svi.h"
 
 void scrstdout_establece_tablas_teclado(int c);
 void scrstdout_reset_teclas(void);
@@ -173,22 +177,20 @@ void scrstdout_z88_cpc_load_keymap(void)
 }
 
 
-void scrtextspeech_filter_welcome_message(void)
+void scrstdout_textspeech_filter_welcome_message(void)
 {
-	//char *filter_text_mensaje="Welcome to ZEsarUX emulator. It is possible you are listening this text through a text to speech filter.";
-	//textspeech_print_speech(filter_text_mensaje);
 
-
-        char texto_welcome[40];
-        sprintf(texto_welcome," Welcome to ZEsarUX v." EMULATOR_VERSION " ");
+	char texto_welcome[40];
+	sprintf(texto_welcome," Welcome to ZEsarUX v." EMULATOR_VERSION " ");
 	textspeech_print_speech(texto_welcome);
+
+	char texto_edition[40];
+	sprintf(texto_edition," " EMULATOR_EDITION_NAME " ");
+	textspeech_print_speech(texto_edition);	
 
 	
 	textspeech_print_speech("Press opening curly bracket to manual redraw screen. Press closing curly bracket to automatic redraw screen. Write 'menu' to open the menu. Write 'esc' to simulate scape key on some menu dialogs");
 	
-	
-	char *mensaje_stop="You can stop listening to menu entries by pressing ENTER.";
-	textspeech_print_speech(mensaje_stop);
 	
 }
 
@@ -228,15 +230,19 @@ int scrstdout_init (void){
 	
 	
 	//Mismos mensajes de bienvenida a traves de filtro texto
-	if (opcion_no_splash.v==0) scrtextspeech_filter_welcome_message();
+	if (opcion_no_welcome_message.v==0) scrstdout_textspeech_filter_welcome_message();
 	
 	
 	if (textspeech_filter_program!=NULL) {
+		char *mensaje_stop="You can stop listening to menu entries by pressing ENTER.";
+		printf("%s\n",mensaje_stop);
+		if (opcion_no_welcome_message.v==0) textspeech_print_speech(mensaje_stop);
+
 		char *mensaje_stoptext="Write 'stoptext' to cancel pending filter texts";
 		printf ("%s\n",mensaje_stoptext);
 		
 		//Mismo mensaje de stoptext a traves de filtro texto
-		if (opcion_no_splash.v==0) textspeech_print_speech(mensaje_stoptext);
+		if (opcion_no_welcome_message.v==0) textspeech_print_speech(mensaje_stoptext);
 	}
 	
 	scr_debug_registers=scrstdout_debug_registers;
@@ -270,7 +276,7 @@ int scrstdout_init (void){
 	//textspeech_also_send_menu.v=1;
 	
 	
-	scr_driver_name="stdout";
+	scr_set_driver_name("stdout");
 	
 	screen_stdout_driver=1;
 	

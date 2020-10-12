@@ -139,7 +139,7 @@ extern int tape_out_block_pzx_open(void);
 extern int tape_out_block_pzx_close(void);
 extern int tape_block_pzx_save(void *dir,int longitud);
 extern void tape_block_pzx_begin_save(int longitud,z80_byte flag);
-
+extern void realtape_pause_unpause(void);
 
 
 #endif

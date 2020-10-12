@@ -1232,7 +1232,7 @@ void codetests_atomic(void)
 
 	scr_messages_debug=codetests_messages_debug;
 	verbose_level=VERBOSE_PARANOID;
-	scr_driver_name="";
+	scr_set_driver_name("");
 
 	z_atomic_reset(&codetest_semaforo);
 
@@ -1298,7 +1298,7 @@ void codetests_network_atomic(void)
 
 	scr_messages_debug=codetests_messages_debug;
 	verbose_level=VERBOSE_PARANOID;
-	scr_driver_name="";
+	scr_set_driver_name("");
 
 	//Empezar a abrir conexiones tcpen este pthread y en el otro
 	while (1) {
@@ -1387,7 +1387,7 @@ void codetests_main(int main_argc,char *main_argv[])
 
 	scr_messages_debug=codetests_messages_debug;
 	verbose_level=VERBOSE_PARANOID;
-	scr_driver_name="";	
+	scr_set_driver_name("");	
 
 	printf ("\nRunning expression parser tests\n");
 	codetests_expression_parser();
@@ -1463,6 +1463,7 @@ void codetests_main(int main_argc,char *main_argv[])
 
 
 	//prueba crear paleta
+	/*
 	int i;
 
 	int valor_paleta=0;
@@ -1472,6 +1473,7 @@ void codetests_main(int main_argc,char *main_argv[])
 
 		valor_paleta +=0x010101;
 	}
+	*/
 
 	exit(0);
 }

@@ -13,9 +13,6 @@ la propia memoria de zxuno quien lo tiene, lo mismo para tbblue, y prism
 ->esto ya esta para .sna, hacer para zsf
 -Opcion para forzar siempre snap grabar zsf de 48k
 
--Incluir campo con fecha grabacion snapshot
-
-
 -quiza en set_machine, cuando hace:
   //Si estaba divmmc o divide activo, desactivarlos
   //if (divmmc_enabled.v) divmmc_disable();

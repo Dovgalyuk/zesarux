@@ -6,6 +6,17 @@
 -Speech:
 -enter le envia siempre speech pending. normal?
 -en speech de mac, en english, al enviar opcion "yes/no", la "No" dice: "No. N"->eso lo traduce como "Number N"
+
+-Al releer ventana con F4, en menu con opciones, no hace traducción de opciones entre corchetes ni dice los corchetes al final de linea,
+como hace cuando está abriendo un menú y leyendo sus opciones.
+
+Ejemplo: 
+[X] AY Envelopes
+
+En vez de "AY Envelopes. Enabled"
+dice:
+"Ex AY Envelopes"
+
 -Tecla escape debería hacer break cuando se está escuchando speech
 O quizá setting configurable 
 

@@ -60,6 +60,8 @@ extern int frecuencia_sonido_variable;
 #define AMPLITUD_TAPE 2
 
 extern int amplitud_speaker_actual_zx8081;
+extern int amplitud_speaker_actual_msx;
+extern int amplitud_speaker_actual_svi;
 
 extern int (*audio_init) (void);
 extern int (*audio_thread_finish) (void);
@@ -71,7 +73,9 @@ extern char *audio_buffer_playback;
 
 extern z80_bit audio_noreset_audiobuffer_full;
 
-extern char *audio_driver_name;
+extern char audio_new_driver_name[];
+
+extern void audio_set_driver_name(char *nombre);
 
 extern char *audio_buffer_one;
 extern char *audio_buffer_two;
@@ -246,6 +250,8 @@ extern audiodac_type audiodac_types[];
 
 extern z80_bit beeper_enabled;
 
+extern z80_bit audio_resample_1bit;
+
 extern void audiodac_mix(void);
 
 extern int audio_using_sdl2;
@@ -258,6 +264,7 @@ extern int audiodac_set_type(char *texto);
 
 extern void audiodac_set_custom_port(z80_byte valor);
 
+extern int audiopcspeaker_tiempo_espera;
 
 
 struct s_audiobuffer_stats

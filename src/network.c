@@ -219,7 +219,7 @@ void z_disconnect_ssl(int indice_tabla)
 
 
  
-#ifdef USE_PTHREADS
+#ifndef NETWORKING_DISABLED
 
 
 //Si se envia CR despues de cada sentencia de escritura
@@ -1001,9 +1001,17 @@ char *zsock_http_skip_headers(char *mem,int total_leidos,int *http_code,char *re
 				//Ver si redirect
 				if (redireccion) {
 					char *existe;
+					char *existe_minus;
 					char *pref_location="Location: ";
+
+					//Windows no tiene strcasestr
+					//existe=strcasestr(buffer_linea,"Location: ");
+
+
 					existe=strstr(buffer_linea,"Location: ");
-					if (existe!=NULL) {			
+					existe_minus=strstr(buffer_linea,"location: ");
+
+					if (existe!=NULL || existe_minus!=NULL) {			
 						int longitud=strlen(pref_location);
 						debug_printf (VERBOSE_DEBUG,"zsock_http_skip_headers Detected redirect %s",buffer_linea);
 						strcpy(redirect,&buffer_linea[longitud]);

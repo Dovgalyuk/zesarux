@@ -656,7 +656,7 @@ z80_byte cpu_core_loop_spectrum_dandanator(z80_int dir GCC_UNUSED, z80_byte valu
 //Cambio de parametros cuando hay delayed RET pero estos settings no son delayed
 void dandanator_cpc_execute_ret_nondelayed_config(z80_byte value)
 {
-	printf ("Changing non delayed config parameters on delayed execution\n");
+	//printf ("Changing non delayed config parameters on delayed execution\n");
                                         if (value & 128) {
 
 						//O sea, solo cambiar bits 7 y 6, resto eliminar
@@ -686,7 +686,7 @@ O sea, conservar bits 7 y 6, resto eliminar
 
 */
 
-	printf ("Changing delayed config parameters on delayed execution\n");
+	//printf ("Changing delayed config parameters on delayed execution\n");
 
                                         if (value & 128) {
 
@@ -717,7 +717,7 @@ void dandanator_cpc_execute_ret_config(z80_byte value)
 
 
                                         if (value & 128) {
-												printf ("Setting config 2 to %02XH\n",value);
+												//printf ("Setting config 2 to %02XH\n",value);
 
                                                 dandanator_cpc_config_2=value;
 
@@ -735,7 +735,7 @@ void dandanator_cpc_execute_ret_config(z80_byte value)
 
                                         }
                                         else {
-											printf ("Setting config 1 to %02XH\n",value);
+											//printf ("Setting config 1 to %02XH\n",value);
 
                                                 dandanator_cpc_config_1=value;
                                         }
@@ -749,7 +749,7 @@ z80_byte cpu_core_loop_cpc_dandanator(z80_int dir GCC_UNUSED, z80_byte value GCC
 	z80_byte preffix=peek_byte_no_time(reg_pc);
 	z80_byte opcode=peek_byte_no_time(reg_pc+1);
 	z80_byte opcode2=peek_byte_no_time(reg_pc+2);
-	z80_int reg_pc_previous=reg_pc;
+	//z80_int reg_pc_previous=reg_pc;
 
 	//Llamar a anterior core
 	debug_nested_core_call_previous(dandanator_nested_id_core);
@@ -779,7 +779,7 @@ z80_byte cpu_core_loop_cpc_dandanator(z80_int dir GCC_UNUSED, z80_byte value GCC
 		if (preffix==0xFD) {
 			if (opcode==0xFD) { // && opcode2==0xFD) {
 				if (opcode2==0xFD) {
- 					printf ("Recibido FDFDFD on PC=%04XH\n",reg_pc_previous);
+ 					//printf ("Recibido FDFDFD on PC=%04XH\n",reg_pc_previous);
 					dandanator_cpc_received_preffix.v=1;
 				}
 			}
@@ -790,19 +790,19 @@ z80_byte cpu_core_loop_cpc_dandanator(z80_int dir GCC_UNUSED, z80_byte value GCC
 						//LD (IY+d),B
 						//Zone 0 Command: Trigger + LD (IY+0),B
 						dandanator_cpc_zone_slots[0]=reg_b;
-						printf ("Setting zone 0 slot %d PC=%04XH\n",dandanator_cpc_zone_slots[0],reg_pc_previous);
+						//printf ("Setting zone 0 slot %d PC=%04XH\n",dandanator_cpc_zone_slots[0],reg_pc_previous);
 					break;
 
 					case 113:
 						//LD (IY+d),C
 						//Zone 1 Command: Trigger + LD (IY+0),C		
 						dandanator_cpc_zone_slots[1]=reg_c;
-						printf ("Setting zone 1 slot %d PC=%04XH\n",dandanator_cpc_zone_slots[1],reg_pc_previous);
+						//printf ("Setting zone 1 slot %d PC=%04XH\n",dandanator_cpc_zone_slots[1],reg_pc_previous);
 					break;
 
 					case 119:
 						//LD (IY+d),A
-						printf ("Setting config value reg_a = %02XH PC=%04XH\n",reg_a,reg_pc_previous);
+						//printf ("Setting config value reg_a = %02XH PC=%04XH\n",reg_a,reg_pc_previous);
 
 						//Esto se ve afectado por el setting "wait for ret", que se lee del valor enviado actual
 						if (reg_a & 64) {
@@ -820,14 +820,14 @@ z80_byte cpu_core_loop_cpc_dandanator(z80_int dir GCC_UNUSED, z80_byte value GCC
 							//wait for ret
 							dandanator_cpc_change_ret_config=reg_a;
 							dandanator_cpc_pending_wait_ret.v=1;
-							printf ("Delaying some config change until ret\n");
+							//printf ("Delaying some config change until ret\n");
 
 							dandanator_cpc_execute_ret_nondelayed_config(reg_a);
 						
 						}
 
 						else {
-							printf ("Running config change inmmediately\n");
+							//printf ("Running config change inmmediately\n");
 							dandanator_cpc_execute_ret_config(reg_a);
 						}
 

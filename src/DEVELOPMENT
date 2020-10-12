@@ -4,6 +4,7 @@
 * en Changelog cambiar nombre edicion y fechas
 * activar capture segmentation fault en cpu.c
 * activar capture floating point exception en cpu.c
+* ZESARUX_EXTRAS_URL en cpu.h en principio no hay que tocarlo
 * Cambiar EMULATOR_VERSION en archivo configure 
 * Cambiar version en macos/apptemplate/Contents/Info.plist, tag CFBundleVersion
 * Ajustar juego editionnamegame.tap, si juego no permitido distribucion, eliminar. Ajustar EMULATOR_GAME_EDITION
@@ -18,8 +19,13 @@ tener en cuenta de sacar de esta lista los casos que retornan hacia rst8 (con fu
 
 * generar README.md mediante ./generate_readme_md.sh > ../README.md
 
+*cuando hay nueva versión hay que actualizar archivo txt del servidor
+Si es estable, actualizar ambos archivos
+Si es beta, actualizar solo el archivo de snapshot 
+
+
 nombres ediciones:
-Star raiders 2, toi acid, sabre wulf, target renegade, cliff hanger,  Night Shift, Saint Dragon, silent service, bubble bobble, dynamite Dan 2, rygar, frank n stein, match day, Hysteria, Bruce lee, El zorro , Exploding fist, Three weeks in Paradise, Exolon, Koronis Rift, Fox Fights back, Gauntlet, Pheenix, Death Wish 3
+bubble bobble, Star raiders 2, toi acid, sabre wulf, target renegade, cliff hanger,  Night Shift, Saint Dragon, silent service, dynamite Dan 2, rygar, frank n stein, match day, Hysteria, Bruce lee, El zorro , Exploding fist, Three weeks in Paradise, Exolon, Koronis Rift, Fox Fights back, Gauntlet, Pheenix, Death Wish 3
 
 
 *rainbow islands, *jetpac, *hard drivin', *lemmings, *sir fred, *rick, *agent dan, *id, *rainbow, *rainbow+, *saint george, *chase hq, *Rescue on Fractalus, *gunfright, *xeno, *Neula, *world destruction, *the great escape, *turbo esprit
@@ -44,6 +50,21 @@ curl -s https://api.github.com/repos/chernandezba/zesarux/releases | egrep '"nam
 --------------
 
 Para que el cpu_panic muestre backtrace si hay un error, compilar con -g -rdynamic (en Linux) o -g (en Mac)
+
+
+Para mostrar todos los iconos lower meter en compileoptions.h:
+
+#define FORCE_VISIBLE_ALL_LOWER_ICONS
+
+
+Para poner como disabled en todos los iconos lower meter en compileoptions.h:
+
+#define FORCE_DISABLED_ALL_LOWER_ICONS
+
+Para poner como disabled en todos los iconos lower meter en compileoptions.h:
+
+#define FORCE_ENABLED_ALL_LOWER_ICONS
+
 
 --------------
 
@@ -135,7 +156,7 @@ con comandos:
 export CFLAGS=-O3
 export LDFLAGS=-O3
 ./configure --enable-memptr --enable-visualmem --enable-cpustats --enable-ssl --disable-caca --disable-aa --disable-cursesw --prefix /usr
-(Habilita drivers video: xwindows, sdl, fbdev, curses, stdout, simpletext y drivers audio: pulse, alsa, sdl, dsp. )
+(Habilita drivers video: xwindows, sdl, fbdev, curses, stdout, simpletext y drivers audio: pulse, alsa, sdl, dsp, pcspeaker. )
 make clean
 make
 make bintargz
@@ -148,7 +169,7 @@ con comandos:
 export CFLAGS=-O3
 export LDFLAGS=-O3
 ./configure --enable-memptr --enable-visualmem --enable-cpustats --enable-ssl --disable-caca --disable-aa --disable-cursesw --prefix /usr
-(Habilita drivers video: xwindows, sdl, fbdev, curses, stdout, simpletext y drivers audio: pulse, alsa, sdl, dsp. )
+(Habilita drivers video: xwindows, sdl, fbdev, curses, stdout, simpletext y drivers audio: pulse, alsa, sdl, dsp, pcspeaker. )
 make clean
 make
 make bintargz
@@ -161,13 +182,13 @@ ZEsarUX-version-raspbian9.tar.gz
 con comandos:
 export CFLAGS=-O3
 export LDFLAGS=-O3
-./configure --enable-raspberry --spectrum-reduced-core --disable-xwindows --disable-caca --disable-aa --disable-pulse --disable-simpletext --disable-stdout --disable-cursesw --prefix /usr
+./configure --enable-raspberry --spectrum-reduced-core --disable-xwindows --disable-caca --disable-aa --disable-pulse --disable-pcspeaker --disable-simpletext --disable-stdout --disable-cursesw --prefix /usr
 
 La salida debe ser similar a:
  Enabled Video output drivers: curses sdl fbdev null
  Disabled Video output drivers: stdout simpletext aa caca cocoa xwindows 
  Enabled Audio output drivers: dsp alsa sdl null
- Disabled Audio output drivers: pulse coreaudio 
+ Disabled Audio output drivers: pcspeaker pulse coreaudio 
  Enabled Audio File output drivers: raw 
  Disabled Audio File output drivers: wav 
  Pthreads support: yes
@@ -193,12 +214,13 @@ make bintargz
 ** Mac
 
 Generar dos binarios de Mac:
+(-Quizá versión legacy de Mac ya no tiene sentido. Requiere Mac OS reciente y los cflags O2 estarán soportados en todos los recientes )
 ZEsarUX-version-macos-legacy.dmg.gz 
 con comandos:
 Versión sin optimizaciones, sin SSL:
 
-export CFLAGS=
-export LDFLAGS=
+export CFLAGS="-mmacosx-version-min=10.13"
+export LDFLAGS="-mmacosx-version-min=10.13"
 
 ./configure --enable-memptr --enable-visualmem --enable-cpustats --disable-xwindows --disable-sdl --disable-fbdev --disable-caca --disable-aa --disable-curses --disable-sndfile 
 (Habilita drivers video: cocoa, stdout, simpletext y drivers audio: coreaudio. )
@@ -215,8 +237,8 @@ Versión con optimizaciones, sin SSL:
 
 
 
-export CFLAGS="-O3 -mmacosx-version-min=10.13"
-export LDFLAGS="-O3 -mmacosx-version-min=10.13"
+export CFLAGS="-O3"
+export LDFLAGS="-O3"
 
 Al menos poner un 10.x dos versiones inferior al que yo tenga, suponiendo que funcione bien...
 -Use otool -l /path/to/binary and inspect the LC_VERSION_MIN_MACOSX load command; 
@@ -284,6 +306,9 @@ La salida debe ser:
  Disabled Video output drivers: stdout curses aa caca cocoa xwindows fbdev 
  Enabled Audio output drivers: sdl null
  Disabled Audio output drivers: dsp alsa pulse coreaudio 
+ ...
+ Pthreads support: yes
+ SSL support: yes
 
 make clean
 make 
@@ -315,7 +340,27 @@ la siguiente, que no usa threads, tendra dlls adicionales en esa carpeta y se co
 Nota: se podria compilar en 64 bits, pero SDL 1.2 solo tiene version 32 bits
 Nota: pasar antes antivirus al exe y al dll por si acaso
 
+—————
 
+Sobre menu y overlay:
+
+menu_overlay_activo indica que hay un overlay sobre el render normal de la máquina emulada. 
+Esto puede ser el menú pero también mensajes de splash, logo de bienvenida, botón joystick numselect etc
+
+Para mostrar ese overlay es muy simple: cada driver de vídeo tiene esta parte de código, 
+después de haber hecho refresco de la máquina emulada:
+
+if (menu_overlay_activo) {
+                menu_overlay_function();
+                }
+
+La función de overlay que dibuja texto es : normal_overlay_texto_menu
+Las ventanas que hacen dibujado de pixel, como waveform, cambian este overlay para llamar a sus funciones internas 
+
+En normal_overlay_texto_menu se dibuja el texto de las ventanas, y también se llama a las funciones de overlay
+de las ventanas en background (si es que está habilitado el background de ventanas)
+
+Con la F-funcion F_FUNCION_OVERLAY_WINDOWS, se activa el dibujado de ventanas en background con el menu cerrado
 
 --------------
 

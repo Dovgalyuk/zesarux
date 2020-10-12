@@ -63,6 +63,8 @@ extern void timex_empty_dock_space(void);
 
 extern void timex_insert_dck_cartridge(char *filename);
 
+extern z80_bit timex_cartridge_inserted;
+
 
 extern int get_timex_ink_mode6_color(void);
 extern int get_timex_border_mode6_color(void);

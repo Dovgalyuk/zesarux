@@ -136,6 +136,10 @@ Ver http://www.atc.us.es/svn/zxuno/software/modo_radastan/videos_radastanianos/ 
 
 -una vez al pasar de stdout a sdl luego sdl no leia teclas
 
+-Impresión caracteres en consola texto nunca debe mostrar el 127. Es Delete
+Quizá mostrar C en caso de 127
+->Hecho de momento en chardetect y speech
+
 *************
 
 Por drivers:
@@ -143,11 +147,14 @@ Por drivers:
 --curses--
 
 
--tab en curses en menu filesel no lo lee
-
--tecla delete en curses en menus no borra
-
 -En overscan con curses salen colores con ??? a la derecha fuera de pantalla 
+
+- curses: con ventana ay piano en background, al ir a Smartload se mezcla texto de ventana ay piano en Smartload
+
+
+- curses: en menú no aparece carácter “.” (Punto)
+
+-Permitir ZX desktop en curses? Cuidado porque igual intenta usar putpixel para dibujar las franjas de colores por defecto del fondo de ZX desktop
 
 
 

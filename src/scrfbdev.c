@@ -116,6 +116,10 @@ The scancodes in translated scancode set 2 are given in hex. Between parentheses
 #include "sam.h"
 #include "ql.h"
 #include "settings.h"
+#include "msx.h"
+#include "coleco.h"
+#include "sg1000.h"
+#include "svi.h"
 
 z80_byte *fbdev_pointer = 0;
   long int fbdev_screensize = 0;
@@ -219,7 +223,7 @@ void scrfbdev_z88_cpc_load_keymap(void)
 	//y los codigos raw de retorno siempre son los mismos.
 	//por tanto, devolvemos lo mismo que con keymap english siempre:
 
-	if (MACHINE_IS_Z88 || MACHINE_IS_SAM || MACHINE_IS_QL) {
+	if (MACHINE_IS_Z88 || MACHINE_IS_SAM || MACHINE_IS_QL || MACHINE_IS_MSX || MACHINE_IS_SVI) {
 		scrfbdev_keymap_z88_cpc_minus=RAWKEY_minus;
 		scrfbdev_keymap_z88_cpc_equal=RAWKEY_equal;
 		scrfbdev_keymap_z88_cpc_backslash=RAWKEY_grave;
@@ -459,8 +463,22 @@ void scrfbdev_refresca_pantalla(void)
                 scr_refresca_pantalla_y_border_mk14();
         }
 
+	else if (MACHINE_IS_MSX) {
+		scr_refresca_pantalla_y_border_msx();
+	}    
+
+	else if (MACHINE_IS_SVI) {
+		scr_refresca_pantalla_y_border_svi();
+	}    		
 
 
+	else if (MACHINE_IS_COLECO) {
+		scr_refresca_pantalla_y_border_coleco();
+	}    
+
+	else if (MACHINE_IS_SG1000) {
+		scr_refresca_pantalla_y_border_sg1000();
+	}    
 
 
         if (menu_overlay_activo) {
@@ -813,7 +831,7 @@ void scrfbdev_actualiza_tablas_teclado_rawmode(void){
 
 
         int tecla_gestionada_sam_ql=0;
-        if (MACHINE_IS_SAM || MACHINE_IS_QL) {
+        if (MACHINE_IS_SAM || MACHINE_IS_QL || MACHINE_IS_MSX || MACHINE_IS_SVI) {
                 tecla_gestionada_sam_ql=1;
 
                         if (teclaraw==scrfbdev_keymap_z88_cpc_minus) util_set_reset_key_common_keymap(UTIL_KEY_COMMON_KEYMAP_MINUS,pressrelease);
@@ -2102,7 +2120,7 @@ int scrfbdev_init (void){
 
 	//printf("%dx%d, %d bpp fbdev_screensize: %ld\n", fbdev_ancho,fbdev_alto, bpp, fbdev_screensize );
 	//Esto debe estar al final, para que funcione correctamente desde menu, cuando se selecciona un driver, y no va, que pueda volver al anterior
-	scr_driver_name="fbdev";
+	scr_set_driver_name("fbdev");
 
 	scr_z88_cpc_load_keymap();
 

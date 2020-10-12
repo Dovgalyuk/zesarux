@@ -328,7 +328,7 @@ int scrvideoname_init (void) {
 
         //Otra inicializacion necesaria
         //Esto debe estar al final, para que funcione correctamente desde menu, cuando se selecciona un driver, y no va, que pueda volver al anterior
-        scr_driver_name="videoname";
+        scr_set_driver_name("videoname");
 
 	//importante: modificar funcion int si_complete_video_driver(void) de screen.c si este driver es completo, agregarlo ahi
 	//importante: definicion de f_functions en menu.c, si driver permite teclas F

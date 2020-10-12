@@ -41,17 +41,25 @@ Examples
 
 */
 
-//#define EMULATOR_VERSION "8.2"
 
-//#define EMULATOR_VERSION "8.2-SN"
-#define EMULATOR_VERSION "8.2-B1"
-//#define EMULATOR_VERSION "8.2-RC"
+//#define EMULATOR_VERSION "9.1-B1"
+#define EMULATOR_VERSION "9.1-SN"
+//#define EMULATOR_VERSION "9.1"
 #define SNAPSHOT_VERSION
 
-#define EMULATOR_DATE "21 May 2020"
-#define EMULATOR_SHORT_DATE "21/05/2020"
-#define EMULATOR_GAME_EDITION "Turbo Esprit"
+#define EMULATOR_DATE "24 August 2020"
+#define EMULATOR_SHORT_DATE "24/08/2020"
+#define EMULATOR_GAME_EDITION "xxxxx"
 #define EMULATOR_EDITION_NAME EMULATOR_GAME_EDITION " edition"
+#define ZESARUX_EXTRAS_HOST "github.com" 
+
+
+//testeo o para forzar una versión en develop
+#define ZESARUX_EXTRAS_URL "https://github.com/chernandezba/zesarux/releases/download/9.0/ZEsarUX_extras-9.0.zip"
+
+//final
+//#define ZESARUX_EXTRAS_URL "/chernandezba/zesarux/releases/download/" EMULATOR_VERSION "/ZEsarUX_extras-" EMULATOR_VERSION ".zip"
+
 
 //8 bits
 typedef unsigned char z80_byte;
@@ -173,6 +181,13 @@ extern z80_bit core_end_frame_check_zrcp_zeng_snap;
 #endif
 
 
+//Para haiku
+#ifdef HAIKU_OS
+//Para incluir PATH_MAX
+#include <limits.h>
+#endif
+
+
 extern z80_byte puerto_65278; //    db    255  ; V    C    X    Z    Sh    ;0
 extern z80_byte puerto_65022; //    db    255  ; G    F    D    S    A     ;1
 extern z80_byte puerto_64510; //    db              255  ; T    R    E    W    Q     ;2
@@ -251,6 +266,10 @@ extern z80_byte video_zx8081_ula_video_output;
 #define CPU_CORE_SAM 6
 #define CPU_CORE_QL 7
 #define CPU_CORE_MK14 8
+#define CPU_CORE_MSX 9
+#define CPU_CORE_COLECO 10
+#define CPU_CORE_SG1000 11
+#define CPU_CORE_SVI 12
 
 extern struct timeval z80_interrupts_timer_antes, z80_interrupts_timer_ahora;
 extern long z80_timer_difftime, z80_timer_seconds, z80_timer_useconds;
@@ -264,6 +283,17 @@ extern z80_bit interrupcion_non_maskable_generada;
 extern z80_bit interrupcion_timer_generada;
 extern z80_byte reg_r_antes_zx8081;
 extern z80_bit temp_zx8081_lineasparimpar;
+
+//40 mas que suficiente
+#define MAX_MACHINE_NAME 40
+
+struct s_machine_names {
+	char nombre_maquina[MAX_MACHINE_NAME];  
+	int id;
+};
+
+extern struct s_machine_names machine_names[];
+
 extern char *get_machine_name(z80_byte m);
 
 extern z80_bit cpu_random_r_register;
@@ -304,6 +334,8 @@ extern int num_scr_driver_array;
 
 extern driver_struct audio_driver_array[];
 extern int num_audio_driver_array;
+
+extern char *driver_audio;
 
 #define MAX_SCR_INIT 10
 #define MAX_AUDIO_INIT 10
@@ -347,6 +379,14 @@ extern z80_bit stdout_simpletext_automatic_redraw;
 #define MACHINE_ID_SPECTRUM_P3_SPA		27
 
 
+#define MACHINE_ID_COLECO 100
+#define MACHINE_ID_SG1000 101
+#define MACHINE_ID_SVI_318 102
+#define MACHINE_ID_SVI_328 103
+
+#define MACHINE_ID_MSX1 110
+
+
 #define MACHINE_ID_ZX80				120
 #define MACHINE_ID_ZX81				121
 #define MACHINE_ID_ACE				122
@@ -361,18 +401,75 @@ extern z80_bit stdout_simpletext_automatic_redraw;
 
 
 //Condiciones de maquinas activas
-#define MACHINE_IS_SPECTRUM (current_machine_type<30)
+
+//De maquinas únicas
+
 #define MACHINE_IS_SPECTRUM_16 (current_machine_type==MACHINE_ID_SPECTRUM_16)
 #define MACHINE_IS_SPECTRUM_48 (current_machine_type==MACHINE_ID_SPECTRUM_48)
 #define MACHINE_IS_INVES (current_machine_type==MACHINE_ID_INVES)
+#define MACHINE_IS_MICRODIGITAL_TK90X (current_machine_type==MACHINE_ID_MICRODIGITAL_TK90X)
+#define MACHINE_IS_MICRODIGITAL_TK90X_SPA (current_machine_type==MACHINE_ID_MICRODIGITAL_TK90X_SPA)
+#define MACHINE_IS_MICRODIGITAL_TK95 (current_machine_type==MACHINE_ID_MICRODIGITAL_TK95)
+#define MACHINE_IS_SPECTRUM_128 (current_machine_type==MACHINE_ID_SPECTRUM_128)
+#define MACHINE_IS_SPECTRUM_128_SPA (current_machine_type==MACHINE_ID_SPECTRUM_128_SPA)
+
+#define MACHINE_IS_ZXUNO (current_machine_type==MACHINE_ID_ZXUNO)
+
+#define MACHINE_IS_CHLOE_140SE (current_machine_type==MACHINE_ID_CHLOE_140SE)
+#define MACHINE_IS_CHLOE_280SE (current_machine_type==MACHINE_ID_CHLOE_280SE)
+
+#define MACHINE_IS_TIMEX_TS2068 (current_machine_type==MACHINE_ID_TIMEX_TS2068)
+
+#define MACHINE_IS_PRISM (current_machine_type==MACHINE_ID_PRISM)
+#define MACHINE_IS_TBBLUE (current_machine_type==MACHINE_ID_TBBLUE)
+
+#define MACHINE_IS_PENTAGON (current_machine_type==MACHINE_ID_PENTAGON)
+#define MACHINE_IS_CHROME (current_machine_type==MACHINE_ID_CHROME)
+
+
+
+
+
+#define MACHINE_IS_TSCONF (current_machine_type==MACHINE_ID_TSCONF)
+#define MACHINE_IS_BASECONF (current_machine_type==MACHINE_ID_BASECONF)
+
+#define MACHINE_IS_COLECO (current_machine_type==MACHINE_ID_COLECO)
+
+#define MACHINE_IS_SG1000 (current_machine_type==MACHINE_ID_SG1000)
+
+#define MACHINE_IS_SVI (current_machine_type==MACHINE_ID_SVI_318 || current_machine_type==MACHINE_ID_SVI_328)
+#define MACHINE_IS_SVI_318 (current_machine_type==MACHINE_ID_SVI_318)
+#define MACHINE_IS_SVI_328 (current_machine_type==MACHINE_ID_SVI_328)
+
+#define MACHINE_IS_MSX1 (current_machine_type==MACHINE_ID_MSX1)
+
+#define MACHINE_IS_ZX80 (current_machine_type==MACHINE_ID_ZX80)
+#define MACHINE_IS_ZX81 (current_machine_type==MACHINE_ID_ZX81)
+
+#define MACHINE_IS_ACE (current_machine_type==MACHINE_ID_ACE)
+
+#define MACHINE_IS_Z88 (current_machine_type==MACHINE_ID_Z88)
+
+#define MACHINE_IS_CPC_464 (current_machine_type==MACHINE_ID_CPC_464)
+#define MACHINE_IS_CPC_4128 (current_machine_type==MACHINE_ID_CPC_4128)
+
+#define MACHINE_IS_SAM (current_machine_type==MACHINE_ID_SAM)
+
+#define MACHINE_IS_QL_STANDARD (current_machine_type==MACHINE_ID_QL_STANDARD)
+
+#define MACHINE_IS_MK14_STANDARD (current_machine_type==MACHINE_ID_MK14_STANDARD)
+
+
+
+//Combinadas
+#define MACHINE_IS_SPECTRUM (current_machine_type<30)
+
+
+
 #define MACHINE_IS_SPECTRUM_48_SPA (current_machine_type==MACHINE_ID_SPECTRUM_48_SPA)
 #define MACHINE_IS_SPECTRUM_16_48 ( (current_machine_type<=MACHINE_ID_MICRODIGITAL_TK95) || MACHINE_IS_SPECTRUM_48_SPA )
 
 #define MACHINE_IS_SPECTRUM_128_P2 ( (current_machine_type>=MACHINE_ID_SPECTRUM_128 && current_machine_type<=MACHINE_ID_SPECTRUM_P2_SPA) || MACHINE_IS_PENTAGON)
-
-
-#define MACHINE_IS_SPECTRUM_128 (current_machine_type==MACHINE_ID_SPECTRUM_128)
-#define MACHINE_IS_SPECTRUM_128_SPA (current_machine_type==MACHINE_ID_SPECTRUM_128_SPA)
 
 #define MACHINE_IS_SPECTRUM_P2 ( (current_machine_type>=MACHINE_ID_SPECTRUM_P2 && current_machine_type<=MACHINE_ID_SPECTRUM_P2_SPA))
 
@@ -385,42 +482,25 @@ extern z80_bit stdout_simpletext_automatic_redraw;
 //MACHINE_IS_SPECTRUM_128_P2_P2A_P3 era MACHINE_IS_SPECTRUM_128_P2_P2A antes de emular el +3
 #define MACHINE_IS_SPECTRUM_128_P2_P2A_P3 ( MACHINE_IS_SPECTRUM_128_P2 || MACHINE_IS_SPECTRUM_P2A_P3)
 
-#define MACHINE_IS_ZXUNO (current_machine_type==MACHINE_ID_ZXUNO)
 
-#define MACHINE_IS_CHLOE_140SE (current_machine_type==MACHINE_ID_CHLOE_140SE)
-#define MACHINE_IS_CHLOE_280SE (current_machine_type==MACHINE_ID_CHLOE_280SE)
 #define MACHINE_IS_CHLOE (MACHINE_IS_CHLOE_140SE || MACHINE_IS_CHLOE_280SE)
-#define MACHINE_IS_TIMEX_TS2068 (current_machine_type==MACHINE_ID_TIMEX_TS2068)
-#define MACHINE_IS_PRISM (current_machine_type==MACHINE_ID_PRISM)
-#define MACHINE_IS_TBBLUE (current_machine_type==MACHINE_ID_TBBLUE)
-#define MACHINE_IS_PENTAGON (current_machine_type==MACHINE_ID_PENTAGON)
-#define MACHINE_IS_CHROME (current_machine_type==MACHINE_ID_CHROME)
+
+#define MACHINE_IS_MSX (current_machine_type>=MACHINE_ID_MSX1 && current_machine_type<=119)
 
 
-#define MACHINE_IS_TSCONF (current_machine_type==MACHINE_ID_TSCONF)
-#define MACHINE_IS_BASECONF (current_machine_type==MACHINE_ID_BASECONF)
-
-#define MACHINE_IS_ZXEVO (MACHINE_IS_TSCONF || MACHINE_IS_BASECONF)
-
-#define MACHINE_IS_ZX80 (current_machine_type==MACHINE_ID_ZX80)
-#define MACHINE_IS_ZX81 (current_machine_type==MACHINE_ID_ZX81)
 #define MACHINE_IS_ZX8081 (MACHINE_IS_ZX80 || MACHINE_IS_ZX81)
-#define MACHINE_IS_ACE (current_machine_type==MACHINE_ID_ACE)
 #define MACHINE_IS_ZX8081ACE (MACHINE_IS_ZX8081 || MACHINE_IS_ACE)
 
-#define MACHINE_IS_Z88 (current_machine_type==MACHINE_ID_Z88)
-
-#define MACHINE_IS_CPC_464 (current_machine_type==MACHINE_ID_CPC_464)
-#define MACHINE_IS_CPC_4128 (current_machine_type==MACHINE_ID_CPC_4128)
+#define MACHINE_IS_ZXEVO (MACHINE_IS_TSCONF || MACHINE_IS_BASECONF)
 #define MACHINE_IS_CPC (current_machine_type>=MACHINE_ID_CPC_464 && current_machine_type<=149)
-#define MACHINE_IS_SAM (current_machine_type==MACHINE_ID_SAM)
+
 
 /*
 160=QL
 161-179 reservado para otros QL
 */
 
-#define MACHINE_IS_QL_STANDARD (current_machine_type==MACHINE_ID_QL_STANDARD)
+
 #define MACHINE_IS_QL (current_machine_type>=MACHINE_ID_QL_STANDARD && current_machine_type<=179)
 
 /*
@@ -428,13 +508,17 @@ extern z80_bit stdout_simpletext_automatic_redraw;
 181-189 reservado para otros MK14
 */
 
-#define MACHINE_IS_MK14_STANDARD (current_machine_type==MACHINE_ID_MK14_STANDARD)
+
 #define MACHINE_IS_MK14 (current_machine_type>=MACHINE_ID_MK14_STANDARD && current_machine_type<=189)
 
 
 #define CPU_IS_MOTOROLA (MACHINE_IS_QL)
 #define CPU_IS_SCMP (MACHINE_IS_MK14)
 #define CPU_IS_Z80 (!CPU_IS_MOTOROLA && !CPU_IS_SCMP)
+
+
+//Maquinas que tienen el chip de memoria vdp 9918a
+#define MACHINE_HAS_VDP_9918A (MACHINE_IS_MSX || MACHINE_IS_COLECO || MACHINE_IS_SG1000 || MACHINE_IS_SVI)
 
 
 extern int machine_emulate_memory_refresh;
@@ -466,7 +550,7 @@ extern char *z80_cpu_types_strings[];
 
 extern int zesarux_main (int main_argc,char *main_argv[]);
 extern z80_bit no_cambio_parametros_maquinas_lentas;
-extern z80_bit opcion_no_splash;
+extern z80_bit opcion_no_welcome_message;
 
 extern int argc;
 extern char **argv;
@@ -492,6 +576,8 @@ extern z80_bit allow_write_rom;
 extern int z88_cpc_keymap_type;
 
 extern z80_bit chloe_keyboard;
+
+extern char *realmachine_keymap_strings_types[];
 
 extern unsigned int debug_t_estados_parcial;
 
