@@ -1671,7 +1671,6 @@ The attribute pointer will roll over from sprite 127 to sprite 0.
 	//Indices al indicar paleta, pattern, sprites. Subindex indica dentro de cada pattern o sprite a que posicion 
 	//(0..3/4 en sprites o 0..255 en pattern ) apunta
 	//z80_byte tbsprite_index_sprite,tbsprite_index_sprite_subindex;
-
 	tbsprite_sprites[tbsprite_index_sprite][tbsprite_index_sprite_subindex]=value;
 	if (tbsprite_index_sprite_subindex == 3 && (value & 0x40) == 0) {			
 		// 4-byte type, add 0 as fifth
@@ -1987,6 +1986,7 @@ If the display of the sprites on the border is disabled, the coordinates of the 
 								}
 
 								else {
+									//printf("anchor sprite %d\n",conta_sprites);
 									//No es relativo. Guardar la visibilidad del ultimo anchor
 									anchor_visible=sprite_visible;
 								}
@@ -6931,8 +6931,8 @@ z80_byte return_tbblue_mmu_segment(z80_int dir)
 int tbblue_is_writable_segment_mmu_rom_space(z80_int dir)
 {
 	//En maquina en config mode no tiene sentido
-	z80_byte maquina=(tbblue_registers[3])&7;
-	if (maquina==0) return 0;
+	//z80_byte maquina=(tbblue_registers[3])&7;
+	//if (maquina==0) return 0;
 
 	z80_byte mmu_value=return_tbblue_mmu_segment(dir);
 	if (mmu_value!=255) return 1;
