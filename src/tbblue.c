@@ -2487,8 +2487,8 @@ int tbblue_get_limit_sram_page(int page)
 
 	z80_byte max=tbblue_return_max_extra_blocks();
 
+//printf("limit sram page for %d is %d\n", page, max);
 	if (page>max-1) page=max-1;
-
 	return page;
 }
 
@@ -2673,7 +2673,7 @@ void tbblue_set_rom_page(z80_byte segment,z80_byte page)
 {
 	z80_byte tbblue_register=80+segment;
 	z80_byte reg_value=tbblue_registers[tbblue_register];
-
+//printf("set rom page seg=%d page=%d val=%d\n", segment, page, reg_value);
 	if (reg_value==255) {
 
 		//Guardar el valor tal cual, antes de ver si la pagina excede el limite
@@ -3111,6 +3111,8 @@ which allows you access to all SRAM.
 				debug_paginas_memoria_mapeadas[0]=0;
 				debug_paginas_memoria_mapeadas[1]=0;
 			}
+			tbblue_set_rom_page(0,0);
+			tbblue_set_rom_page(1,1);
 
 			tbblue_set_ram_page(2);
 			tbblue_set_ram_page(3);
