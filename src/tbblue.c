@@ -3120,8 +3120,8 @@ which allows you access to all SRAM.
 			tbblue_set_ram_page(5);
 
 			//En modo config, ram7 esta en segmento 3
-			tbblue_registers[80+6]=7*2;
-			tbblue_registers[80+7]=7*2+1;
+			//tbblue_registers[80+6]=7*2;
+			//tbblue_registers[80+7]=7*2+1;
 
 
 			tbblue_set_ram_page(6);
