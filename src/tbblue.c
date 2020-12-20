@@ -2099,6 +2099,56 @@ If the display of the sprites on the border is disabled, the coordinates of the 
 						}
 
 
+							int sprite_es_4bpp=0;
+
+							int offset_4bpp_N6=0;
+
+							if (tbsprite_sprites[conta_sprites][3] & 64) {
+								//Pattern es de 5 bytes
+
+								//En caso de anchor:
+								//H N6 T X X Y Y Y8
+								//H = 1 if the sprite pattern is 4-bit
+								//N6 = 7th pattern bit if the sprite pattern is 4-bit
+
+								
+
+								if (!relative_sprite) {
+
+									if (tbsprite_sprites[conta_sprites][4] & 128) sprite_es_4bpp=1;
+
+									if (sprite_es_4bpp) {
+										if (tbsprite_sprites[conta_sprites][4] & 64) offset_4bpp_N6=1;
+									}
+
+									anchor_sprite_es_4bpp=sprite_es_4bpp;
+								}
+
+								else {
+
+
+									//En caso de relative sprites, el valor de H viene del anchor
+									/*
+									B. Relative Sprite, Composite Type
+									0 1 N6 X X Y Y PO
+									C. Relative Sprite, Unified Type
+									0 1 N6 0 0 0 0 PO
+
+									Ver que el bit N6 se desplaza respecto a cuando es un anchor
+									*/
+
+									sprite_es_4bpp=anchor_sprite_es_4bpp;
+
+									if (sprite_es_4bpp) {
+										if (tbsprite_sprites[conta_sprites][4] & 32) offset_4bpp_N6=1;
+									}
+
+									
+								}
+
+								//TODO: Y8
+							}
+
 						//Pintar el sprite si esta en rango de coordenada y
 						if (diferencia>=0 && diferencia<TBBLUE_SPRITE_HEIGHT && y>=rangoymin && y<=rangoymax) {
 
@@ -2193,55 +2243,6 @@ If the display of the sprites on the border is disabled, the coordinates of the 
 							}
 
 
-							int sprite_es_4bpp=0;
-
-							int offset_4bpp_N6=0;
-
-							if (tbsprite_sprites[conta_sprites][3] & 64) {
-								//Pattern es de 5 bytes
-
-								//En caso de anchor:
-								//H N6 T X X Y Y Y8
-								//H = 1 if the sprite pattern is 4-bit
-								//N6 = 7th pattern bit if the sprite pattern is 4-bit
-
-								
-
-								if (!relative_sprite) {
-
-									if (tbsprite_sprites[conta_sprites][4] & 128) sprite_es_4bpp=1;
-
-									if (sprite_es_4bpp) {
-										if (tbsprite_sprites[conta_sprites][4] & 64) offset_4bpp_N6=1;
-									}
-
-									anchor_sprite_es_4bpp=sprite_es_4bpp;
-								}
-
-								else {
-
-
-									//En caso de relative sprites, el valor de H viene del anchor
-									/*
-									B. Relative Sprite, Composite Type
-									0 1 N6 X X Y Y PO
-									C. Relative Sprite, Unified Type
-									0 1 N6 0 0 0 0 PO
-
-									Ver que el bit N6 se desplaza respecto a cuando es un anchor
-									*/
-
-									sprite_es_4bpp=anchor_sprite_es_4bpp;
-
-									if (sprite_es_4bpp) {
-										if (tbsprite_sprites[conta_sprites][4] & 32) offset_4bpp_N6=1;
-									}
-
-									
-								}
-
-								//TODO: Y8
-							}
 
 							for (i=0;i<TBBLUE_SPRITE_WIDTH;i++) {
 								z80_byte index_color;
