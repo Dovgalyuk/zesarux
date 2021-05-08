@@ -6934,8 +6934,8 @@ z80_byte return_tbblue_mmu_segment(z80_int dir)
 int tbblue_is_writable_segment_mmu_rom_space(z80_int dir)
 {
 	//En maquina en config mode no tiene sentido
-	//z80_byte maquina=(tbblue_registers[3])&7;
-	//if (maquina==0) return 0;
+	z80_byte maquina=(tbblue_registers[3])&7;
+	if (maquina==0) return 0;
 
 	z80_byte mmu_value=return_tbblue_mmu_segment(dir);
 	if (mmu_value!=255) return 1;
